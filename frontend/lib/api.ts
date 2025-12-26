@@ -114,3 +114,31 @@ export async function connectBank(institutionId: string, redirectUrl: string): P
     if (!response.ok) throw new Error('Failed to connect bank');
     return response.json();
 }
+
+export interface SyncStatus {
+    status: 'never' | 'running' | 'completed' | 'failed';
+    last_sync: string | null;
+    accounts_synced: number;
+    transactions_synced: number;
+    error?: string;
+}
+
+export interface SyncResult {
+    status: 'completed' | 'failed';
+    accounts_synced: number;
+    transactions_synced: number;
+}
+
+export async function syncData(): Promise<SyncResult> {
+    const response = await fetch(`${API_BASE}/sync/`, {
+        method: 'POST',
+    });
+
+    if (!response.ok) throw new Error('Sync failed');
+    return response.json();
+}
+
+export async function getSyncStatus(): Promise<SyncStatus> {
+    return fetchApi<SyncStatus>('/sync/status');
+}
+

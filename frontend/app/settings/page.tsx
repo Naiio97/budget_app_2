@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
+import { syncData, getSyncStatus, SyncStatus, getDashboard } from '@/lib/api';
 
 const demoAccounts = [
     { id: '1', name: 'Hlavní účet', type: 'bank' as const, balance: 125420, currency: 'CZK' },
@@ -15,22 +16,146 @@ export default function SettingsPage() {
     const [gocardlessKey, setGocardlessKey] = useState('');
     const [trading212Key, setTrading212Key] = useState('');
     const [saved, setSaved] = useState(false);
+    const [accounts, setAccounts] = useState(demoAccounts);
+
+    // Sync state
+    const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [syncError, setSyncError] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Fetch initial sync status and accounts
+        async function fetchData() {
+            try {
+                const [status, dashData] = await Promise.all([
+                    getSyncStatus(),
+                    getDashboard()
+                ]);
+                setSyncStatus(status);
+                if (dashData.accounts.length > 0) {
+                    setAccounts(dashData.accounts);
+                }
+            } catch (err) {
+                console.log('Using demo data');
+            }
+        }
+        fetchData();
+    }, []);
 
     const handleSave = () => {
-        // In real app, this would save to backend
         console.log('Saving settings...');
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
     };
 
+    const handleSync = async () => {
+        setIsSyncing(true);
+        setSyncError(null);
+
+        try {
+            const result = await syncData();
+            const status = await getSyncStatus();
+            setSyncStatus(status);
+
+            // Refresh accounts
+            try {
+                const dashData = await getDashboard();
+                if (dashData.accounts.length > 0) {
+                    setAccounts(dashData.accounts);
+                }
+            } catch { }
+        } catch (err) {
+            setSyncError('Synchronizace selhala. Zkontrolujte API klíče.');
+            console.error('Sync error:', err);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const formatLastSync = (dateStr: string | null) => {
+        if (!dateStr) return 'Nikdy';
+        const date = new Date(dateStr);
+        return date.toLocaleString('cs-CZ', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     return (
-        <MainLayout accounts={demoAccounts}>
+        <MainLayout accounts={accounts}>
             <header style={{ marginBottom: 'var(--spacing-xl)' }}>
                 <h1>Nastavení</h1>
                 <p className="text-secondary" style={{ marginTop: 'var(--spacing-sm)' }}>
                     Správa připojení a preferencí
                 </p>
             </header>
+
+            {/* Sync Section */}
+            <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-lg)' }}>
+                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔄 Synchronizace dat</h3>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)', flexWrap: 'wrap' }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleSync}
+                        disabled={isSyncing}
+                        style={{
+                            minWidth: '180px',
+                            opacity: isSyncing ? 0.7 : 1,
+                            cursor: isSyncing ? 'wait' : 'pointer'
+                        }}
+                    >
+                        {isSyncing ? (
+                            <>
+                                <span className="loading-spinner" style={{
+                                    display: 'inline-block',
+                                    width: '16px',
+                                    height: '16px',
+                                    border: '2px solid rgba(255,255,255,0.3)',
+                                    borderTopColor: 'white',
+                                    borderRadius: '50%',
+                                    animation: 'spin 1s linear infinite',
+                                    marginRight: '8px'
+                                }} />
+                                Synchronizuji...
+                            </>
+                        ) : (
+                            '🔄 Synchronizovat data'
+                        )}
+                    </button>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div className="text-secondary" style={{ fontSize: '0.875rem' }}>
+                            Poslední synchronizace: <strong>{formatLastSync(syncStatus?.last_sync || null)}</strong>
+                        </div>
+                        {syncStatus && syncStatus.status === 'completed' && (
+                            <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                {syncStatus.accounts_synced} účtů, {syncStatus.transactions_synced} transakcí
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {syncError && (
+                    <div style={{
+                        marginTop: 'var(--spacing-md)',
+                        padding: 'var(--spacing-sm) var(--spacing-md)',
+                        background: 'rgba(255,100,100,0.2)',
+                        borderRadius: 'var(--radius-md)',
+                        color: '#ff6b6b',
+                        fontSize: '0.875rem'
+                    }}>
+                        ⚠️ {syncError}
+                    </div>
+                )}
+
+                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-md)' }}>
+                    Synchronizace stáhne data z GoCardless a Trading 212 a uloží je do lokální databáze pro okamžitý přístup.
+                </p>
+            </GlassCard>
 
             {/* API Connections */}
             <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-lg)' }}>
@@ -234,6 +359,13 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </GlassCard>
+
+            <style jsx>{`
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `}</style>
         </MainLayout>
     );
 }

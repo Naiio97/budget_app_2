@@ -1,34 +1,53 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from typing import Optional
 from datetime import datetime, timedelta
-from routers.accounts import get_accounts
-from routers.transactions import get_transactions, get_category_summary
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from database import get_db
+from models import AccountModel, TransactionModel, SyncStatusModel
 from services.trading212 import trading212_service
 
 router = APIRouter()
 
 
 @router.get("/")
-async def get_dashboard():
-    """Get main dashboard data"""
-    # Get accounts
-    accounts = await get_accounts()
+async def get_dashboard(db: AsyncSession = Depends(get_db)):
+    """Get main dashboard data from database (instant response)"""
+    
+    # Get accounts from DB
+    result = await db.execute(select(AccountModel))
+    accounts = result.scalars().all()
     
     # Calculate totals
     total_balance = sum(acc.balance for acc in accounts)
     bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
     investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
     
-    # Get recent transactions
-    transactions = await get_transactions(limit=10)
+    # Get recent transactions from DB
+    tx_result = await db.execute(
+        select(TransactionModel).order_by(TransactionModel.date.desc()).limit(10)
+    )
+    recent_tx = tx_result.scalars().all()
     
-    # Get spending by category (last 30 days)
-    categories = await get_category_summary()
+    # Get transactions for last 30 days for calculations
+    date_30_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    all_tx_result = await db.execute(
+        select(TransactionModel).where(TransactionModel.date >= date_30_days_ago).limit(500)
+    )
+    all_tx = all_tx_result.scalars().all()
     
-    # Calculate income vs expenses (last 30 days)
-    all_tx = await get_transactions(limit=500)
+    # Calculate income vs expenses
     income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank")
     expenses = sum(abs(tx.amount) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank")
+    
+    # Calculate categories
+    categories = {}
+    for tx in all_tx:
+        if tx.amount < 0:
+            cat = tx.category or "Other"
+            if cat not in categories:
+                categories[cat] = 0
+            categories[cat] += abs(tx.amount)
     
     return {
         "summary": {
@@ -43,7 +62,7 @@ async def get_dashboard():
             "expenses": expenses,
             "savings": income - expenses
         },
-        "categories": categories.get("categories", {}),
+        "categories": categories,
         "recent_transactions": [
             {
                 "id": tx.id,
@@ -53,7 +72,7 @@ async def get_dashboard():
                 "currency": tx.currency,
                 "category": tx.category
             }
-            for tx in transactions
+            for tx in recent_tx
         ],
         "accounts": [
             {
@@ -70,7 +89,7 @@ async def get_dashboard():
 
 @router.get("/portfolio")
 async def get_portfolio_summary():
-    """Get investment portfolio summary"""
+    """Get investment portfolio summary (live from Trading 212)"""
     try:
         portfolio = await trading212_service.get_portfolio()
         pies = await trading212_service.get_pies()
@@ -106,20 +125,27 @@ async def get_portfolio_summary():
 
 
 @router.get("/balance-history")
-async def get_balance_history(days: int = Query(30, ge=7, le=365)):
-    """Get balance history for chart (simplified - uses transactions)"""
+async def get_balance_history(
+    days: int = Query(30, ge=7, le=365),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get balance history for chart from database"""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
-    transactions = await get_transactions(
-        date_from=start_date.strftime("%Y-%m-%d"),
-        date_to=end_date.strftime("%Y-%m-%d"),
-        limit=1000
+    # Get transactions from DB
+    result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.date >= start_date.strftime("%Y-%m-%d")
+        ).limit(1000)
     )
+    transactions = result.scalars().all()
     
-    # Build daily balances (simplified simulation)
-    accounts = await get_accounts()
-    current_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
+    # Get current balance
+    acc_result = await db.execute(
+        select(func.sum(AccountModel.balance)).where(AccountModel.type == "bank")
+    )
+    current_balance = acc_result.scalar() or 0
     
     history = []
     daily_totals = {}
@@ -137,9 +163,8 @@ async def get_balance_history(days: int = Query(30, ge=7, le=365)):
     for i in range(days, -1, -1):
         date = (end_date - timedelta(days=i)).strftime("%Y-%m-%d")
         if date in daily_totals:
-            balance -= daily_totals[date]  # Reverse to get historical balance
+            balance -= daily_totals[date]
         history.append({"date": date, "balance": balance})
     
-    # Reverse to correct chronological order
     history.reverse()
     return {"history": history}

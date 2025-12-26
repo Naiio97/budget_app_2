@@ -1,14 +1,25 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from config import get_settings
-from routers import accounts, transactions, dashboard
+from routers import accounts, transactions, dashboard, sync
+from database import init_db
 
 settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on startup"""
+    await init_db()
+    yield
+
 
 app = FastAPI(
     title="Budget Tracker API",
     description="Personal finance tracking with GoCardless & Trading 212",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS for frontend
@@ -24,6 +35,7 @@ app.add_middleware(
 app.include_router(accounts.router, prefix="/api/accounts", tags=["Accounts"])
 app.include_router(transactions.router, prefix="/api/transactions", tags=["Transactions"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 
 
 @app.get("/")

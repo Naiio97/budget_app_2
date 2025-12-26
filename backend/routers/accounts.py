@@ -1,8 +1,14 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
+from database import get_db
+from models import AccountModel
+import json
+from datetime import datetime
 
 router = APIRouter()
 
@@ -21,7 +27,7 @@ class AccountResponse(BaseModel):
     institution: Optional[str] = None
 
 
-# In-memory storage for connected accounts (for demo - use DB in production)
+# Keep legacy in-memory storage for bank connection flow
 connected_accounts: dict = {}
 
 
@@ -52,8 +58,8 @@ async def connect_bank(request: ConnectBankRequest):
 
 
 @router.get("/connect/bank/callback")
-async def bank_callback(ref: str):
-    """Handle bank connection callback"""
+async def bank_callback(ref: str, db: AsyncSession = Depends(get_db)):
+    """Handle bank connection callback - saves account to DB"""
     try:
         requisition = await gocardless_service.get_requisition(ref)
         accounts = requisition.get("accounts", [])
@@ -62,6 +68,32 @@ async def bank_callback(ref: str):
             details = await gocardless_service.get_account_details(account_id)
             balances = await gocardless_service.get_account_balances(account_id)
             
+            balance_list = balances.get("balances", [])
+            balance = float(balance_list[0]["balanceAmount"]["amount"]) if balance_list else 0
+            currency = balance_list[0]["balanceAmount"]["currency"] if balance_list else "CZK"
+            account_details = details.get("account", {})
+            
+            # Save to database
+            existing = await db.get(AccountModel, account_id)
+            if existing:
+                existing.balance = balance
+                existing.currency = currency
+                existing.last_synced = datetime.utcnow()
+                existing.details_json = json.dumps(details)
+            else:
+                new_account = AccountModel(
+                    id=account_id,
+                    name=account_details.get("name", "Bank Account"),
+                    type="bank",
+                    balance=balance,
+                    currency=currency,
+                    institution=requisition.get("institution_id"),
+                    details_json=json.dumps(details),
+                    last_synced=datetime.utcnow()
+                )
+                db.add(new_account)
+            
+            # Also keep in memory for legacy compatibility
             connected_accounts[account_id] = {
                 "id": account_id,
                 "type": "bank",
@@ -70,65 +102,37 @@ async def bank_callback(ref: str):
                 "institution": requisition.get("institution_id")
             }
         
+        await db.commit()
         return {"status": "connected", "accounts": len(accounts)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/", response_model=List[AccountResponse])
-async def get_accounts():
-    """Get all connected accounts"""
-    accounts = []
+async def get_accounts(db: AsyncSession = Depends(get_db)):
+    """Get all connected accounts from database"""
+    result = await db.execute(select(AccountModel))
+    accounts = result.scalars().all()
     
-    # Bank accounts
-    for acc_id, acc in connected_accounts.items():
-        if acc["type"] == "bank":
-            balances = acc.get("balances", {}).get("balances", [])
-            balance = balances[0]["balanceAmount"]["amount"] if balances else 0
-            currency = balances[0]["balanceAmount"]["currency"] if balances else "CZK"
-            
-            details = acc.get("details", {}).get("account", {})
-            accounts.append(AccountResponse(
-                id=acc_id,
-                name=details.get("name", "Bank Account"),
-                type="bank",
-                balance=float(balance),
-                currency=currency,
-                institution=acc.get("institution")
-            ))
-    
-    # Investment account (Trading 212)
-    try:
-        cash = await trading212_service.get_account_info()
-        portfolio = await trading212_service.get_portfolio()
-        total_value = cash.get("free", 0) + sum(p.get("currentPrice", 0) * p.get("quantity", 0) for p in portfolio)
-        
-        accounts.append(AccountResponse(
-            id="trading212",
-            name="Trading 212",
-            type="investment",
-            balance=float(total_value),
-            currency=cash.get("currency", "EUR"),
-            institution="Trading 212"
-        ))
-    except:
-        pass  # Trading 212 not configured
-    
-    return accounts
+    return [
+        AccountResponse(
+            id=acc.id,
+            name=acc.name,
+            type=acc.type,
+            balance=acc.balance,
+            currency=acc.currency,
+            institution=acc.institution
+        )
+        for acc in accounts
+    ]
 
 
 @router.get("/{account_id}/balances")
-async def get_account_balances(account_id: str):
-    """Get account balances"""
-    if account_id == "trading212":
-        try:
-            cash = await trading212_service.get_account_info()
-            return {"balances": [{"amount": cash.get("free", 0), "currency": cash.get("currency", "EUR")}]}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+async def get_account_balances(account_id: str, db: AsyncSession = Depends(get_db)):
+    """Get account balances from database"""
+    account = await db.get(AccountModel, account_id)
     
-    try:
-        balances = await gocardless_service.get_account_balances(account_id)
-        return balances
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    return {"balances": [{"amount": account.balance, "currency": account.currency}]}
