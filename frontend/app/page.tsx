@@ -79,112 +79,116 @@ export default function DashboardPage() {
     : '0';
 
   return (
-    <MainLayout accounts={data.accounts}>
-      <header style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <h1>Dashboard</h1>
-        {error && (
-          <p className="text-tertiary" style={{ fontSize: '0.875rem', marginTop: 'var(--spacing-sm)' }}>
-            ⚠️ {error}
-          </p>
-        )}
-      </header>
+    <MainLayout accounts={data.accounts} disableScroll={true}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <header style={{ marginBottom: 'var(--spacing-xl)', flexShrink: 0 }}>
+          <h1>Dashboard</h1>
+          {error && (
+            <p className="text-tertiary" style={{ fontSize: '0.875rem', marginTop: 'var(--spacing-sm)' }}>
+              ⚠️ {error}
+            </p>
+          )}
+        </header>
 
-      {/* Summary Stats */}
-      <div className="dashboard-grid">
-        <StatCard
-          icon="💰"
-          label="Celkový zůstatek"
-          value={data.summary.total_balance}
-          currency={data.summary.currency}
-        />
-        <StatCard
-          icon="🏦"
-          label="Bankovní účty"
-          value={data.summary.bank_balance}
-          currency={data.summary.currency}
-        />
-        <StatCard
-          icon="📈"
-          label="Investice"
-          value={data.summary.investment_balance}
-          currency={data.summary.currency}
-        />
-      </div>
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-xl)' }}>
+          {/* Summary Stats */}
+          <div className="dashboard-grid">
+            <StatCard
+              icon="💰"
+              label="Celkový zůstatek"
+              value={data.summary.total_balance}
+              currency={data.summary.currency}
+            />
+            <StatCard
+              icon="🏦"
+              label="Bankovní účty"
+              value={data.summary.bank_balance}
+              currency={data.summary.currency}
+            />
+            <StatCard
+              icon="📈"
+              label="Investice"
+              value={data.summary.investment_balance}
+              currency={data.summary.currency}
+            />
+          </div>
 
-      {/* Monthly Overview */}
-      <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-xl)' }}>
-        <GlassCard>
-          <h4 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
-            Měsíční přehled
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-secondary">Příjmy</span>
-              <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
-                +{formatCurrency(data.monthly.income)}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span className="text-secondary">Výdaje</span>
-              <span style={{ fontWeight: 600 }}>
-                -{formatCurrency(data.monthly.expenses)}
-              </span>
-            </div>
+          {/* Monthly Overview */}
+          <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-xl)' }}>
+            <GlassCard>
+              <h4 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
+                Měsíční přehled
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="text-secondary">Příjmy</span>
+                  <span style={{ color: 'var(--accent-success)', fontWeight: 600 }}>
+                    +{formatCurrency(data.monthly.income)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="text-secondary">Výdaje</span>
+                  <span style={{ fontWeight: 600 }}>
+                    -{formatCurrency(data.monthly.expenses)}
+                  </span>
+                </div>
+                <div style={{
+                  borderTop: '1px solid var(--glass-border-light)',
+                  paddingTop: 'var(--spacing-md)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontWeight: 500 }}>Úspory</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{
+                      color: data.monthly.savings >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)',
+                      fontWeight: 700,
+                      fontSize: '1.25rem'
+                    }}>
+                      {formatCurrency(data.monthly.savings)}
+                    </span>
+                    <span className="stat-change positive" style={{ marginLeft: 'var(--spacing-sm)' }}>
+                      {savingsPercent}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </GlassCard>
+
+            <GlassCard>
+              <h4 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
+                Výdaje podle kategorií
+              </h4>
+              <CategoryChart categories={data.categories} currency={data.summary.currency} />
+            </GlassCard>
+          </div>
+
+          {/* Recent Transactions */}
+          <GlassCard hover={false}>
             <div style={{
-              borderTop: '1px solid var(--glass-border-light)',
-              paddingTop: 'var(--spacing-md)',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              marginBottom: 'var(--spacing-lg)'
             }}>
-              <span style={{ fontWeight: 500 }}>Úspory</span>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{
-                  color: data.monthly.savings >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)',
-                  fontWeight: 700,
-                  fontSize: '1.25rem'
-                }}>
-                  {formatCurrency(data.monthly.savings)}
-                </span>
-                <span className="stat-change positive" style={{ marginLeft: 'var(--spacing-sm)' }}>
-                  {savingsPercent}%
-                </span>
-              </div>
+              <h4>Poslední transakce</h4>
+              <a
+                href="/transactions"
+                style={{
+                  color: 'var(--accent-primary)',
+                  textDecoration: 'none',
+                  fontSize: '0.875rem',
+                  fontWeight: 500
+                }}
+              >
+                Zobrazit vše →
+              </a>
             </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard>
-          <h4 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
-            Výdaje podle kategorií
-          </h4>
-          <CategoryChart categories={data.categories} currency={data.summary.currency} />
-        </GlassCard>
-      </div>
-
-      {/* Recent Transactions */}
-      <GlassCard hover={false}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 'var(--spacing-lg)'
-        }}>
-          <h4>Poslední transakce</h4>
-          <a
-            href="/transactions"
-            style={{
-              color: 'var(--accent-primary)',
-              textDecoration: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 500
-            }}
-          >
-            Zobrazit vše →
-          </a>
+            <TransactionList transactions={data.recent_transactions} showAccount />
+          </GlassCard>
         </div>
-        <TransactionList transactions={data.recent_transactions} showAccount />
-      </GlassCard>
+      </div>
     </MainLayout>
   );
 }

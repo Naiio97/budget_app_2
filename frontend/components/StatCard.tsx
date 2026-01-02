@@ -23,20 +23,19 @@ export default function StatCard({ label, value, change, icon, currency = 'CZK' 
     };
 
     return (
-        <div className="glass glass-card stat-card animate-fade-in">
-            {icon && (
-                <span style={{ fontSize: '1.5rem', marginBottom: 'var(--spacing-xs)' }}>
-                    {icon}
-                </span>
-            )}
-            <div className="stat-label">{label}</div>
-            <div className="stat-value">{formatValue()}</div>
-            {change && (
-                <div className={`stat-change ${change.value >= 0 ? 'positive' : 'negative'}`}>
-                    {change.value >= 0 ? '↑' : '↓'} {Math.abs(change.value).toFixed(1)}%
-                    {change.label && <span style={{ marginLeft: '4px' }}>{change.label}</span>}
-                </div>
-            )}
+        <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+                {icon && <span style={{ fontSize: '1.25rem' }}>{icon}</span>}
+                <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0 }}>{label}</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <div className="stat-value" style={{ fontSize: '1.5rem' }}>{formatValue()}</div>
+                {change && (
+                    <div className={`stat-change ${change.value >= 0 ? 'positive' : 'negative'}`}>
+                        {change.value >= 0 ? '↑' : '↓'} {Math.abs(change.value).toFixed(1)}%
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

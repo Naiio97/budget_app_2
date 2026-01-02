@@ -21,19 +21,31 @@ class Transaction(BaseModel):
     account_name: Optional[str] = None
 
 
-@router.get("/", response_model=List[Transaction])
+class PaginatedTransactions(BaseModel):
+    items: List[Transaction]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+@router.get("/", response_model=PaginatedTransactions)
 async def get_transactions(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    account_id: Optional[str] = None,
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    account_id: Optional[str] = None,
-    limit: int = 100,
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all transactions from database (instant response)"""
+    """Get paginated transactions with filtering"""
     
-    # Build query with join to get account name
+    # Base query
     query = select(TransactionModel, AccountModel.name).join(AccountModel, TransactionModel.account_id == AccountModel.id)
     
+    # Conditions
     conditions = []
     if date_from:
         conditions.append(TransactionModel.date >= date_from)
@@ -41,16 +53,31 @@ async def get_transactions(
         conditions.append(TransactionModel.date <= date_to)
     if account_id:
         conditions.append(TransactionModel.account_id == account_id)
+    if category:
+        conditions.append(TransactionModel.category == category)
+    if search:
+        search_term = f"%{search}%"
+        conditions.append(TransactionModel.description.ilike(search_term))
     
     if conditions:
         query = query.where(and_(*conditions))
     
-    query = query.order_by(TransactionModel.date.desc()).limit(limit)
+    # Count total
+    from sqlalchemy import func
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+    
+    # Pagination
+    pages = (total + limit - 1) // limit
+    offset = (page - 1) * limit
+    
+    query = query.order_by(TransactionModel.date.desc()).offset(offset).limit(limit)
     
     result = await db.execute(query)
     rows = result.all()
     
-    return [
+    items = [
         Transaction(
             id=tx.id,
             date=tx.date,
@@ -64,6 +91,14 @@ async def get_transactions(
         )
         for tx, account_name in rows
     ]
+    
+    return PaginatedTransactions(
+        items=items,
+        total=total,
+        page=page,
+        size=limit,
+        pages=pages
+    )
 
 
 def categorize_transaction(tx: dict) -> str:

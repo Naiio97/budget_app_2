@@ -29,42 +29,74 @@ const demoAccounts = [
 ];
 
 export default function TransactionsPage() {
-    const [transactions, setTransactions] = useState<Transaction[]>(demoTransactions);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [accounts, setAccounts] = useState(demoAccounts);
     const [loading, setLoading] = useState(true);
+
+    // Filters & Pagination
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [selectedAccount, setSelectedAccount] = useState<string>('');
 
+    const [monthlyStats, setMonthlyStats] = useState({ income: 0, expenses: 0 });
+
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setPage(1); // Reset to page 1 on search
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    // Reset page on filter change
+    useEffect(() => {
+        setPage(1);
+    }, [selectedCategory, selectedAccount]);
+
+    // Fetch Data
     useEffect(() => {
         async function fetchData() {
+            setLoading(true);
             try {
-                const [txData, dashData] = await Promise.all([
-                    getTransactions({ limit: 100 }),
+                const [txResponse, dashData] = await Promise.all([
+                    getTransactions({
+                        page,
+                        limit: 20,
+                        search: debouncedSearch,
+                        category: selectedCategory,
+                        account_id: selectedAccount
+                    }),
                     getDashboard()
                 ]);
-                setTransactions(txData);
-                setAccounts(dashData.accounts);
+
+                setTransactions(txResponse.items);
+                setTotalPages(txResponse.pages);
+                setTotalItems(txResponse.total);
+
+                if (dashData.accounts.length > 0) {
+                    setAccounts(dashData.accounts);
+                }
+                setMonthlyStats(dashData.monthly);
             } catch (err) {
-                console.log('Using demo data');
+                console.log('Error fetching data:', err);
+                // Fallback to demo data if API fails completely (optional)
+                setTransactions(demoTransactions);
             } finally {
                 setLoading(false);
             }
         }
         fetchData();
-    }, []);
+    }, [page, debouncedSearch, selectedCategory, selectedAccount]);
 
-    const categories = [...new Set(transactions.map(tx => tx.category).filter(Boolean))];
-
-    const filteredTransactions = transactions.filter(tx => {
-        const matchesSearch = tx.description.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = !selectedCategory || tx.category === selectedCategory;
-        const matchesAccount = !selectedAccount || tx.account_id === selectedAccount;
-        return matchesSearch && matchesCategory && matchesAccount;
-    });
-
-    const totalIncome = filteredTransactions.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
-    const totalExpenses = filteredTransactions.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const categories = [
+        "Food", "Transport", "Utilities", "Entertainment", "Shopping", "Salary", "Investment", "Dividend", "Other"
+    ];
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -75,103 +107,107 @@ export default function TransactionsPage() {
     };
 
     return (
-        <MainLayout accounts={accounts}>
-            <header style={{ marginBottom: 'var(--spacing-xl)' }}>
-                <h1>Transakce</h1>
-                <p className="text-secondary" style={{ marginTop: 'var(--spacing-sm)' }}>
-                    Přehled všech vašich transakcí
-                </p>
-            </header>
+        <MainLayout accounts={accounts} disableScroll={true}>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+                <div style={{ alignItems: 'baseline', marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transakce</h1>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                            {totalItems} položek • <span style={{ color: 'var(--accent-success)' }}>+{formatCurrency(monthlyStats.income)}</span> • <span>{formatCurrency(monthlyStats.expenses)}</span>
+                        </div>
+                    </div>
+                </div>
 
-            {/* Filters */}
-            <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: 'var(--spacing-md)'
-                }}>
-                    <div>
-                        <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
-                            Hledat
-                        </label>
-                        <input
-                            type="text"
-                            className="input"
-                            placeholder="Název transakce..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                {/* Compact Filters */}
+                <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', flexShrink: 0 }}>
+                    <div style={{
+                        display: 'flex',
+                        gap: 'var(--spacing-md)',
+                        overflowX: 'auto',
+                        paddingBottom: '4px'
+                    }}>
+                        <div style={{ flex: 1, minWidth: '150px' }}>
+                            <input
+                                type="text"
+                                className="input"
+                                placeholder="🔍 Hledat..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                            />
+                        </div>
+                        <div style={{ width: '180px' }}>
+                            <select
+                                className="input"
+                                value={selectedCategory}
+                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                            >
+                                <option value="">Všechny kategorie</option>
+                                {categories.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div style={{ width: '180px' }}>
+                            <select
+                                className="input"
+                                value={selectedAccount}
+                                onChange={(e) => setSelectedAccount(e.target.value)}
+                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                            >
+                                <option value="">Všechny účty</option>
+                                {accounts.map(acc => (
+                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
-                            Kategorie
-                        </label>
-                        <select
-                            className="input"
-                            value={selectedCategory}
-                            onChange={(e) => setSelectedCategory(e.target.value)}
-                        >
-                            <option value="">Všechny kategorie</option>
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
-                            Účet
-                        </label>
-                        <select
-                            className="input"
-                            value={selectedAccount}
-                            onChange={(e) => setSelectedAccount(e.target.value)}
-                        >
-                            <option value="">Všechny účty</option>
-                            {accounts.map(acc => (
-                                <option key={acc.id} value={acc.id}>{acc.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-            </GlassCard>
+                </GlassCard>
 
-            {/* Summary */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: 'var(--spacing-md)',
-                marginBottom: 'var(--spacing-lg)'
-            }}>
-                <div className="glass glass-card-compact" style={{ textAlign: 'center' }}>
-                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: 'var(--spacing-xs)' }}>
-                        Příjmy
-                    </div>
-                    <div style={{ color: 'var(--accent-success)', fontWeight: 600, fontSize: '1.25rem' }}>
-                        +{formatCurrency(totalIncome)}
-                    </div>
-                </div>
-                <div className="glass glass-card-compact" style={{ textAlign: 'center' }}>
-                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: 'var(--spacing-xs)' }}>
-                        Výdaje
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '1.25rem' }}>
-                        -{formatCurrency(totalExpenses)}
-                    </div>
-                </div>
-                <div className="glass glass-card-compact" style={{ textAlign: 'center' }}>
-                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: 'var(--spacing-xs)' }}>
-                        Počet transakcí
-                    </div>
-                    <div style={{ fontWeight: 600, fontSize: '1.25rem' }}>
-                        {filteredTransactions.length}
-                    </div>
+                {/* Transaction List */}
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <GlassCard hover={false} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-md)' }}>
+                            <TransactionList transactions={transactions} showAccount />
+                        </div>
+
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: 'var(--spacing-lg)',
+                                paddingTop: 'var(--spacing-md)',
+                                marginTop: 'auto',
+                                borderTop: '1px solid rgba(255,255,255,0.1)',
+                                flexShrink: 0
+                            }}>
+                                <button
+                                    className="btn"
+                                    disabled={page <= 1}
+                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                    style={{ opacity: page <= 1 ? 0.5 : 1 }}
+                                >
+                                    ← Předchozí
+                                </button>
+                                <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                    Stránka {page} z {totalPages}
+                                </span>
+                                <button
+                                    className="btn"
+                                    disabled={page >= totalPages}
+                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                    style={{ opacity: page >= totalPages ? 0.5 : 1 }}
+                                >
+                                    Další →
+                                </button>
+                            </div>
+                        )}
+                    </GlassCard>
                 </div>
             </div>
-
-            {/* Transaction List */}
-            <GlassCard hover={false}>
-                <TransactionList transactions={filteredTransactions} showAccount />
-            </GlassCard>
         </MainLayout>
     );
 }

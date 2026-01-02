@@ -78,20 +78,34 @@ export async function getAccounts(): Promise<Account[]> {
     return fetchApi<Account[]>('/accounts/');
 }
 
+export interface PaginatedResponse<T> {
+    items: T[];
+    total: number;
+    page: number;
+    size: number;
+    pages: number;
+}
+
 export async function getTransactions(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    category?: string;
+    account_id?: string;
     date_from?: string;
     date_to?: string;
-    account_id?: string;
-    limit?: number;
-}): Promise<Transaction[]> {
+}): Promise<PaginatedResponse<Transaction>> {
     const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set('page', params.page.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.search) searchParams.set('search', params.search);
+    if (params?.category) searchParams.set('category', params.category);
+    if (params?.account_id) searchParams.set('account_id', params.account_id);
     if (params?.date_from) searchParams.set('date_from', params.date_from);
     if (params?.date_to) searchParams.set('date_to', params.date_to);
-    if (params?.account_id) searchParams.set('account_id', params.account_id);
-    if (params?.limit) searchParams.set('limit', params.limit.toString());
 
     const query = searchParams.toString();
-    return fetchApi<Transaction[]>(`/transactions/${query ? `?${query}` : ''}`);
+    return fetchApi<PaginatedResponse<Transaction>>(`/transactions/${query ? `?${query}` : ''}`);
 }
 
 export async function getBalanceHistory(days: number = 30): Promise<BalanceHistory> {

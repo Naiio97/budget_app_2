@@ -13,9 +13,10 @@ interface MainLayoutProps {
         balance: number;
         currency: string;
     }>;
+    disableScroll?: boolean;
 }
 
-export default function MainLayout({ children, accounts = [] }: MainLayoutProps) {
+export default function MainLayout({ children, accounts = [], disableScroll = false }: MainLayoutProps) {
     const pathname = usePathname();
 
     const navItems = [
@@ -36,7 +37,7 @@ export default function MainLayout({ children, accounts = [] }: MainLayoutProps)
     return (
         <div className="layout">
             <main className="main-content">
-                <nav className="nav">
+                <nav className="nav" style={{ flexShrink: 0 }}>
                     {navItems.map((item) => (
                         <Link
                             key={item.href}
@@ -49,7 +50,13 @@ export default function MainLayout({ children, accounts = [] }: MainLayoutProps)
                     ))}
                 </nav>
 
-                {children}
+                {disableScroll ? (
+                    children
+                ) : (
+                    <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, marginRight: '-12px', paddingRight: '12px' }}>
+                        {children}
+                    </div>
+                )}
             </main>
 
             <aside className="sidebar">

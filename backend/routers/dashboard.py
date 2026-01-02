@@ -29,7 +29,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         select(TransactionModel, AccountModel.name)
         .join(AccountModel, TransactionModel.account_id == AccountModel.id)
         .order_by(TransactionModel.date.desc())
-        .limit(10)
+        .limit(5)
     )
     recent_tx_rows = tx_result.all()
     
