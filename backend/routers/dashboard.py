@@ -15,7 +15,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     """Get main dashboard data from database (instant response)"""
     
     # Get accounts from DB
-    result = await db.execute(select(AccountModel))
+    result = await db.execute(select(AccountModel).where(AccountModel.is_visible == True))
     accounts = result.scalars().all()
     
     # Calculate totals
@@ -24,10 +24,14 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
     
     # Get recent transactions from DB
+    # Get recent transactions from DB with account name
     tx_result = await db.execute(
-        select(TransactionModel).order_by(TransactionModel.date.desc()).limit(10)
+        select(TransactionModel, AccountModel.name)
+        .join(AccountModel, TransactionModel.account_id == AccountModel.id)
+        .order_by(TransactionModel.date.desc())
+        .limit(10)
     )
-    recent_tx = tx_result.scalars().all()
+    recent_tx_rows = tx_result.all()
     
     # Get transactions for last 30 days for calculations
     date_30_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -70,9 +74,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "description": tx.description,
                 "amount": tx.amount,
                 "currency": tx.currency,
-                "category": tx.category
+                "category": tx.category,
+                "account_name": account_name
             }
-            for tx in recent_tx
+            for tx, account_name in recent_tx_rows
         ],
         "accounts": [
             {

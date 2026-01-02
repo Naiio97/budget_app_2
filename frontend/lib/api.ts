@@ -7,6 +7,7 @@ export interface Account {
     balance: number;
     currency: string;
     institution?: string;
+    is_visible?: boolean;
 }
 
 export interface Transaction {
@@ -18,6 +19,7 @@ export interface Transaction {
     category?: string;
     account_id: string;
     account_type: string;
+    account_name?: string;
 }
 
 export interface DashboardData {
@@ -115,6 +117,26 @@ export async function connectBank(institutionId: string, redirectUrl: string): P
     return response.json();
 }
 
+export async function updateAccount(id: string, data: { name?: string; is_visible?: boolean }): Promise<{ status: string; id: string }> {
+    const response = await fetch(`${API_BASE}/accounts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+
+    if (!response.ok) throw new Error('Failed to update account');
+    return response.json();
+}
+
+export async function deleteAccount(id: string): Promise<{ status: string; id: string }> {
+    const response = await fetch(`${API_BASE}/accounts/${id}`, {
+        method: 'DELETE',
+    });
+
+    if (!response.ok) throw new Error('Failed to delete account');
+    return response.json();
+}
+
 export interface SyncStatus {
     status: 'never' | 'running' | 'completed' | 'failed';
     last_sync: string | null;
@@ -142,3 +164,32 @@ export async function getSyncStatus(): Promise<SyncStatus> {
     return fetchApi<SyncStatus>('/sync/status');
 }
 
+// API Keys management
+export interface ApiKeysResponse {
+    gocardless_secret_id: string | null;
+    gocardless_secret_key: string | null;
+    trading212_api_key: string | null;
+    has_gocardless: boolean;
+    has_trading212: boolean;
+}
+
+export interface ApiKeysRequest {
+    gocardless_secret_id?: string;
+    gocardless_secret_key?: string;
+    trading212_api_key?: string;
+}
+
+export async function getApiKeys(): Promise<ApiKeysResponse> {
+    return fetchApi<ApiKeysResponse>('/settings/api-keys');
+}
+
+export async function saveApiKeys(keys: ApiKeysRequest): Promise<{ status: string; updated_keys: string[] }> {
+    const response = await fetch(`${API_BASE}/settings/api-keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(keys),
+    });
+
+    if (!response.ok) throw new Error('Failed to save API keys');
+    return response.json();
+}

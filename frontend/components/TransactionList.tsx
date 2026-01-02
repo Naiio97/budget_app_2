@@ -56,7 +56,7 @@ export default function TransactionList({ transactions, showAccount = false }: T
                             {formatDate(tx.date)}
                             {showAccount && tx.account_type && (
                                 <span style={{ marginLeft: '8px', opacity: 0.7 }}>
-                                    • {tx.account_type === 'bank' ? '🏦' : '📈'}
+                                    • {tx.account_name || (tx.account_type === 'bank' ? '🏦' : '📈')}
                                 </span>
                             )}
                             {tx.category && (

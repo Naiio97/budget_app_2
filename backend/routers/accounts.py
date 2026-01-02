@@ -136,3 +136,43 @@ async def get_account_balances(account_id: str, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=404, detail="Account not found")
     
     return {"balances": [{"amount": account.balance, "currency": account.currency}]}
+
+
+class UpdateAccountRequest(BaseModel):
+    name: Optional[str] = None
+    is_visible: Optional[bool] = None
+
+
+@router.put("/{account_id}")
+async def update_account(
+    account_id: str,
+    request: UpdateAccountRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update account details (name, visibility)"""
+    account = await db.get(AccountModel, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+        
+    if request.name is not None:
+        account.name = request.name
+    if request.is_visible is not None:
+        account.is_visible = request.is_visible
+        
+    await db.commit()
+    return {"status": "updated", "id": account.id}
+
+
+@router.delete("/{account_id}")
+async def delete_account(
+    account_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete account and all its transactions"""
+    account = await db.get(AccountModel, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+        
+    await db.delete(account)
+    await db.commit()
+    return {"status": "deleted", "id": account_id}

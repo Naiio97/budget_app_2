@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from database import get_db
-from models import TransactionModel
+from models import TransactionModel, AccountModel
 
 router = APIRouter()
 
@@ -18,6 +18,7 @@ class Transaction(BaseModel):
     category: Optional[str] = None
     account_id: str
     account_type: str  # "bank" or "investment"
+    account_name: Optional[str] = None
 
 
 @router.get("/", response_model=List[Transaction])
@@ -30,8 +31,8 @@ async def get_transactions(
 ):
     """Get all transactions from database (instant response)"""
     
-    # Build query
-    query = select(TransactionModel)
+    # Build query with join to get account name
+    query = select(TransactionModel, AccountModel.name).join(AccountModel, TransactionModel.account_id == AccountModel.id)
     
     conditions = []
     if date_from:
@@ -47,7 +48,7 @@ async def get_transactions(
     query = query.order_by(TransactionModel.date.desc()).limit(limit)
     
     result = await db.execute(query)
-    transactions = result.scalars().all()
+    rows = result.all()
     
     return [
         Transaction(
@@ -58,9 +59,10 @@ async def get_transactions(
             currency=tx.currency,
             category=tx.category,
             account_id=tx.account_id,
-            account_type=tx.account_type
+            account_type=tx.account_type,
+            account_name=account_name
         )
-        for tx in transactions
+        for tx, account_name in rows
     ]
 
 

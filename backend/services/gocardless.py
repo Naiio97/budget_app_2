@@ -7,6 +7,22 @@ settings = get_settings()
 BASE_URL = "https://bankaccountdata.gocardless.com/api/v2"
 
 
+async def get_gocardless_credentials():
+    """Get GoCardless credentials from database or fallback to .env"""
+    from routers.settings import get_api_key
+    
+    secret_id = await get_api_key("gocardless_secret_id")
+    secret_key = await get_api_key("gocardless_secret_key")
+    
+    # Fallback to .env if not in DB
+    if not secret_id:
+        secret_id = settings.gocardless_secret_id
+    if not secret_key:
+        secret_key = settings.gocardless_secret_key
+    
+    return secret_id, secret_key
+
+
 class GoCardlessService:
     def __init__(self):
         self.access_token: Optional[str] = None
@@ -17,12 +33,17 @@ class GoCardlessService:
         if self.access_token:
             return self.access_token
         
+        secret_id, secret_key = await get_gocardless_credentials()
+        
+        if not secret_id or not secret_key:
+            raise Exception("GoCardless credentials not configured")
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{BASE_URL}/token/new/",
                 json={
-                    "secret_id": settings.gocardless_secret_id,
-                    "secret_key": settings.gocardless_secret_key
+                    "secret_id": secret_id,
+                    "secret_key": secret_key
                 }
             )
             response.raise_for_status()
@@ -30,6 +51,11 @@ class GoCardlessService:
             self.access_token = data["access"]
             self.refresh_token = data.get("refresh")
             return self.access_token
+    
+    def clear_token(self):
+        """Clear cached token (for when credentials change)"""
+        self.access_token = None
+        self.refresh_token = None
     
     async def get_institutions(self, country: str = "CZ") -> list:
         """Get available banks for a country"""

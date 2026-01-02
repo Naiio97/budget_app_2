@@ -16,6 +16,7 @@ class AccountModel(Base):
     institution = Column(String, nullable=True)
     details_json = Column(Text, nullable=True)  # Raw JSON from API
     last_synced = Column(DateTime, default=datetime.utcnow)
+    is_visible = Column(Boolean, default=True)
     
     # Relationship to transactions
     transactions = relationship("TransactionModel", back_populates="account", cascade="all, delete-orphan")
@@ -51,3 +52,12 @@ class SyncStatusModel(Base):
     error_message = Column(Text, nullable=True)
     accounts_synced = Column(Integer, default=0)
     transactions_synced = Column(Integer, default=0)
+
+
+class SettingsModel(Base):
+    """Application settings (API keys, preferences)"""
+    __tablename__ = "settings"
+    
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -3,49 +3,209 @@
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
-import { syncData, getSyncStatus, SyncStatus, getDashboard } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
 
-const demoAccounts = [
-    { id: '1', name: 'Hlavní účet', type: 'bank' as const, balance: 125420, currency: 'CZK' },
-    { id: '2', name: 'Spořicí účet', type: 'bank' as const, balance: 60000, currency: 'CZK' },
-    { id: '3', name: 'Trading 212', type: 'investment' as const, balance: 60360, currency: 'EUR' },
+const demoAccounts: Account[] = [
+    { id: '1', name: 'Hlavní účet', type: 'bank', balance: 125420, currency: 'CZK' },
+    { id: '2', name: 'Spořicí účet', type: 'bank', balance: 60000, currency: 'CZK' },
+    { id: '3', name: 'Trading 212', type: 'investment', balance: 60360, currency: 'EUR' },
 ];
+
+interface Institution {
+    id: string;
+    name: string;
+    logo: string;
+    bic?: string;
+}
 
 export default function SettingsPage() {
     const [gocardlessId, setGocardlessId] = useState('');
     const [gocardlessKey, setGocardlessKey] = useState('');
     const [trading212Key, setTrading212Key] = useState('');
     const [saved, setSaved] = useState(false);
-    const [accounts, setAccounts] = useState(demoAccounts);
+    const [saving, setSaving] = useState(false);
+    const [accounts, setAccounts] = useState<Account[]>(demoAccounts); // Use Account interface
+    const [apiKeysLoaded, setApiKeysLoaded] = useState<ApiKeysResponse | null>(null);
+
+    // Account Management State
+    const [editingAccount, setEditingAccount] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+    const [processingAccount, setProcessingAccount] = useState<string | null>(null);
+
+    // Banks
+    const [institutions, setInstitutions] = useState<Institution[]>([]);
+    const [loadingBanks, setLoadingBanks] = useState(false);
+    const [connectingBank, setConnectingBank] = useState<string | null>(null);
 
     // Sync state
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncError, setSyncError] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Fetch initial sync status and accounts
-        async function fetchData() {
-            try {
-                const [status, dashData] = await Promise.all([
-                    getSyncStatus(),
-                    getDashboard()
-                ]);
-                setSyncStatus(status);
+    // ... (existing useEffect and handlers)
+
+    const handleRename = async (id: string) => {
+        if (!editName.trim()) return;
+        setProcessingAccount(id);
+        try {
+            await updateAccount(id, { name: editName });
+            setAccounts(accounts.map(acc => acc.id === id ? { ...acc, name: editName } : acc));
+            setEditingAccount(null);
+        } catch (err) {
+            console.error('Failed to rename account:', err);
+        } finally {
+            setProcessingAccount(null);
+        }
+    };
+
+    const handleToggleVisibility = async (id: string, currentVisibility: boolean) => {
+        setProcessingAccount(id);
+        try {
+            await updateAccount(id, { is_visible: !currentVisibility });
+            setAccounts(accounts.map(acc => acc.id === id ? { ...acc, is_visible: !currentVisibility } : acc));
+        } catch (err) {
+            console.error('Failed to toggle visibility:', err);
+        } finally {
+            setProcessingAccount(null);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if (!confirm('Opravdu chcete smazat tento účet a celou jeho historii transakcí? Tato akce je nevratná.')) return;
+
+        setProcessingAccount(id);
+        try {
+            await deleteAccount(id);
+            setAccounts(accounts.filter(acc => acc.id !== id));
+        } catch (err) {
+            console.error('Failed to delete account:', err);
+            alert('Nepodařilo se smazat účet.');
+        } finally {
+            setProcessingAccount(null);
+        }
+    };
+
+    // ... (rest of the component)
+
+
+
+    const loadBanks = async () => {
+        setLoadingBanks(true);
+        try {
+            const data = await getInstitutions('CZ');
+            setInstitutions(data.institutions); // Show all banks
+        } catch (err) {
+            console.error('Failed to load banks:', err);
+        } finally {
+            setLoadingBanks(false);
+        }
+    };
+
+    const handleConnectBank = async (institutionId: string) => {
+        // setConnectingBank(institutionId); // Already set by select
+        try {
+            const redirectUrl = `${window.location.origin}/settings?ref=`;
+            const result = await connectBank(institutionId, redirectUrl);
+            // Redirect to bank authorization
+            window.location.href = result.link;
+        } catch (err) {
+            console.error('Failed to connect bank:', err);
+            // setConnectingBank(null);
+        }
+    };
+
+    const handleBankCallback = async (requisitionId: string) => {
+        try {
+            // Call backend to finalize connection
+            const response = await fetch(`http://localhost:8000/api/accounts/connect/bank/callback?ref=${requisitionId}`);
+            if (response.ok) {
+                // Refresh data
+                const dashData = await getDashboard();
                 if (dashData.accounts.length > 0) {
                     setAccounts(dashData.accounts);
+                }
+                // Clear URL params
+                window.history.replaceState({}, '', '/settings');
+            }
+        } catch (err) {
+            console.error('Bank callback failed:', err);
+        }
+    };
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const [status, dashData, keys] = await Promise.all([
+                    getSyncStatus(),
+                    getDashboard(),
+                    getApiKeys()
+                ]);
+                setSyncStatus(status);
+                setApiKeysLoaded(keys);
+
+                if (keys.gocardless_secret_id) setGocardlessId(keys.gocardless_secret_id);
+                if (keys.gocardless_secret_key) setGocardlessKey(keys.gocardless_secret_key);
+                if (keys.trading212_api_key) setTrading212Key(keys.trading212_api_key);
+
+                if (dashData.accounts.length > 0) {
+                    setAccounts(dashData.accounts);
+                }
+
+                // Load banks if GoCardless is configured
+                if (keys.has_gocardless) {
+                    loadBanks();
                 }
             } catch (err) {
                 console.log('Using demo data');
             }
         }
         fetchData();
+
+        // Check for callback from bank OAuth
+        const urlParams = new URLSearchParams(window.location.search);
+        const ref = urlParams.get('ref');
+        if (ref) {
+            handleBankCallback(ref);
+        }
     }, []);
 
-    const handleSave = () => {
-        console.log('Saving settings...');
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const keysToSave: Record<string, string> = {};
+
+            if (gocardlessId && !gocardlessId.includes('...')) {
+                keysToSave.gocardless_secret_id = gocardlessId;
+            }
+            if (gocardlessKey && !gocardlessKey.includes('...')) {
+                keysToSave.gocardless_secret_key = gocardlessKey;
+            }
+            if (trading212Key && !trading212Key.includes('...')) {
+                keysToSave.trading212_api_key = trading212Key;
+            }
+
+            if (Object.keys(keysToSave).length > 0) {
+                await saveApiKeys(keysToSave);
+            }
+
+            setSaved(true);
+            setTimeout(() => setSaved(false), 3000);
+
+            const keys = await getApiKeys();
+            setApiKeysLoaded(keys);
+            if (keys.gocardless_secret_id) setGocardlessId(keys.gocardless_secret_id);
+            if (keys.gocardless_secret_key) setGocardlessKey(keys.gocardless_secret_key);
+            if (keys.trading212_api_key) setTrading212Key(keys.trading212_api_key);
+
+            // Load banks after saving GoCardless keys
+            if (keys.has_gocardless) {
+                loadBanks();
+            }
+        } catch (err) {
+            console.error('Failed to save settings:', err);
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleSync = async () => {
@@ -53,11 +213,10 @@ export default function SettingsPage() {
         setSyncError(null);
 
         try {
-            const result = await syncData();
+            await syncData();
             const status = await getSyncStatus();
             setSyncStatus(status);
 
-            // Refresh accounts
             try {
                 const dashData = await getDashboard();
                 if (dashData.accounts.length > 0) {
@@ -84,6 +243,10 @@ export default function SettingsPage() {
         });
     };
 
+    const [activeTab, setActiveTab] = useState<'accounts' | 'connections' | 'preferences'>('accounts');
+
+    // ... (rest of the component)
+
     return (
         <MainLayout accounts={accounts}>
             <header style={{ marginBottom: 'var(--spacing-xl)' }}>
@@ -93,272 +256,397 @@ export default function SettingsPage() {
                 </p>
             </header>
 
-            {/* Sync Section */}
-            <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔄 Synchronizace dat</h3>
+            {/* Tabs Navigation */}
+            <div style={{ display: 'flex', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 'var(--spacing-sm)' }}>
+                <button
+                    className={`btn ${activeTab === 'accounts' ? 'btn-primary' : ''}`}
+                    style={{ background: activeTab === 'accounts' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'accounts' ? 1 : 0.6 }}
+                    onClick={() => setActiveTab('accounts')}
+                >
+                    💳 Účty
+                </button>
+                <button
+                    className={`btn ${activeTab === 'connections' ? 'btn-primary' : ''}`}
+                    style={{ background: activeTab === 'connections' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'connections' ? 1 : 0.6 }}
+                    onClick={() => setActiveTab('connections')}
+                >
+                    🔗 Propojení
+                </button>
+                <button
+                    className={`btn ${activeTab === 'preferences' ? 'btn-primary' : ''}`}
+                    style={{ background: activeTab === 'preferences' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'preferences' ? 1 : 0.6 }}
+                    onClick={() => setActiveTab('preferences')}
+                >
+                    ⚙️ Preference
+                </button>
+            </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)', flexWrap: 'wrap' }}>
-                    <button
-                        className="btn btn-primary"
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        style={{
-                            minWidth: '180px',
-                            opacity: isSyncing ? 0.7 : 1,
-                            cursor: isSyncing ? 'wait' : 'pointer'
-                        }}
-                    >
-                        {isSyncing ? (
-                            <>
-                                <span className="loading-spinner" style={{
-                                    display: 'inline-block',
-                                    width: '16px',
-                                    height: '16px',
-                                    border: '2px solid rgba(255,255,255,0.3)',
-                                    borderTopColor: 'white',
-                                    borderRadius: '50%',
-                                    animation: 'spin 1s linear infinite',
-                                    marginRight: '8px'
-                                }} />
-                                Synchronizuji...
-                            </>
+            {/* TAB: ACCOUNTS */}
+            {activeTab === 'accounts' && (
+                <div className="animate-fade-in">
+                    {/* My Accounts Management */}
+                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>💳 Moje účty</h3>
+
+                        {accounts.length === 0 ? (
+                            <p className="text-secondary">Zatím nemáte připojené žádné účty.</p>
                         ) : (
-                            '🔄 Synchronizovat data'
-                        )}
-                    </button>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                                {accounts.map(account => (
+                                    <div key={account.id} style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: 'var(--spacing-md)',
+                                        background: 'rgba(255,255,255,0.05)',
+                                        borderRadius: 'var(--radius-md)',
+                                        opacity: processingAccount === account.id ? 0.5 : (account.is_visible !== false ? 1 : 0.6)
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flex: 1 }}>
+                                            <span style={{ fontSize: '1.5rem' }}>
+                                                {account.type === 'bank' ? '🏦' : '📈'}
+                                            </span>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <div className="text-secondary" style={{ fontSize: '0.875rem' }}>
-                            Poslední synchronizace: <strong>{formatLastSync(syncStatus?.last_sync || null)}</strong>
-                        </div>
-                        {syncStatus && syncStatus.status === 'completed' && (
-                            <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                {syncStatus.accounts_synced} účtů, {syncStatus.transactions_synced} transakcí
+                                            {editingAccount === account.id ? (
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <input
+                                                        type="text"
+                                                        className="input"
+                                                        value={editName}
+                                                        onChange={(e) => setEditName(e.target.value)}
+                                                        autoFocus
+                                                        style={{ padding: '4px 8px', fontSize: '0.9rem' }}
+                                                    />
+                                                    <button className="btn btn-sm" onClick={() => handleRename(account.id)}>OK</button>
+                                                    <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>❌</button>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        {account.name}
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditName(account.name);
+                                                                setEditingAccount(account.id);
+                                                            }}
+                                                            style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '0.8rem' }}
+                                                            title="Přejmenovat"
+                                                        >
+                                                            ✏️
+                                                        </button>
+                                                    </div>
+                                                    <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                                        {account.balance} {account.currency} • {account.institution || account.type}
+                                                        {account.is_visible === false && ' • (Skryto)'}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                                            <button
+                                                className="btn"
+                                                style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                                                onClick={() => handleToggleVisibility(account.id, account.is_visible ?? true)}
+                                                title={account.is_visible !== false ? "Skrýt z přehledů" : "Zobrazit v přehledech"}
+                                            >
+                                                {account.is_visible !== false ? '👁️' : '🙈'}
+                                            </button>
+                                            <button
+                                                className="btn"
+                                                style={{ padding: '4px 8px', fontSize: '0.8rem', color: '#ff6b6b', borderColor: 'rgba(255,100,100,0.3)' }}
+                                                onClick={() => handleDelete(account.id)}
+                                                title="Odstranit účet"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
-                    </div>
+                    </GlassCard>
+
+                    {/* Connect Bank */}
+                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Připojit nový bankovní účet</h3>
+
+                        {!apiKeysLoaded?.has_gocardless ? (
+                            <p className="text-tertiary" style={{ fontSize: '0.875rem' }}>
+                                Pro připojení banky nejdříve zadejte a uložte GoCardless API klíče v záložce <strong>Propojení</strong>.
+                            </p>
+                        ) : loadingBanks ? (
+                            <p className="text-secondary">Načítám seznam bank...</p>
+                        ) : institutions.length === 0 ? (
+                            <div>
+                                <p className="text-secondary" style={{ marginBottom: 'var(--spacing-md)' }}>
+                                    Žádné banky nenačteny.
+                                </p>
+                                <button className="btn" onClick={loadBanks}>
+                                    🔄 Načíst banky
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                <div style={{ display: 'flex', gap: 'var(--spacing-md)', alignItems: 'center', maxWidth: '500px' }}>
+                                    <select
+                                        className="input"
+                                        style={{ flex: 1 }}
+                                        onChange={(e) => setConnectingBank(e.target.value)}
+                                        value={connectingBank || ''}
+                                    >
+                                        <option value="" disabled>Vyberte banku...</option>
+                                        {institutions.map((bank) => (
+                                            <option key={bank.id} value={bank.id}>
+                                                {bank.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        className="btn btn-primary"
+                                        disabled={!connectingBank}
+                                        onClick={() => connectingBank && handleConnectBank(connectingBank)}
+                                    >
+                                        {connectingBank && institutions.find(b => b.id === connectingBank)?.name ? 'Připojit vybranou' : 'Připojit'}
+                                    </button>
+                                </div>
+                                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-lg)' }}>
+                                    Po kliknutí budete přesměrováni na stránku vaší banky pro autorizaci
+                                </p>
+                            </>
+                        )}
+                    </GlassCard>
                 </div>
+            )}
 
-                {syncError && (
-                    <div style={{
-                        marginTop: 'var(--spacing-md)',
-                        padding: 'var(--spacing-sm) var(--spacing-md)',
-                        background: 'rgba(255,100,100,0.2)',
-                        borderRadius: 'var(--radius-md)',
-                        color: '#ff6b6b',
-                        fontSize: '0.875rem'
-                    }}>
-                        ⚠️ {syncError}
-                    </div>
-                )}
+            {/* TAB: CONNECTIONS */}
+            {activeTab === 'connections' && (
+                <div className="animate-fade-in">
+                    {/* Sync Section */}
+                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔄 Synchronizace dat</h3>
 
-                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-md)' }}>
-                    Synchronizace stáhne data z GoCardless a Trading 212 a uloží je do lokální databáze pro okamžitý přístup.
-                </p>
-            </GlassCard>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)', flexWrap: 'wrap' }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSync}
+                                disabled={isSyncing}
+                                style={{
+                                    minWidth: '180px',
+                                    opacity: isSyncing ? 0.7 : 1,
+                                    cursor: isSyncing ? 'wait' : 'pointer'
+                                }}
+                            >
+                                {isSyncing ? (
+                                    <>
+                                        <span style={{
+                                            display: 'inline-block',
+                                            width: '16px',
+                                            height: '16px',
+                                            border: '2px solid rgba(255,255,255,0.3)',
+                                            borderTopColor: 'white',
+                                            borderRadius: '50%',
+                                            animation: 'spin 1s linear infinite',
+                                            marginRight: '8px'
+                                        }} />
+                                        Synchronizuji...
+                                    </>
+                                ) : (
+                                    '🔄 Synchronizovat data'
+                                )}
+                            </button>
 
-            {/* API Connections */}
-            <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔗 Připojení k API</h3>
-
-                <div style={{ marginBottom: 'var(--spacing-xl)' }}>
-                    <h4 style={{ marginBottom: 'var(--spacing-md)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-                        <span style={{ fontSize: '1.5rem' }}>🏦</span>
-                        GoCardless Bank Account Data
-                    </h4>
-                    <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: 'var(--spacing-md)' }}>
-                        Připojte své bankovní účty pro automatický import transakcí.
-                        <a
-                            href="https://bankaccountdata.gocardless.com/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--accent-primary)', marginLeft: '8px' }}
-                        >
-                            Získat API klíče →
-                        </a>
-                    </p>
-                    <div style={{ display: 'grid', gap: 'var(--spacing-md)', maxWidth: '500px' }}>
-                        <div>
-                            <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
-                                Secret ID
-                            </label>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="Váš Secret ID..."
-                                value={gocardlessId}
-                                onChange={(e) => setGocardlessId(e.target.value)}
-                            />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div className="text-secondary" style={{ fontSize: '0.875rem' }}>
+                                    Poslední synchronizace: <strong>{formatLastSync(syncStatus?.last_sync || null)}</strong>
+                                </div>
+                                {syncStatus && syncStatus.status === 'completed' && (
+                                    <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                        {syncStatus.accounts_synced} účtů, {syncStatus.transactions_synced} transakcí
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
-                                Secret Key
-                            </label>
-                            <input
-                                type="password"
-                                className="input"
-                                placeholder="Váš Secret Key..."
-                                value={gocardlessKey}
-                                onChange={(e) => setGocardlessKey(e.target.value)}
-                            />
+
+                        {syncError && (
+                            <div style={{
+                                marginTop: 'var(--spacing-md)',
+                                padding: 'var(--spacing-sm) var(--spacing-md)',
+                                background: 'rgba(255,100,100,0.2)',
+                                borderRadius: 'var(--radius-md)',
+                                color: '#ff6b6b',
+                                fontSize: '0.875rem'
+                            }}>
+                                ⚠️ {syncError}
+                            </div>
+                        )}
+
+                        <div style={{ marginTop: 'var(--spacing-md)', display: 'flex', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+                            <div style={{
+                                padding: 'var(--spacing-xs) var(--spacing-sm)',
+                                background: apiKeysLoaded?.has_gocardless ? 'rgba(100,255,100,0.2)' : 'rgba(255,255,255,0.1)',
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '0.75rem'
+                            }}>
+                                {apiKeysLoaded?.has_gocardless ? '✅' : '❌'} GoCardless
+                            </div>
+                            <div style={{
+                                padding: 'var(--spacing-xs) var(--spacing-sm)',
+                                background: apiKeysLoaded?.has_trading212 ? 'rgba(100,255,100,0.2)' : 'rgba(255,255,255,0.1)',
+                                borderRadius: 'var(--radius-sm)',
+                                fontSize: '0.75rem'
+                            }}>
+                                {apiKeysLoaded?.has_trading212 ? '✅' : '❌'} Trading 212
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                <div style={{ borderTop: '1px solid var(--glass-border-light)', paddingTop: 'var(--spacing-xl)' }}>
-                    <h4 style={{ marginBottom: 'var(--spacing-md)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-                        <span style={{ fontSize: '1.5rem' }}>📈</span>
-                        Trading 212
-                    </h4>
-                    <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: 'var(--spacing-md)' }}>
-                        Připojte své investiční portfolio z Trading 212.
-                        <a
-                            href="https://trading212.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--accent-primary)', marginLeft: '8px' }}
-                        >
-                            Získat API klíč →
-                        </a>
-                    </p>
-                    <div style={{ maxWidth: '500px' }}>
-                        <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
-                            API Key
-                        </label>
-                        <input
-                            type="password"
-                            className="input"
-                            placeholder="Váš Trading 212 API Key..."
-                            value={trading212Key}
-                            onChange={(e) => setTrading212Key(e.target.value)}
-                        />
-                    </div>
-                </div>
+                        <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-md)' }}>
+                            Synchronizace stáhne data z propojených účtů a uloží je do lokální databáze.
+                        </p>
+                    </GlassCard>
 
-                <div style={{ marginTop: 'var(--spacing-xl)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-                    <button className="btn btn-primary" onClick={handleSave}>
-                        💾 Uložit nastavení
-                    </button>
-                    {saved && (
-                        <span style={{ color: 'var(--accent-success)', fontSize: '0.875rem' }}>
-                            ✓ Uloženo
-                        </span>
-                    )}
-                </div>
-            </GlassCard>
+                    {/* API Connections */}
+                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔗 Připojení k API</h3>
 
-            {/* Connect Bank */}
-            <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Připojit nový účet</h3>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)' }}>
-                    <button className="btn" style={{
-                        padding: 'var(--spacing-lg)',
-                        flexDirection: 'column',
-                        height: 'auto'
-                    }}>
-                        <span style={{ fontSize: '2rem', marginBottom: 'var(--spacing-sm)' }}>🏦</span>
-                        <span style={{ fontWeight: 600 }}>Česká spořitelna</span>
-                        <span className="text-tertiary" style={{ fontSize: '0.75rem' }}>Připojit</span>
-                    </button>
-                    <button className="btn" style={{
-                        padding: 'var(--spacing-lg)',
-                        flexDirection: 'column',
-                        height: 'auto'
-                    }}>
-                        <span style={{ fontSize: '2rem', marginBottom: 'var(--spacing-sm)' }}>🏦</span>
-                        <span style={{ fontWeight: 600 }}>Komerční banka</span>
-                        <span className="text-tertiary" style={{ fontSize: '0.75rem' }}>Připojit</span>
-                    </button>
-                    <button className="btn" style={{
-                        padding: 'var(--spacing-lg)',
-                        flexDirection: 'column',
-                        height: 'auto'
-                    }}>
-                        <span style={{ fontSize: '2rem', marginBottom: 'var(--spacing-sm)' }}>🏦</span>
-                        <span style={{ fontWeight: 600 }}>ČSOB</span>
-                        <span className="text-tertiary" style={{ fontSize: '0.75rem' }}>Připojit</span>
-                    </button>
-                    <button className="btn" style={{
-                        padding: 'var(--spacing-lg)',
-                        flexDirection: 'column',
-                        height: 'auto'
-                    }}>
-                        <span style={{ fontSize: '2rem', marginBottom: 'var(--spacing-sm)' }}>🏦</span>
-                        <span style={{ fontWeight: 600 }}>Raiffeisenbank</span>
-                        <span className="text-tertiary" style={{ fontSize: '0.75rem' }}>Připojit</span>
-                    </button>
-                </div>
-
-                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-lg)', textAlign: 'center' }}>
-                    Více bank dostupných po zadání GoCardless API klíčů
-                </p>
-            </GlassCard>
-
-            {/* Preferences */}
-            <GlassCard className="animate-fade-in">
-                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Preference</h3>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <div style={{ fontWeight: 500 }}>Výchozí měna</div>
-                            <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Měna pro zobrazení celkových zůstatků</div>
+                        <div style={{ marginBottom: 'var(--spacing-xl)' }}>
+                            <h4 style={{ marginBottom: 'var(--spacing-md)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span style={{ fontSize: '1.5rem' }}>🏦</span>
+                                GoCardless Bank Account Data
+                            </h4>
+                            <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: 'var(--spacing-md)' }}>
+                                Připojte své bankovní účty pro automatický import transakcí.
+                                <a
+                                    href="https://bankaccountdata.gocardless.com/"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: 'var(--accent-primary)', marginLeft: '8px' }}
+                                >
+                                    Získat API klíče →
+                                </a>
+                            </p>
+                            <div style={{ display: 'grid', gap: 'var(--spacing-md)', maxWidth: '500px' }}>
+                                <div>
+                                    <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
+                                        Secret ID
+                                    </label>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder="Váš Secret ID..."
+                                        value={gocardlessId}
+                                        onChange={(e) => setGocardlessId(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
+                                        Secret Key
+                                    </label>
+                                    <input
+                                        type="password"
+                                        className="input"
+                                        placeholder="Váš Secret Key..."
+                                        value={gocardlessKey}
+                                        onChange={(e) => setGocardlessKey(e.target.value)}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <select className="input" style={{ width: 'auto' }}>
-                            <option value="CZK">CZK - Koruna česká</option>
-                            <option value="EUR">EUR - Euro</option>
-                            <option value="USD">USD - Americký dolar</option>
-                        </select>
-                    </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <div style={{ fontWeight: 500 }}>Automatická synchronizace</div>
-                            <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Automaticky stahovat nové transakce</div>
+                        <div style={{ borderTop: '1px solid var(--glass-border-light)', paddingTop: 'var(--spacing-xl)' }}>
+                            <h4 style={{ marginBottom: 'var(--spacing-md)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
+                                <span style={{ fontSize: '1.5rem' }}>📈</span>
+                                Trading 212
+                            </h4>
+                            <p className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: 'var(--spacing-md)' }}>
+                                Připojte své investiční portfolio z Trading 212.
+                                <a
+                                    href="https://trading212.com"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: 'var(--accent-primary)', marginLeft: '8px' }}
+                                >
+                                    Získat API klíč →
+                                </a>
+                            </p>
+                            <div style={{ maxWidth: '500px' }}>
+                                <label className="text-secondary" style={{ fontSize: '0.75rem', display: 'block', marginBottom: 'var(--spacing-xs)' }}>
+                                    API Key
+                                </label>
+                                <input
+                                    type="password"
+                                    className="input"
+                                    placeholder="Váš Trading 212 API Key..."
+                                    value={trading212Key}
+                                    onChange={(e) => setTrading212Key(e.target.value)}
+                                />
+                            </div>
                         </div>
-                        <label style={{
-                            position: 'relative',
-                            display: 'inline-block',
-                            width: '50px',
-                            height: '28px'
-                        }}>
-                            <input type="checkbox" defaultChecked style={{ opacity: 0, width: 0, height: 0 }} />
-                            <span style={{
-                                position: 'absolute',
-                                cursor: 'pointer',
-                                top: 0, left: 0, right: 0, bottom: 0,
-                                backgroundColor: 'var(--accent-primary)',
-                                borderRadius: 'var(--radius-full)',
-                                transition: 'var(--transition-fast)'
-                            }} />
-                        </label>
-                    </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                            <div style={{ fontWeight: 500 }}>Notifikace</div>
-                            <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Upozornění na velké transakce</div>
+                        <div style={{ marginTop: 'var(--spacing-xl)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSave}
+                                disabled={saving}
+                                style={{ opacity: saving ? 0.7 : 1 }}
+                            >
+                                {saving ? '⏳ Ukládám...' : '💾 Uložit nastavení'}
+                            </button>
+                            {saved && (
+                                <span style={{ color: 'var(--accent-success)', fontSize: '0.875rem' }}>
+                                    ✓ Uloženo do databáze
+                                </span>
+                            )}
                         </div>
-                        <label style={{
-                            position: 'relative',
-                            display: 'inline-block',
-                            width: '50px',
-                            height: '28px'
-                        }}>
-                            <input type="checkbox" style={{ opacity: 0, width: 0, height: 0 }} />
-                            <span style={{
-                                position: 'absolute',
-                                cursor: 'pointer',
-                                top: 0, left: 0, right: 0, bottom: 0,
-                                backgroundColor: 'rgba(255,255,255,0.2)',
-                                borderRadius: 'var(--radius-full)',
-                                transition: 'var(--transition-fast)'
-                            }} />
-                        </label>
-                    </div>
+                    </GlassCard>
                 </div>
-            </GlassCard>
+            )}
+
+            {/* TAB: PREFERENCES */}
+            {activeTab === 'preferences' && (
+                <div className="animate-fade-in">
+                    <GlassCard>
+                        <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Preference</h3>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 500 }}>Výchozí měna</div>
+                                    <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Měna pro zobrazení celkových zůstatků</div>
+                                </div>
+                                <select className="input" style={{ width: 'auto' }}>
+                                    <option value="CZK">CZK - Koruna česká</option>
+                                    <option value="EUR">EUR - Euro</option>
+                                    <option value="USD">USD - Americký dolar</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <div style={{ fontWeight: 500 }}>Automatická synchronizace</div>
+                                    <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Automaticky stahovat nové transakce</div>
+                                </div>
+                                <label style={{
+                                    position: 'relative',
+                                    display: 'inline-block',
+                                    width: '50px',
+                                    height: '28px'
+                                }}>
+                                    <input type="checkbox" defaultChecked style={{ opacity: 0, width: 0, height: 0 }} />
+                                    <span style={{
+                                        position: 'absolute',
+                                        cursor: 'pointer',
+                                        top: 0, left: 0, right: 0, bottom: 0,
+                                        backgroundColor: 'var(--accent-primary)',
+                                        borderRadius: 'var(--radius-full)',
+                                        transition: 'var(--transition-fast)'
+                                    }} />
+                                </label>
+                            </div>
+                        </div>
+                    </GlassCard>
+                </div>
+            )}
 
             <style jsx>{`
                 @keyframes spin {

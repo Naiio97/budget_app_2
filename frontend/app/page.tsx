@@ -107,7 +107,7 @@ export default function DashboardPage() {
           icon="📈"
           label="Investice"
           value={data.summary.investment_balance}
-          currency="EUR"
+          currency={data.summary.currency}
         />
       </div>
 
