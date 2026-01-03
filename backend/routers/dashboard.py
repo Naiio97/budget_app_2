@@ -85,7 +85,8 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "name": acc.name,
                 "type": acc.type,
                 "balance": acc.balance,
-                "currency": acc.currency
+                "currency": acc.currency,
+                "institution": acc.institution
             }
             for acc in accounts
         ]

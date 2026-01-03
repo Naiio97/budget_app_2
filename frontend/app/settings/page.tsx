@@ -5,11 +5,7 @@ import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
 
-const demoAccounts: Account[] = [
-    { id: '1', name: 'Hlavní účet', type: 'bank', balance: 125420, currency: 'CZK' },
-    { id: '2', name: 'Spořicí účet', type: 'bank', balance: 60000, currency: 'CZK' },
-    { id: '3', name: 'Trading 212', type: 'investment', balance: 60360, currency: 'EUR' },
-];
+
 
 interface Institution {
     id: string;
@@ -24,7 +20,8 @@ export default function SettingsPage() {
     const [trading212Key, setTrading212Key] = useState('');
     const [saved, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [accounts, setAccounts] = useState<Account[]>(demoAccounts); // Use Account interface
+    const [accounts, setAccounts] = useState<Account[]>([]);
+    const [loadingAccounts, setLoadingAccounts] = useState(true);
     const [apiKeysLoaded, setApiKeysLoaded] = useState<ApiKeysResponse | null>(null);
 
     // Account Management State
@@ -87,7 +84,28 @@ export default function SettingsPage() {
 
     // ... (rest of the component)
 
+    const getBankLogo = (institution: string | undefined, type: string) => {
+        if (!institution) return null;
 
+        const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const inst = normalize(institution);
+
+        let logoFile = '';
+        if (inst.includes('airbank')) logoFile = 'airbank';
+        else if (inst.includes('csas') || inst.includes('cesk') || inst.includes('sporitelna')) logoFile = 'csas';
+        else if (inst.includes('trading212')) logoFile = 'trading212';
+        else if (inst.includes('kb') || inst.includes('komercni')) logoFile = 'kb';
+        else if (inst.includes('moneta')) logoFile = 'moneta';
+        else if (inst.includes('raiffeisen') || (inst.includes('rb') && !inst.includes('airbank'))) logoFile = 'rb';
+        else if (inst.includes('fio')) logoFile = 'fio';
+        else if (inst.includes('csob')) logoFile = 'csob';
+        else if (inst.includes('revolut')) logoFile = 'revolut';
+
+        if (logoFile) {
+            return `/logos/${logoFile}.png`;
+        }
+        return null;
+    };
 
     const loadBanks = async () => {
         setLoadingBanks(true);
@@ -147,16 +165,16 @@ export default function SettingsPage() {
                 if (keys.gocardless_secret_key) setGocardlessKey(keys.gocardless_secret_key);
                 if (keys.trading212_api_key) setTrading212Key(keys.trading212_api_key);
 
-                if (dashData.accounts.length > 0) {
-                    setAccounts(dashData.accounts);
-                }
+                setAccounts(dashData.accounts || []);
+                setLoadingAccounts(false);
 
                 // Load banks if GoCardless is configured
                 if (keys.has_gocardless) {
                     loadBanks();
                 }
             } catch (err) {
-                console.log('Using demo data');
+                console.log('Failed to load settings data');
+                setLoadingAccounts(false);
             }
         }
         fetchData();
@@ -308,9 +326,14 @@ export default function SettingsPage() {
                                                     opacity: processingAccount === account.id ? 0.5 : (account.is_visible !== false ? 1 : 0.6)
                                                 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flex: 1 }}>
-                                                        <span style={{ fontSize: '1.25rem' }}>
-                                                            {account.type === 'bank' ? '🏦' : '📈'}
-                                                        </span>
+                                                        {(() => {
+                                                            const logoUrl = getBankLogo(account.institution, account.type);
+                                                            return logoUrl ? (
+                                                                <img src={logoUrl} alt={account.name} style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px' }} />
+                                                            ) : (
+                                                                <span style={{ fontSize: '1.25rem' }}>{account.type === 'bank' ? '🏦' : '📈'}</span>
+                                                            );
+                                                        })()}
 
                                                         {editingAccount === account.id ? (
                                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -341,7 +364,7 @@ export default function SettingsPage() {
                                                                     </button>
                                                                 </div>
                                                                 <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                                                    {account.balance} {account.currency} • {account.institution || account.type}
+                                                                    {account.institution || account.type}
                                                                     {account.is_visible === false && ' • (Skryto)'}
                                                                 </div>
                                                             </div>

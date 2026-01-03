@@ -67,6 +67,8 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  background: var(--bg-dark);
 }
 
 body {
@@ -77,6 +79,7 @@ body {
   min-height: 100vh;
   line-height: 1.5;
   overflow-x: hidden;
+  overscroll-behavior: none;
 }
 
 /* Animated background */
@@ -302,6 +305,7 @@ h6 {
   -webkit-backdrop-filter: blur(40px);
   border-left: 1px solid var(--glass-border-light);
   overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 100;
 }
 

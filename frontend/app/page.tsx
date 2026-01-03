@@ -8,44 +8,8 @@ import CategoryChart from '@/components/CategoryChart';
 import GlassCard from '@/components/GlassCard';
 import { DashboardData, getDashboard, Transaction } from '@/lib/api';
 
-// Demo data for when API is not available
-const demoData: DashboardData = {
-  summary: {
-    total_balance: 245780,
-    bank_balance: 185420,
-    investment_balance: 60360,
-    currency: 'CZK',
-    accounts_count: 3,
-  },
-  monthly: {
-    income: 65000,
-    expenses: 42350,
-    savings: 22650,
-  },
-  categories: {
-    'Food': 8500,
-    'Transport': 4200,
-    'Utilities': 6800,
-    'Entertainment': 3500,
-    'Shopping': 12350,
-    'Other': 7000,
-  },
-  recent_transactions: [
-    { id: '1', date: '2024-12-26', description: 'Lidl - nákup', amount: -1250, currency: 'CZK', category: 'Food', account_id: 'demo', account_type: 'bank' },
-    { id: '2', date: '2024-12-25', description: 'Výplata', amount: 65000, currency: 'CZK', category: 'Salary', account_id: 'demo', account_type: 'bank' },
-    { id: '3', date: '2024-12-24', description: 'Netflix', amount: -299, currency: 'CZK', category: 'Entertainment', account_id: 'demo', account_type: 'bank' },
-    { id: '4', date: '2024-12-23', description: 'Uber', amount: -185, currency: 'CZK', category: 'Transport', account_id: 'demo', account_type: 'bank' },
-    { id: '5', date: '2024-12-22', description: 'Dividenda AAPL', amount: 450, currency: 'CZK', category: 'Dividend', account_id: 'trading212', account_type: 'investment' },
-  ],
-  accounts: [
-    { id: '1', name: 'Hlavní účet', type: 'bank', balance: 125420, currency: 'CZK' },
-    { id: '2', name: 'Spořicí účet', type: 'bank', balance: 60000, currency: 'CZK' },
-    { id: '3', name: 'Trading 212', type: 'investment', balance: 60360, currency: 'EUR' },
-  ],
-};
-
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData>(demoData);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,8 +20,8 @@ export default function DashboardPage() {
         setData(dashboardData);
         setError(null);
       } catch (err) {
-        console.log('Using demo data - API not available');
-        setError('Demo mode - API nedostupné');
+        console.log('API error:', err);
+        setError('Nepodařilo se načíst data. Zkontrolujte připojení k serveru.');
       } finally {
         setLoading(false);
       }
@@ -73,6 +37,32 @@ export default function DashboardPage() {
       maximumFractionDigits: 0,
     }).format(amount);
   };
+
+  // Show loading spinner while fetching data
+  if (loading || !data) {
+    return (
+      <MainLayout accounts={[]}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100%',
+          flexDirection: 'column',
+          gap: 'var(--spacing-md)'
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid var(--glass-border-light)',
+            borderTopColor: 'var(--accent-primary)',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <span className="text-secondary">Načítám data...</span>
+        </div>
+      </MainLayout>
+    );
+  }
 
   const savingsPercent = data.monthly.income > 0
     ? ((data.monthly.savings / data.monthly.income) * 100).toFixed(1)

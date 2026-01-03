@@ -6,31 +6,9 @@ import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
 import { Transaction, getTransactions, DashboardData, getDashboard } from '@/lib/api';
 
-// Demo transactions
-const demoTransactions: Transaction[] = [
-    { id: '1', date: '2024-12-26', description: 'Lidl - nákup potravin', amount: -1250, currency: 'CZK', category: 'Food', account_id: 'demo', account_type: 'bank' },
-    { id: '2', date: '2024-12-25', description: 'Výplata - prosinec', amount: 65000, currency: 'CZK', category: 'Salary', account_id: 'demo', account_type: 'bank' },
-    { id: '3', date: '2024-12-24', description: 'Netflix předplatné', amount: -299, currency: 'CZK', category: 'Entertainment', account_id: 'demo', account_type: 'bank' },
-    { id: '4', date: '2024-12-24', description: 'Uber - cesta do práce', amount: -185, currency: 'CZK', category: 'Transport', account_id: 'demo', account_type: 'bank' },
-    { id: '5', date: '2024-12-23', description: 'Dividenda AAPL', amount: 450, currency: 'CZK', category: 'Dividend', account_id: 'trading212', account_type: 'investment' },
-    { id: '6', date: '2024-12-22', description: 'Alza.cz - elektronika', amount: -4999, currency: 'CZK', category: 'Shopping', account_id: 'demo', account_type: 'bank' },
-    { id: '7', date: '2024-12-21', description: 'ČEZ - elektřina', amount: -2850, currency: 'CZK', category: 'Utilities', account_id: 'demo', account_type: 'bank' },
-    { id: '8', date: '2024-12-20', description: 'Pražské vodovody', amount: -650, currency: 'CZK', category: 'Utilities', account_id: 'demo', account_type: 'bank' },
-    { id: '9', date: '2024-12-19', description: 'Albert hypermarket', amount: -890, currency: 'CZK', category: 'Food', account_id: 'demo', account_type: 'bank' },
-    { id: '10', date: '2024-12-18', description: 'Spotify Premium', amount: -169, currency: 'CZK', category: 'Entertainment', account_id: 'demo', account_type: 'bank' },
-    { id: '11', date: '2024-12-17', description: 'Benzina - palivo', amount: -1850, currency: 'CZK', category: 'Transport', account_id: 'demo', account_type: 'bank' },
-    { id: '12', date: '2024-12-16', description: 'Nákup MSFT akcie', amount: -8500, currency: 'CZK', category: 'Investment', account_id: 'trading212', account_type: 'investment' },
-];
-
-const demoAccounts = [
-    { id: '1', name: 'Hlavní účet', type: 'bank' as const, balance: 125420, currency: 'CZK' },
-    { id: '2', name: 'Spořicí účet', type: 'bank' as const, balance: 60000, currency: 'CZK' },
-    { id: '3', name: 'Trading 212', type: 'investment' as const, balance: 60360, currency: 'EUR' },
-];
-
 export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
-    const [accounts, setAccounts] = useState(demoAccounts);
+    const [accounts, setAccounts] = useState<{ id: string; name: string; type: 'bank' | 'investment'; balance: number; currency: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Filters & Pagination
@@ -85,8 +63,7 @@ export default function TransactionsPage() {
                 setMonthlyStats(dashData.monthly);
             } catch (err) {
                 console.log('Error fetching data:', err);
-                // Fallback to demo data if API fails completely (optional)
-                setTransactions(demoTransactions);
+                // API failed - just show empty state
             } finally {
                 setLoading(false);
             }
