@@ -54,6 +54,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
     try:
         # Clear existing transactions (fresh sync)
         await db.execute(delete(TransactionModel))
+        await db.commit()  # Commit the delete before adding new transactions
         
         # Sync bank accounts from GoCardless
         # Sync bank accounts from GoCardless
@@ -141,7 +142,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                             account_type="bank",
                             raw_json=json.dumps(tx_data)
                         )
-                        db.add(tx)
+                        await db.merge(tx)  # Use merge to handle duplicates
                         transactions_synced += 1
                         
                     accounts_synced += 1
@@ -235,7 +236,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     account_type="investment",
                     raw_json=json.dumps(order)
                 )
-                db.add(tx)
+                await db.merge(tx)  # Use merge to handle duplicates
                 transactions_synced += 1
             
             # Sync dividends
@@ -263,7 +264,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     account_type="investment",
                     raw_json=json.dumps(div)
                 )
-                db.add(tx)
+                await db.merge(tx)  # Use merge to handle duplicates
                 transactions_synced += 1
                 
         except Exception as e:
@@ -284,10 +285,20 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
         }
         
     except Exception as e:
-        sync_status.status = "failed"
-        sync_status.error_message = str(e)
-        sync_status.completed_at = datetime.utcnow()
-        await db.commit()
+        # Rollback any pending transaction before updating status
+        await db.rollback()
+        
+        # Re-fetch sync_status after rollback (it may be detached)
+        result = await db.execute(
+            select(SyncStatusModel).order_by(SyncStatusModel.id.desc()).limit(1)
+        )
+        sync_status = result.scalar_one_or_none()
+        
+        if sync_status:
+            sync_status.status = "failed"
+            sync_status.error_message = str(e)
+            sync_status.completed_at = datetime.utcnow()
+            await db.commit()
         
         raise HTTPException(status_code=500, detail=str(e))
 

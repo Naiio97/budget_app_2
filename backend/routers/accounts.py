@@ -6,7 +6,7 @@ from sqlalchemy import select
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
 from database import get_db
-from models import AccountModel
+from models import AccountModel, TransactionModel
 import json
 from datetime import datetime
 
@@ -136,6 +136,70 @@ async def get_account_balances(account_id: str, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=404, detail="Account not found")
     
     return {"balances": [{"amount": account.balance, "currency": account.currency}]}
+
+
+@router.get("/{account_id}/detail")
+async def get_account_detail(
+    account_id: str, 
+    page: int = 1, 
+    limit: int = 20, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Get full account details including paginated transactions"""
+    account = await db.get(AccountModel, account_id)
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Calculate offset
+    offset = (page - 1) * limit
+    
+    # Get total count of transactions for this account
+    from sqlalchemy import func
+    count_query = select(func.count()).where(TransactionModel.account_id == account_id)
+    count_result = await db.execute(count_query)
+    total_items = count_result.scalar() or 0
+    
+    # Calculate total pages
+    import math
+    total_pages = math.ceil(total_items / limit) if total_items > 0 else 1
+    
+    # Get paginated transactions
+    tx_result = await db.execute(
+        select(TransactionModel)
+        .where(TransactionModel.account_id == account_id)
+        .order_by(TransactionModel.date.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    transactions = tx_result.scalars().all()
+    
+    return {
+        "account": {
+            "id": account.id,
+            "name": account.name,
+            "type": account.type,
+            "balance": account.balance,
+            "currency": account.currency,
+            "institution": account.institution,
+            "is_visible": account.is_visible,
+            "last_synced": account.last_synced.isoformat() if account.last_synced else None
+        },
+        "transactions": [
+            {
+                "id": tx.id,
+                "date": tx.date,
+                "description": tx.description,
+                "amount": tx.amount,
+                "currency": tx.currency,
+                "category": tx.category
+            }
+            for tx in transactions
+        ],
+        "total": total_items,
+        "pages": total_pages,
+        "current_page": page
+    }
 
 
 class UpdateAccountRequest(BaseModel):

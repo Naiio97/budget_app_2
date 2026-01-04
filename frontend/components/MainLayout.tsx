@@ -25,6 +25,8 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
     const navItems = [
         { href: '/', label: 'Dashboard', icon: '📊' },
         { href: '/transactions', label: 'Transakce', icon: '💳' },
+        { href: '/budgets', label: 'Rozpočty', icon: '💰' },
+        { href: '/investments', label: 'Investice', icon: '📈' },
         { href: '/settings', label: 'Nastavení', icon: '⚙️' },
     ];
 
@@ -117,8 +119,16 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
                 ) : (
                     accounts.map((account) => {
                         const logoUrl = getBankLogo(account.institution, account.type);
+                        const href = account.type === 'investment'
+                            ? '/investments'
+                            : `/accounts/${account.id}`;
+
                         return (
-                            <div key={account.id} className="glass account-card">
+                            <Link
+                                key={account.id}
+                                href={href}
+                                className="glass account-card"
+                            >
                                 {logoUrl ? (
                                     <div className="account-icon" style={{ background: 'white', overflow: 'hidden', padding: '4px' }}>
                                         <img src={logoUrl} alt={account.institution || account.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -134,7 +144,7 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
                                         {formatCurrency(account.balance, account.currency)}
                                     </div>
                                 </div>
-                            </div>
+                            </Link>
                         );
                     })
                 )}

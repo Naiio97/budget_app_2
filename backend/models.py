@@ -61,3 +61,29 @@ class SettingsModel(Base):
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BudgetModel(Base):
+    """Monthly budget per category"""
+    __tablename__ = "budgets"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    category = Column(String, nullable=False)  # "Food", "Transport", etc.
+    amount = Column(Float, nullable=False)  # Monthly limit in CZK
+    currency = Column(String, default="CZK")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SavingsGoalModel(Base):
+    """Savings goal with target amount"""
+    __tablename__ = "savings_goals"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)  # "Dovolená", "Nové auto"
+    target_amount = Column(Float, nullable=False)
+    current_amount = Column(Float, default=0.0)
+    currency = Column(String, default="CZK")
+    deadline = Column(String, nullable=True)  # YYYY-MM-DD
+    is_completed = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

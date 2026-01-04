@@ -6,18 +6,23 @@ import StatCard from '@/components/StatCard';
 import TransactionList from '@/components/TransactionList';
 import CategoryChart from '@/components/CategoryChart';
 import GlassCard from '@/components/GlassCard';
-import { DashboardData, getDashboard, Transaction } from '@/lib/api';
+import { DashboardData, getDashboard, Transaction, BudgetOverview, getBudgetOverview } from '@/lib/api';
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [budgetOverview, setBudgetOverview] = useState<BudgetOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const dashboardData = await getDashboard();
+        const [dashboardData, budgetData] = await Promise.all([
+          getDashboard(),
+          getBudgetOverview().catch(() => null)
+        ]);
         setData(dashboardData);
+        setBudgetOverview(budgetData);
         setError(null);
       } catch (err) {
         console.log('API error:', err);
@@ -153,6 +158,92 @@ export default function DashboardPage() {
               <CategoryChart categories={data.categories} currency={data.summary.currency} />
             </GlassCard>
           </div>
+
+          {/* Budget Overview Widget */}
+          {budgetOverview && budgetOverview.categories_count > 0 && (
+            <GlassCard style={{ marginBottom: 'var(--spacing-xl)' }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 'var(--spacing-md)'
+              }}>
+                <h4 style={{ margin: 0 }}>💰 Stav rozpočtu</h4>
+                <a
+                  href="/budgets"
+                  style={{
+                    color: 'var(--accent-primary)',
+                    textDecoration: 'none',
+                    fontSize: '0.875rem',
+                    fontWeight: 500
+                  }}
+                >
+                  Spravovat →
+                </a>
+              </div>
+
+              {/* Total Progress */}
+              <div style={{ marginBottom: 'var(--spacing-md)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Celkem</span>
+                  <span style={{ fontSize: '0.85rem' }}>
+                    {formatCurrency(budgetOverview.total_spent)} / {formatCurrency(budgetOverview.total_budget)}
+                  </span>
+                </div>
+                <div style={{
+                  height: '8px',
+                  background: 'rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min(budgetOverview.total_percentage, 100)}%`,
+                    background: budgetOverview.total_percentage >= 100
+                      ? 'var(--accent-error)'
+                      : budgetOverview.total_percentage >= 80
+                        ? 'var(--accent-warning)'
+                        : 'var(--accent-success)',
+                    borderRadius: '4px',
+                    transition: 'width 0.5s ease'
+                  }} />
+                </div>
+              </div>
+
+              {/* Top 3 Categories */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                {budgetOverview.categories.slice(0, 3).map((cat, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+                    <span style={{ width: '80px', fontSize: '0.8rem' }}>{cat.category}</span>
+                    <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${Math.min(cat.percentage, 100)}%`,
+                        background: cat.percentage >= 100
+                          ? 'var(--accent-error)'
+                          : cat.percentage >= 80
+                            ? 'var(--accent-warning)'
+                            : 'var(--accent-success)',
+                        borderRadius: '3px'
+                      }} />
+                    </div>
+                    <span style={{
+                      width: '45px',
+                      textAlign: 'right',
+                      fontSize: '0.8rem',
+                      color: cat.percentage >= 100
+                        ? 'var(--accent-error)'
+                        : cat.percentage >= 80
+                          ? 'var(--accent-warning)'
+                          : 'var(--text-secondary)'
+                    }}>
+                      {cat.percentage.toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
 
           {/* Recent Transactions */}
           <GlassCard hover={false}>

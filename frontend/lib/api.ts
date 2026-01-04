@@ -207,3 +207,170 @@ export async function saveApiKeys(keys: ApiKeysRequest): Promise<{ status: strin
     if (!response.ok) throw new Error('Failed to save API keys');
     return response.json();
 }
+
+// Account detail
+export interface AccountDetail {
+    account: {
+        id: string;
+        name: string;
+        type: string;
+        balance: number;
+        currency: string;
+        institution: string | null;
+        is_visible: boolean;
+        last_synced: string | null;
+    };
+    transactions: Transaction[];
+    total: number;
+    pages: number;
+    current_page: number;
+}
+
+export async function getAccountDetail(accountId: string, page: number = 1, limit: number = 20): Promise<AccountDetail> {
+    return fetchApi<AccountDetail>(`/accounts/${accountId}/detail?page=${page}&limit=${limit}`);
+}
+
+// Investment portfolio (from database)
+export interface InvestmentPortfolio {
+    total_value: number;
+    currency: string;
+    last_synced: string | null;
+    transactions: Array<{
+        id: string;
+        date: string;
+        description: string;
+        amount: number;
+        currency: string;
+        category: string;
+    }>;
+}
+
+export interface PortfolioHistory {
+    history: Array<{ date: string; value: number }>;
+    currency: string;
+}
+
+export interface Dividend {
+    date: string;
+    ticker: string;
+    amount: number;
+    currency: string;
+}
+
+export async function getInvestmentPortfolio(): Promise<InvestmentPortfolio> {
+    return fetchApi<InvestmentPortfolio>('/investments/portfolio');
+}
+
+export async function getPortfolioHistory(period: string = '1M'): Promise<PortfolioHistory> {
+    return fetchApi<PortfolioHistory>(`/investments/history?period=${period}`);
+}
+
+export async function getDividends(limit: number = 50): Promise<{ dividends: Dividend[] }> {
+    return fetchApi<{ dividends: Dividend[] }>(`/investments/dividends?limit=${limit}`);
+}
+
+// === Budgets & Goals ===
+
+export interface Budget {
+    id: number;
+    category: string;
+    amount: number;
+    currency: string;
+    is_active: boolean;
+    spent: number;
+    percentage: number;
+}
+
+export interface BudgetOverview {
+    month: string;
+    month_name: string;
+    total_budget: number;
+    total_spent: number;
+    total_percentage: number;
+    categories: Array<{
+        category: string;
+        amount: number;
+        spent: number;
+        percentage: number;
+    }>;
+    categories_count: number;
+}
+
+export interface SavingsGoal {
+    id: number;
+    name: string;
+    target_amount: number;
+    current_amount: number;
+    currency: string;
+    deadline: string | null;
+    is_completed: boolean;
+    percentage: number;
+}
+
+export async function getBudgets(): Promise<Budget[]> {
+    return fetchApi<Budget[]>('/budgets/');
+}
+
+export async function getBudgetOverview(): Promise<BudgetOverview> {
+    return fetchApi<BudgetOverview>('/budgets/overview');
+}
+
+export async function createBudget(data: { category: string; amount: number }): Promise<Budget> {
+    const response = await fetch(`${API_BASE}/budgets/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to create budget');
+    return response.json();
+}
+
+export async function updateBudget(id: number, data: { category?: string; amount?: number; is_active?: boolean }): Promise<Budget> {
+    const response = await fetch(`${API_BASE}/budgets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to update budget');
+    return response.json();
+}
+
+export async function deleteBudget(id: number): Promise<{ status: string; id: number }> {
+    const response = await fetch(`${API_BASE}/budgets/${id}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete budget');
+    return response.json();
+}
+
+export async function getGoals(): Promise<SavingsGoal[]> {
+    return fetchApi<SavingsGoal[]>('/budgets/goals');
+}
+
+export async function createGoal(data: { name: string; target_amount: number; deadline?: string }): Promise<SavingsGoal> {
+    const response = await fetch(`${API_BASE}/budgets/goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to create goal');
+    return response.json();
+}
+
+export async function updateGoal(id: number, data: { name?: string; target_amount?: number; current_amount?: number; add_amount?: number; deadline?: string; is_completed?: boolean }): Promise<SavingsGoal> {
+    const response = await fetch(`${API_BASE}/budgets/goals/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to update goal');
+    return response.json();
+}
+
+export async function deleteGoal(id: number): Promise<{ status: string; id: number }> {
+    const response = await fetch(`${API_BASE}/budgets/goals/${id}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete goal');
+    return response.json();
+}
