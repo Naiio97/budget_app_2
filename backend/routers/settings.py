@@ -93,3 +93,84 @@ async def get_api_key(key: str) -> Optional[str]:
     from database import get_db_context
     async with get_db_context() as db:
         return await get_setting(db, key)
+
+
+# ============== Category Rules ==============
+
+from models import CategoryRuleModel
+
+class CategoryRuleRequest(BaseModel):
+    pattern: str
+    category: str
+
+
+class CategoryRuleResponse(BaseModel):
+    id: int
+    pattern: str
+    category: str
+    is_user_defined: bool
+    match_count: int
+
+
+@router.get("/category-rules")
+async def get_category_rules(db: AsyncSession = Depends(get_db)):
+    """Get all category rules"""
+    result = await db.execute(
+        select(CategoryRuleModel).order_by(CategoryRuleModel.is_user_defined.desc(), CategoryRuleModel.match_count.desc())
+    )
+    rules = result.scalars().all()
+    
+    return {
+        "rules": [
+            CategoryRuleResponse(
+                id=r.id,
+                pattern=r.pattern,
+                category=r.category,
+                is_user_defined=r.is_user_defined,
+                match_count=r.match_count
+            )
+            for r in rules
+        ]
+    }
+
+
+@router.post("/category-rules")
+async def create_category_rule(request: CategoryRuleRequest, db: AsyncSession = Depends(get_db)):
+    """Create a new category rule"""
+    # Check if pattern already exists
+    existing = await db.execute(
+        select(CategoryRuleModel).where(CategoryRuleModel.pattern == request.pattern.lower())
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Rule with this pattern already exists")
+    
+    rule = CategoryRuleModel(
+        pattern=request.pattern.lower(),
+        category=request.category,
+        is_user_defined=True,
+        match_count=0
+    )
+    db.add(rule)
+    await db.commit()
+    await db.refresh(rule)
+    
+    return {
+        "id": rule.id,
+        "pattern": rule.pattern,
+        "category": rule.category,
+        "message": "Rule created successfully"
+    }
+
+
+@router.delete("/category-rules/{rule_id}")
+async def delete_category_rule(rule_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete a category rule"""
+    rule = await db.get(CategoryRuleModel, rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    
+    await db.delete(rule)
+    await db.commit()
+    
+    return {"message": "Rule deleted", "id": rule_id}
+

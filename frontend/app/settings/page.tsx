@@ -14,6 +14,14 @@ interface Institution {
     bic?: string;
 }
 
+interface CategoryRule {
+    id: number;
+    pattern: string;
+    category: string;
+    is_user_defined: boolean;
+    match_count: number;
+}
+
 export default function SettingsPage() {
     const [gocardlessId, setGocardlessId] = useState('');
     const [gocardlessKey, setGocardlessKey] = useState('');
@@ -38,6 +46,12 @@ export default function SettingsPage() {
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncError, setSyncError] = useState<string | null>(null);
+
+    // Category Rules
+    const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+    const [newPattern, setNewPattern] = useState('');
+    const [newCategory, setNewCategory] = useState('Food');
+    const [savingRule, setSavingRule] = useState(false);
 
     // ... (existing useEffect and handlers)
 
@@ -178,6 +192,7 @@ export default function SettingsPage() {
             }
         }
         fetchData();
+        loadCategoryRules();
 
         // Check for callback from bank OAuth
         const urlParams = new URLSearchParams(window.location.search);
@@ -261,7 +276,61 @@ export default function SettingsPage() {
         });
     };
 
-    const [activeTab, setActiveTab] = useState<'accounts' | 'connections' | 'preferences'>('accounts');
+    const [activeTab, setActiveTab] = useState<'accounts' | 'connections' | 'preferences' | 'categories'>('accounts');
+
+    // Category rule handlers
+    const loadCategoryRules = async () => {
+        try {
+            const response = await fetch('http://localhost:8000/api/settings/category-rules');
+            if (response.ok) {
+                const data = await response.json();
+                setCategoryRules(data.rules || []);
+            }
+        } catch (err) {
+            console.error('Failed to load category rules:', err);
+        }
+    };
+
+    const handleAddRule = async () => {
+        if (!newPattern.trim()) return;
+        setSavingRule(true);
+        try {
+            const response = await fetch('http://localhost:8000/api/settings/category-rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern: newPattern, category: newCategory })
+            });
+            if (response.ok) {
+                setNewPattern('');
+                loadCategoryRules();
+            }
+        } catch (err) {
+            console.error('Failed to add rule:', err);
+        } finally {
+            setSavingRule(false);
+        }
+    };
+
+    const handleDeleteRule = async (id: number) => {
+        try {
+            await fetch(`http://localhost:8000/api/settings/category-rules/${id}`, { method: 'DELETE' });
+            setCategoryRules(categoryRules.filter(r => r.id !== id));
+        } catch (err) {
+            console.error('Failed to delete rule:', err);
+        }
+    };
+
+    const handleRecategorize = async () => {
+        setIsSyncing(true);
+        try {
+            await fetch('http://localhost:8000/api/sync/recategorize', { method: 'POST' });
+            alert('Transakce byly překategorizovány!');
+        } catch (err) {
+            console.error('Failed to recategorize:', err);
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     // ... (rest of the component)
 
@@ -298,6 +367,13 @@ export default function SettingsPage() {
                             onClick={() => setActiveTab('preferences')}
                         >
                             ⚙️ Preference
+                        </button>
+                        <button
+                            className={`btn ${activeTab === 'categories' ? 'btn-primary' : ''}`}
+                            style={{ background: activeTab === 'categories' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'categories' ? 1 : 0.6 }}
+                            onClick={() => setActiveTab('categories')}
+                        >
+                            🏷️ Kategorie
                         </button>
                     </div>
                 </div>
@@ -634,7 +710,112 @@ export default function SettingsPage() {
                             </GlassCard>
                         </div>
                     )}
+
+                    {/* TAB: CATEGORIES */}
+                    {activeTab === 'categories' && (
+                        <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                            {/* Add New Rule */}
+                            <GlassCard>
+                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Přidat pravidlo</h3>
+                                <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                                    Když popis transakce obsahuje zadaný text, automaticky se přiřadí vybraná kategorie.
+                                </p>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        placeholder='Např. "sensu" nebo "neruda"'
+                                        value={newPattern}
+                                        onChange={(e) => setNewPattern(e.target.value)}
+                                    />
+                                    <select
+                                        className="input"
+                                        value={newCategory}
+                                        onChange={(e) => setNewCategory(e.target.value)}
+                                    >
+                                        <option value="Food">🍔 Jídlo</option>
+                                        <option value="Transport">🚗 Doprava</option>
+                                        <option value="Utilities">💡 Služby</option>
+                                        <option value="Entertainment">🎬 Zábava</option>
+                                        <option value="Shopping">🛒 Nákupy</option>
+                                        <option value="Health">🏥 Zdraví</option>
+                                        <option value="Salary">💰 Příjem</option>
+                                        <option value="Other">📦 Ostatní</option>
+                                    </select>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleAddRule}
+                                        disabled={savingRule || !newPattern.trim()}
+                                    >
+                                        {savingRule ? 'Ukládám...' : '➕ Přidat pravidlo'}
+                                    </button>
+                                </div>
+
+                                <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                                    <button
+                                        className="btn"
+                                        onClick={handleRecategorize}
+                                        disabled={isSyncing}
+                                        style={{ width: '100%' }}
+                                    >
+                                        {isSyncing ? '⏳ Překategorizovávám...' : '🔄 Překategorizovat všechny transakce'}
+                                    </button>
+                                    <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
+                                        Aplikuje aktuální pravidla na všechny existující transakce.
+                                    </p>
+                                </div>
+                            </GlassCard>
+
+                            {/* Rules List */}
+                            <GlassCard>
+                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📋 Pravidla kategorií</h3>
+
+                                {categoryRules.length === 0 ? (
+                                    <p className="text-secondary">Zatím nemáte žádná vlastní pravidla. Přidejte nové pravidlo nebo změňte kategorii u transakce.</p>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                                        {categoryRules.map(rule => (
+                                            <div key={rule.id} style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '10px 12px',
+                                                background: rule.is_user_defined ? 'rgba(45, 212, 191, 0.1)' : 'rgba(255,255,255,0.05)',
+                                                borderRadius: 'var(--radius-sm)',
+                                                border: rule.is_user_defined ? '1px solid rgba(45, 212, 191, 0.2)' : 'none'
+                                            }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>
+                                                        "{rule.pattern}" → {rule.category}
+                                                    </div>
+                                                    <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                                        {rule.is_user_defined ? '👤 Vlastní pravidlo' : '🤖 Naučené'} • {rule.match_count}× použito
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDeleteRule(rule.id)}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        color: '#ff6b6b',
+                                                        fontSize: '1rem',
+                                                        padding: '4px 8px'
+                                                    }}
+                                                    title="Smazat pravidlo"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </GlassCard>
+                        </div>
+                    )}
                 </div>
+
             </div>
             <style jsx>{`
                 @keyframes spin {

@@ -5,8 +5,10 @@ import MainLayout from '@/components/MainLayout';
 import StatCard from '@/components/StatCard';
 import TransactionList from '@/components/TransactionList';
 import CategoryChart from '@/components/CategoryChart';
+import NetWorthChart from '@/components/NetWorthChart';
 import GlassCard from '@/components/GlassCard';
 import { DashboardData, getDashboard, Transaction, BudgetOverview, getBudgetOverview } from '@/lib/api';
+import { formatCurrency } from '@/lib/format';
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -33,15 +35,6 @@ export default function DashboardPage() {
     }
     fetchData();
   }, []);
-
-  const formatCurrency = (amount: number, currency: string = 'CZK') => {
-    return new Intl.NumberFormat('cs-CZ', {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
 
   // Show loading spinner while fetching data
   if (loading || !data) {
@@ -158,6 +151,14 @@ export default function DashboardPage() {
               <CategoryChart categories={data.categories} currency={data.summary.currency} />
             </GlassCard>
           </div>
+
+          {/* Net Worth Chart */}
+          <GlassCard style={{ marginBottom: 'var(--spacing-xl)' }}>
+            <h4 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
+              📊 Vývoj majetku
+            </h4>
+            <NetWorthChart currency={data.summary.currency} />
+          </GlassCard>
 
           {/* Budget Overview Widget */}
           {budgetOverview && budgetOverview.categories_count > 0 && (

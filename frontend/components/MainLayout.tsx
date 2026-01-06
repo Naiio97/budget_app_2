@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState } from 'react';
 import { syncData } from '@/lib/api';
+import { formatCurrency } from '@/lib/format';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -29,15 +30,6 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
         { href: '/investments', label: 'Investice', icon: '📈' },
         { href: '/settings', label: 'Nastavení', icon: '⚙️' },
     ];
-
-    const formatCurrency = (amount: number, currency: string = 'CZK') => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency,
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(amount);
-    };
 
     const handleSync = async () => {
         if (isSyncing) return;

@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from database import get_db
-from models import TransactionModel, AccountModel
+from models import TransactionModel, AccountModel, CategoryRuleModel
 
 router = APIRouter()
 
@@ -141,3 +141,78 @@ async def get_category_summary(
             categories[cat] += abs(tx.amount)
     
     return {"categories": categories}
+
+
+class CategoryUpdate(BaseModel):
+    category: str
+    learn: bool = True  # If true, create a rule for this merchant
+
+
+@router.patch("/{transaction_id}/category")
+async def update_transaction_category(
+    transaction_id: str,
+    data: CategoryUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update transaction category and optionally learn the mapping"""
+    
+    # Get the transaction
+    tx = await db.get(TransactionModel, transaction_id)
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    old_category = tx.category
+    tx.category = data.category
+    
+    # Extract merchant name for learning
+    if data.learn and tx.description:
+        # Get the creditor name from description (usually first word/phrase)
+        merchant = tx.description.lower().strip()
+        
+        # Check if rule already exists
+        existing = await db.execute(
+            select(CategoryRuleModel).where(CategoryRuleModel.pattern == merchant)
+        )
+        existing_rule = existing.scalar_one_or_none()
+        
+        if existing_rule:
+            # Update existing rule
+            existing_rule.category = data.category
+            existing_rule.match_count += 1
+        else:
+            # Create new learned rule
+            rule = CategoryRuleModel(
+                pattern=merchant,
+                category=data.category,
+                is_user_defined=False,  # Learned from user action
+                match_count=1
+            )
+            db.add(rule)
+    
+    await db.commit()
+    
+    return {
+        "id": transaction_id,
+        "old_category": old_category,
+        "new_category": data.category,
+        "rule_created": data.learn
+    }
+
+
+@router.get("/available-categories")
+async def get_available_categories():
+    """Get list of available categories"""
+    return {
+        "categories": [
+            {"value": "Food", "label": "🍔 Jídlo"},
+            {"value": "Transport", "label": "🚗 Doprava"},
+            {"value": "Utilities", "label": "💡 Energie & Služby"},
+            {"value": "Entertainment", "label": "🎬 Zábava"},
+            {"value": "Shopping", "label": "🛒 Nákupy"},
+            {"value": "Health", "label": "🏥 Zdraví"},
+            {"value": "Salary", "label": "💰 Příjem"},
+            {"value": "Investment", "label": "📈 Investice"},
+            {"value": "Other", "label": "📦 Ostatní"},
+        ]
+    }
+

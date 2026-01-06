@@ -79,7 +79,8 @@ export default function TransactionsPage() {
         return new Intl.NumberFormat('cs-CZ', {
             style: 'currency',
             currency: 'CZK',
-            minimumFractionDigits: 0,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
         }).format(amount);
     };
 

@@ -87,3 +87,16 @@ class SavingsGoalModel(Base):
     deadline = Column(String, nullable=True)  # YYYY-MM-DD
     is_completed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CategoryRuleModel(Base):
+    """Category rule for automatic transaction categorization"""
+    __tablename__ = "category_rules"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    pattern = Column(String, nullable=False)  # Text pattern to match (lowercase)
+    category = Column(String, nullable=False)  # Target category (Food, Transport, etc.)
+    is_user_defined = Column(Boolean, default=True)  # True = user created, False = learned
+    match_count = Column(Integer, default=0)  # How many times this rule matched
+    created_at = Column(DateTime, default=datetime.utcnow)
+

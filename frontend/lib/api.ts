@@ -116,6 +116,16 @@ export async function getPortfolio(): Promise<Portfolio> {
     return fetchApi<Portfolio>('/dashboard/portfolio');
 }
 
+// Net Worth History
+export interface NetWorthHistory {
+    history: Array<{ date: string; bank: number; investment: number; total: number }>;
+    currency: string;
+}
+
+export async function getNetWorthHistory(days: number = 30): Promise<NetWorthHistory> {
+    return fetchApi<NetWorthHistory>(`/dashboard/net-worth-history?days=${days}`);
+}
+
 export async function getInstitutions(country: string = 'CZ'): Promise<{ institutions: any[] }> {
     return fetchApi<{ institutions: any[] }>(`/accounts/institutions?country=${country}`);
 }

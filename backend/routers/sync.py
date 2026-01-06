@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel
+from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
@@ -13,19 +13,95 @@ from services.exchange_rates import get_exchange_rate
 router = APIRouter()
 
 
+
 def categorize_transaction(tx: dict) -> str:
-    """Simple category detection based on description"""
+    """Smart category detection based on description with Czech merchants"""
     desc = (tx.get("remittanceInformationUnstructured", "") or 
             tx.get("creditorName", "") or 
             tx.get("debtorName", "")).lower()
     
+    # Extended categories with Czech merchants and services
     categories = {
-        "food": ["lidl", "albert", "tesco", "billa", "kaufland", "restaurant", "bistro", "food"],
-        "transport": ["uber", "bolt", "benzina", "orlen", "mhd", "jízdenka", "prague transport"],
-        "utilities": ["čez", "pražské vodovody", "innogy", "vodafone", "t-mobile", "o2"],
-        "entertainment": ["netflix", "spotify", "cinema", "hbo", "disney"],
-        "shopping": ["amazon", "alza", "mall.cz", "czc", "datart"],
-        "salary": ["mzda", "plat", "salary", "výplata"],
+        "food": [
+            # Supermarkets
+            "lidl", "albert", "tesco", "billa", "kaufland", "penny", "globus", "makro", "coop", "norma", "žabka",
+            # Restaurants & Food delivery
+            "restaurant", "restaurace", "bistro", "food", "wolt", "dáme jídlo", "damejidlo", "bolt food", "foodora",
+            "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa", 
+            "pizza", "sushi", "kebab", "banh mi", "thai", "vietnam", "čína", "china", "asia", "grill",
+            # Cafes & Bakeries
+            "kavárna", "kavarna", "café", "cafe", "pekárna", "pekarna", "cukrárna", "cukrarna", "bakery",
+            # Pubs & Bars
+            "hospoda", "pub", "pivnice", "bar", "pivovar", "brewery",
+            # Fast food Czech
+            "bageterie", "qerko", "rohlik", "rohlík", "košík", "kosik",
+            # Meat & Specialty
+            "řeznictví", "reznictvi", "uzeniny", "maso",
+            "luxor", "miners", "cinestar bar"
+        ],
+        "transport": [
+            # Ride sharing
+            "uber", "bolt", "liftago", "taxi",
+            # Gas stations
+            "benzina", "orlen", "omv", "shell", "mol", "eni", "cng", "euro oil", "pap oil",
+            # Public transport
+            "mhd", "jízdenka", "jizdenka", "prague transport", "dpp", "pid", "litacka", "lítačka",
+            # Parking
+            "parking", "parkovani", "parkoviště", "parkování",
+            # Toll & Highway
+            "dálnice", "dalnice", "mýto", "myto",
+            # Car related
+            "autoservis", "pneuservis", "autopůjčovna"
+        ],
+        "utilities": [
+            # Energy
+            "čez", "cez", "pražské vodovody", "innogy", "eon", "pre", "pražská energetika",
+            # Telecom
+            "vodafone", "t-mobile", "o2", "nordic telecom", "nej.cz",
+            # Internet & TV
+            "upc", "skylink", "digi",
+            # Insurance
+            "pojištění", "pojisteni", "allianz", "generali", "kooperativa", "čpp", "cpp",
+            # Rent & Housing
+            "nájem", "najem", "rent", "svj", "bytové",
+            # Other utilities
+            "plyn", "elektřina", "elektrina", "voda", "teplo"
+        ],
+        "entertainment": [
+            # Streaming
+            "netflix", "spotify", "hbo", "disney", "apple tv", "youtube", "deezer", "tidal",
+            # Cinema & Theatre
+            "cinema", "kino", "cinestar", "cinema city", "divadlo", "theatre",
+            # Gaming
+            "steam", "playstation", "xbox", "nintendo", "epic games", "tipsport", "fortuna", "sazka",
+            # Sports & Fitness  
+            "fitness", "gym", "posilovna", "bazén", "bazen", "wellness", "sauna", "squash", "tenis",
+            # Events
+            "ticketmaster", "ticketportal", "goout", "eventim",
+            # Books & Media
+            "audioteka", "bookbeat"
+        ],
+        "shopping": [
+            # Electronics
+            "amazon", "alza", "mall.cz", "czc", "datart", "electro world", "planeo", "okay",
+            # Fashion
+            "zara", "h&m", "reserved", "about you", "zalando", "answear", "bata", "deichmann",
+            # Home & DIY
+            "ikea", "obi", "hornbach", "bauhaus", "baumax", "jysk", "sconto", "xxxlutz", "asko", "möbelix",
+            # Department stores
+            "tesco", "dm", "rossmann", "douglas", "sephora",
+            # Online
+            "heureka", "aliexpress", "wish", "shein", "temu",
+            # Other
+            "decathlon", "sportisimo", "hervis"
+        ],
+        "salary": [
+            "mzda", "plat", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie"
+        ],
+        "health": [
+            "lékárna", "lekarna", "pharmacy", "doktor", "doctor", "nemocnice", "hospital", "klinika", "clinic",
+            "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni"
+        ],
     }
     
     for category, keywords in categories.items():
@@ -35,7 +111,88 @@ def categorize_transaction(tx: dict) -> str:
     return "Other"
 
 
+async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
+    """Smart category detection with priority: user rules > learned rules > built-in keywords"""
+    desc = (tx.get("remittanceInformationUnstructured", "") or 
+            tx.get("creditorName", "") or 
+            tx.get("debtorName", "")).lower()
+    
+    if not desc:
+        return "Other"
+    
+    # 1. Check user-defined rules first (highest priority)
+    user_rules = await db.execute(
+        select(CategoryRuleModel)
+        .where(CategoryRuleModel.is_user_defined == True)
+        .order_by(CategoryRuleModel.match_count.desc())
+    )
+    for rule in user_rules.scalars():
+        if rule.pattern.lower() in desc:
+            # Update match count
+            rule.match_count += 1
+            return rule.category
+    
+    # 2. Check learned rules (from user category changes)
+    learned_rules = await db.execute(
+        select(CategoryRuleModel)
+        .where(CategoryRuleModel.is_user_defined == False)
+        .order_by(CategoryRuleModel.match_count.desc())
+    )
+    for rule in learned_rules.scalars():
+        if rule.pattern.lower() in desc:
+            rule.match_count += 1
+            return rule.category
+    
+    # 3. Fall back to built-in keyword matching
+    return categorize_transaction(tx)
+
+
+@router.post("/recategorize")
+async def recategorize_transactions(db: AsyncSession = Depends(get_db)):
+    """Recategorize all existing transactions using improved category detection with rules"""
+    import json
+    
+    result = await db.execute(select(TransactionModel))
+    transactions = result.scalars().all()
+    
+    updated = 0
+    categories_count = {}
+    
+    for tx in transactions:
+        # Skip investment transactions
+        if tx.account_type == "investment":
+            continue
+            
+        # Get raw data if available
+        raw_data = {}
+        if tx.raw_json:
+            try:
+                raw_data = json.loads(tx.raw_json)
+            except:
+                raw_data = {"remittanceInformationUnstructured": tx.description}
+        else:
+            raw_data = {"remittanceInformationUnstructured": tx.description}
+        
+        # Use the async function that checks DB rules first
+        new_category = await categorize_transaction_with_rules(raw_data, db)
+        
+        if tx.category != new_category:
+            tx.category = new_category
+            updated += 1
+        
+        categories_count[new_category] = categories_count.get(new_category, 0) + 1
+    
+    await db.commit()
+    
+    return {
+        "updated": updated,
+        "categories": categories_count
+    }
+
+
+
 @router.post("/")
+
 async def sync_all_data(db: AsyncSession = Depends(get_db)):
     """Synchronize all data from external APIs to local database"""
     

@@ -174,3 +174,84 @@ async def get_balance_history(
     
     history.reverse()
     return {"history": history}
+
+
+@router.get("/net-worth-history")
+async def get_net_worth_history(
+    days: int = Query(30, ge=7, le=365),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get net worth history (bank + investments) for chart"""
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+    
+    # Get all accounts with current balances
+    acc_result = await db.execute(
+        select(AccountModel).where(AccountModel.is_visible == True)
+    )
+    accounts = acc_result.scalars().all()
+    
+    current_bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
+    current_investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
+    
+    # Get transactions from DB
+    result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.date >= start_date.strftime("%Y-%m-%d")
+        ).limit(2000)
+    )
+    transactions = result.scalars().all()
+    
+    # Group transactions by date and type
+    bank_daily = {}
+    investment_daily = {}
+    
+    for tx in transactions:
+        date = tx.date[:10]
+        if tx.account_type == "bank":
+            bank_daily[date] = bank_daily.get(date, 0) + tx.amount
+        elif tx.account_type == "investment":
+            investment_daily[date] = investment_daily.get(date, 0) + tx.amount
+    
+    # Generate daily points (working BACKWARDS from today to oldest)
+    # Start with current balances and subtract transactions to get historical values
+    history = []
+    bank_balance = current_bank_balance
+    investment_balance = current_investment_balance
+    
+    # First, record today's balance
+    today = end_date.strftime("%Y-%m-%d")
+    history.append({
+        "date": today,
+        "bank": round(bank_balance, 2),
+        "investment": round(investment_balance, 2),
+        "total": round(bank_balance + investment_balance, 2)
+    })
+    
+    # Work backwards from today
+    for i in range(1, days + 1):
+        date = (end_date - timedelta(days=i)).strftime("%Y-%m-%d")
+        next_date = (end_date - timedelta(days=i-1)).strftime("%Y-%m-%d")
+        
+        # Subtract the NEXT day's transactions to get this day's ending balance
+        # (because next_date transactions caused the change FROM this day TO next_date)
+        if next_date in bank_daily:
+            bank_balance -= bank_daily[next_date]
+        if next_date in investment_daily:
+            investment_balance -= investment_daily[next_date]
+        
+        history.append({
+            "date": date,
+            "bank": round(bank_balance, 2),
+            "investment": round(investment_balance, 2),
+            "total": round(bank_balance + investment_balance, 2)
+        })
+    
+    # Reverse to get chronological order (oldest first, newest last)
+    history.reverse()
+    
+    return {
+        "history": history,
+        "currency": "CZK"
+    }
+
