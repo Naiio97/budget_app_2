@@ -6,10 +6,18 @@ import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
 import { Transaction, getTransactions, DashboardData, getDashboard } from '@/lib/api';
 
+interface Category {
+    id: number;
+    name: string;
+    icon: string;
+    is_active: boolean;
+}
+
 export default function TransactionsPage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [accounts, setAccounts] = useState<{ id: string; name: string; type: 'bank' | 'investment'; balance: number; currency: string }[]>([]);
     const [loading, setLoading] = useState(true);
+    const [categories, setCategories] = useState<Category[]>([]);
 
     // Filters & Pagination
     const [searchTerm, setSearchTerm] = useState('');
@@ -71,9 +79,13 @@ export default function TransactionsPage() {
         fetchData();
     }, [page, debouncedSearch, selectedCategory, selectedAccount]);
 
-    const categories = [
-        "Food", "Transport", "Utilities", "Entertainment", "Shopping", "Salary", "Investment", "Dividend", "Other"
-    ];
+    // Load categories
+    useEffect(() => {
+        fetch('http://localhost:8000/api/categories')
+            .then(res => res.json())
+            .then(data => setCategories(data))
+            .catch(err => console.error('Failed to load categories:', err));
+    }, []);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -122,8 +134,8 @@ export default function TransactionsPage() {
                                 style={{ padding: '6px 12px', fontSize: '0.9rem' }}
                             >
                                 <option value="">Všechny kategorie</option>
-                                {categories.map(cat => (
-                                    <option key={cat} value={cat}>{cat}</option>
+                                {categories.filter(c => c.is_active).map(cat => (
+                                    <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
                                 ))}
                             </select>
                         </div>

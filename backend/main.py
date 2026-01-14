@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from config import get_settings
-from routers import accounts, transactions, dashboard, sync, settings, investments, budgets
+from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories
 from database import init_db
 
 settings_config = get_settings()
@@ -39,6 +39,8 @@ app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
 app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(investments.router, prefix="/api/investments", tags=["Investments"])
 app.include_router(budgets.router, prefix="/api/budgets", tags=["Budgets"])
+app.include_router(monthly_budget.router, prefix="/api", tags=["Monthly Budget"])
+app.include_router(categories.router, tags=["Categories"])
 
 
 @app.get("/")

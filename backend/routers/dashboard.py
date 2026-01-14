@@ -40,14 +40,14 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     )
     all_tx = all_tx_result.scalars().all()
     
-    # Calculate income vs expenses
-    income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank")
-    expenses = sum(abs(tx.amount) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank")
+    # Calculate income vs expenses (excluding internal/family transfers)
+    income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank" and not tx.is_excluded)
+    expenses = sum(abs(tx.amount) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank" and not tx.is_excluded)
     
-    # Calculate categories
+    # Calculate categories (excluding internal/family transfers)
     categories = {}
     for tx in all_tx:
-        if tx.amount < 0:
+        if tx.amount < 0 and not tx.is_excluded:
             cat = tx.category or "Other"
             if cat not in categories:
                 categories[cat] = 0
@@ -255,3 +255,85 @@ async def get_net_worth_history(
         "currency": "CZK"
     }
 
+
+@router.get("/monthly-report")
+async def get_monthly_report(
+    months: int = Query(6, ge=1, le=24),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get monthly report with income/expenses and category breakdown"""
+    
+    # Get transactions grouped by month
+    result = await db.execute(
+        select(TransactionModel).where(TransactionModel.account_type == "bank")
+    )
+    transactions = result.scalars().all()
+    
+    # Group by month
+    monthly_data = {}
+    category_data = {}
+    
+    for tx in transactions:
+        if not tx.date:
+            continue
+        
+        # Skip excluded transactions (internal/family transfers) from totals
+        if tx.is_excluded:
+            continue
+            
+        month = tx.date[:7]  # YYYY-MM
+        
+        if month not in monthly_data:
+            monthly_data[month] = {"income": 0, "expenses": 0}
+        
+        if tx.amount >= 0:
+            monthly_data[month]["income"] += tx.amount
+        else:
+            monthly_data[month]["expenses"] += abs(tx.amount)
+        
+        # Category breakdown
+        cat = tx.category or "Other"
+        if month not in category_data:
+            category_data[month] = {}
+        if cat not in category_data[month]:
+            category_data[month][cat] = 0
+        if tx.amount < 0:  # Only expenses for category breakdown
+            category_data[month][cat] += abs(tx.amount)
+    
+    # Sort by month and limit to requested months
+    sorted_months = sorted(monthly_data.keys(), reverse=True)[:months]
+    sorted_months.reverse()  # Oldest first for chart
+    
+    # Build response
+    monthly_totals = []
+    for month in sorted_months:
+        data = monthly_data[month]
+        monthly_totals.append({
+            "month": month,
+            "income": round(data["income"], 2),
+            "expenses": round(data["expenses"], 2),
+            "balance": round(data["income"] - data["expenses"], 2)
+        })
+    
+    # Category breakdown per month
+    category_breakdown = []
+    for month in sorted_months:
+        if month in category_data:
+            for cat, amount in category_data[month].items():
+                category_breakdown.append({
+                    "month": month,
+                    "category": cat,
+                    "amount": round(amount, 2)
+                })
+    
+    # Get all unique categories for chart
+    all_categories = set()
+    for month_cats in category_data.values():
+        all_categories.update(month_cats.keys())
+    
+    return {
+        "monthly_totals": monthly_totals,
+        "category_breakdown": category_breakdown,
+        "categories": sorted(list(all_categories)),
+        "currency": "CZK"
+    }

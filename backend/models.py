@@ -34,6 +34,8 @@ class TransactionModel(Base):
     currency = Column(String, default="CZK")
     category = Column(String, nullable=True)
     account_type = Column(String, nullable=False)  # "bank" or "investment"
+    transaction_type = Column(String, default="normal")  # "normal", "internal_transfer", "family_transfer"
+    is_excluded = Column(Boolean, default=False)  # True = excluded from income/expense calculations
     raw_json = Column(Text, nullable=True)  # Original API response
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -100,3 +102,105 @@ class CategoryRuleModel(Base):
     match_count = Column(Integer, default=0)  # How many times this rule matched
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class CategoryModel(Base):
+    """User-defined transaction categories"""
+    __tablename__ = "categories"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)  # "Food", "Transport", etc.
+    icon = Column(String, default="📦")  # Emoji icon
+    color = Column(String, default="#6366f1")  # Hex color for charts
+    order_index = Column(Integer, default=0)  # Display order
+    is_income = Column(Boolean, default=False)  # True for income categories like Salary
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# === Monthly Budget Tracker Models ===
+
+class MonthlyBudgetModel(Base):
+    """Měsíční rozpočet - příjmy a přebytek"""
+    __tablename__ = "monthly_budgets"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year_month = Column(String, nullable=False, unique=True)  # "2025-01"
+    
+    # Příjmy
+    salary = Column(Float, default=0.0)
+    other_income = Column(Float, default=0.0)
+    meal_vouchers = Column(Float, default=0.0)
+    
+    # Investice (manuální částka tento měsíc)
+    investment_amount = Column(Float, default=0.0)
+    
+    # Přebytek poslaný na spořící účet
+    surplus_to_savings = Column(Float, default=0.0)
+    
+    is_closed = Column(Boolean, default=False)  # Měsíc uzavřen
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    expenses = relationship("MonthlyExpenseModel", back_populates="budget", cascade="all, delete-orphan")
+
+
+class RecurringExpenseModel(Base):
+    """Šablona pravidelného měsíčního výdaje"""
+    __tablename__ = "recurring_expenses"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)  # "Nájem + Služby", "Netflix"
+    default_amount = Column(Float, nullable=False)
+    is_auto_paid = Column(Boolean, default=False)  # Zelené = automtatická platba z účtu
+    match_pattern = Column(String, nullable=True)  # Pattern pro auto-match s transakcemi
+    category = Column(String, nullable=True)  # Pro seskupení
+    order_index = Column(Integer, default=0)  # Pořadí v seznamu
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class MonthlyExpenseModel(Base):
+    """Konkrétní výdaj v konkrétním měsíci"""
+    __tablename__ = "monthly_expenses"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    budget_id = Column(Integer, ForeignKey("monthly_budgets.id"), nullable=False)
+    recurring_expense_id = Column(Integer, ForeignKey("recurring_expenses.id"), nullable=True)
+    
+    name = Column(String, nullable=False)  # Může být jiný než recurring
+    amount = Column(Float, nullable=False)  # Může se lišit od default
+    is_paid = Column(Boolean, default=False)
+    is_auto_paid = Column(Boolean, default=False)
+    matched_transaction_id = Column(String, nullable=True)  # ID transakce co to zaplatila
+    
+    # Relationships
+    budget = relationship("MonthlyBudgetModel", back_populates="expenses")
+
+
+class ManualAccountModel(Base):
+    """Manuálně sledovaný účet (spořící účet bez API)"""
+    __tablename__ = "manual_accounts"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)  # "Spořící účet"
+    balance = Column(Float, default=0.0)
+    currency = Column(String, default="CZK")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    items = relationship("ManualAccountItemModel", back_populates="account", cascade="all, delete-orphan")
+
+
+class ManualAccountItemModel(Base):
+    """Položky na manuálním účtu (peníze co nejsou moje)"""
+    __tablename__ = "manual_account_items"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, ForeignKey("manual_accounts.id"), nullable=False)
+    name = Column(String, nullable=False)  # "GYM", "Líšeňka"
+    amount = Column(Float, nullable=False)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    account = relationship("ManualAccountModel", back_populates="items")

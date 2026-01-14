@@ -1,20 +1,50 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
 interface CategoryChartProps {
     categories: Record<string, number>;
     currency?: string;
 }
 
-const categoryColors: Record<string, string> = {
-    'Food': '#FF6B6B',
-    'Transport': '#4ECDC4',
-    'Utilities': '#FFE66D',
-    'Entertainment': '#95E1D3',
-    'Shopping': '#F38181',
-    'Investment': '#AA96DA',
-    'Dividend': '#A8D8EA',
-    'Other': '#9B9B9B',
+interface Category {
+    id: number;
+    name: string;
+    icon: string;
+    color: string;
+}
+
+// Fallback colors
+const FALLBACK_COLORS: Record<string, string> = {
+    'Food': '#ef4444',
+    'Transport': '#f97316',
+    'Utilities': '#eab308',
+    'Entertainment': '#22c55e',
+    'Shopping': '#14b8a6',
+    'Investment': '#3b82f6',
+    'Dividend': '#8b5cf6',
+    'Salary': '#10b981',
+    'Internal Transfer': '#6b7280',
+    'Family Transfer': '#6b7280',
+    'Other': '#6b7280',
 };
 
 export default function CategoryChart({ categories, currency = 'CZK' }: CategoryChartProps) {
+    const [categoryColors, setCategoryColors] = useState<Record<string, string>>(FALLBACK_COLORS);
+
+    useEffect(() => {
+        fetch('http://localhost:8000/api/categories')
+            .then(res => res.json())
+            .then((data: Category[]) => {
+                const colors = data.reduce((acc, cat) => {
+                    acc[cat.name] = cat.color;
+                    return acc;
+                }, { ...FALLBACK_COLORS } as Record<string, string>);
+                setCategoryColors(colors);
+            })
+            .catch(err => console.error('Failed to load categories:', err));
+    }, []);
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
             style: 'currency',
@@ -44,7 +74,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
                         key={category}
                         style={{
                             width: `${(amount / total) * 100}%`,
-                            backgroundColor: categoryColors[category] || categoryColors['Other'],
+                            backgroundColor: categoryColors[category] || categoryColors['Other'] || '#6b7280',
                             transition: 'width var(--transition-normal)',
                         }}
                         title={`${category}: ${formatCurrency(amount)}`}
@@ -61,7 +91,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
                                 width: '12px',
                                 height: '12px',
                                 borderRadius: '4px',
-                                backgroundColor: categoryColors[category] || categoryColors['Other'],
+                                backgroundColor: categoryColors[category] || categoryColors['Other'] || '#6b7280',
                             }}
                         />
                         <span style={{ fontSize: '0.875rem' }}>
@@ -76,3 +106,4 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
         </div>
     );
 }
+

@@ -174,3 +174,52 @@ async def delete_category_rule(rule_id: int, db: AsyncSession = Depends(get_db))
     
     return {"message": "Rule deleted", "id": rule_id}
 
+
+# ============== Family Account Settings ==============
+
+class FamilyAccountRequest(BaseModel):
+    pattern: str  # Name pattern to match in transaction description (e.g., "Sandri")
+    name: Optional[str] = "Partner"
+
+
+class FamilyAccountResponse(BaseModel):
+    pattern: str
+    name: str
+
+
+@router.get("/family-accounts")
+async def get_family_accounts(db: AsyncSession = Depends(get_db)):
+    """Get configured family accounts (wife's account, etc.)"""
+    family_pattern = await get_setting(db, "family_account_pattern")
+    family_name = await get_setting(db, "family_account_name") or "Partner"
+    
+    accounts = []
+    if family_pattern:
+        accounts.append(FamilyAccountResponse(pattern=family_pattern, name=family_name))
+    
+    return {"accounts": accounts}
+
+
+@router.post("/family-accounts")
+async def save_family_account(request: FamilyAccountRequest, db: AsyncSession = Depends(get_db)):
+    """Save family account pattern for automatic transaction detection"""
+    await set_setting(db, "family_account_pattern", request.pattern.lower().strip())
+    await set_setting(db, "family_account_name", request.name)
+    await db.commit()
+    
+    return {"status": "saved", "pattern": request.pattern, "name": request.name}
+
+
+@router.delete("/family-accounts")
+async def delete_family_account(db: AsyncSession = Depends(get_db)):
+    """Remove family account setting"""
+    existing_pattern = await db.get(SettingsModel, "family_account_pattern")
+    existing_name = await db.get(SettingsModel, "family_account_name")
+    
+    if existing_pattern:
+        await db.delete(existing_pattern)
+    if existing_name:
+        await db.delete(existing_name)
+    await db.commit()
+    
+    return {"status": "deleted"}

@@ -26,10 +26,13 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
     const navItems = [
         { href: '/', label: 'Dashboard', icon: '📊' },
         { href: '/transactions', label: 'Transakce', icon: '💳' },
+        { href: '/rozpocet', label: 'Měs. rozpočet', icon: '📅' },
         { href: '/budgets', label: 'Rozpočty', icon: '💰' },
+        { href: '/reports', label: 'Přehledy', icon: '📊' },
         { href: '/investments', label: 'Investice', icon: '📈' },
         { href: '/settings', label: 'Nastavení', icon: '⚙️' },
     ];
+
 
     const handleSync = async () => {
         if (isSyncing) return;

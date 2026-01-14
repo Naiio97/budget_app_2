@@ -5,13 +5,88 @@ from datetime import datetime
 import json
 
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel
+from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 
 router = APIRouter()
 
+
+async def get_family_account_pattern(db: AsyncSession) -> str | None:
+    """Get the configured family account pattern from settings"""
+    result = await db.execute(select(SettingsModel).where(SettingsModel.key == "family_account_pattern"))
+    setting = result.scalar_one_or_none()
+    return setting.value if setting else None
+
+
+async def detect_and_mark_transfers(db: AsyncSession):
+    """Detect and mark internal transfers and family transfers after sync"""
+    
+    # Get all own account IDs
+    result = await db.execute(select(AccountModel.id))
+    own_account_ids = [row[0] for row in result.all()]
+    
+    # Get family account pattern (e.g., "sandri")
+    family_pattern = await get_family_account_pattern(db)
+    
+    # Get all transactions
+    tx_result = await db.execute(select(TransactionModel).where(TransactionModel.account_type == "bank"))
+    transactions = tx_result.scalars().all()
+    
+    # Group transactions by date for internal transfer detection
+    by_date = {}
+    for tx in transactions:
+        date = tx.date[:10] if tx.date else ""
+        if date not in by_date:
+            by_date[date] = []
+        by_date[date].append(tx)
+    
+    marked_internal = 0
+    marked_family = 0
+    
+    for tx in transactions:
+        if tx.is_excluded:
+            continue  # Already marked
+        
+        # Check for family transfer (based on pattern in description)
+        if family_pattern:
+            desc_lower = (tx.description or "").lower()
+            if family_pattern in desc_lower:
+                tx.transaction_type = "family_transfer"
+                tx.is_excluded = True
+                tx.category = "Family Transfer"
+                marked_family += 1
+                continue
+        
+        # Check for internal transfer (same amount, opposite direction, same day, different accounts)
+        date = tx.date[:10] if tx.date else ""
+        if date and date in by_date:
+            for other_tx in by_date[date]:
+                if other_tx.id == tx.id:
+                    continue
+                # Same amount, opposite sign, different account
+                if (abs(abs(tx.amount) - abs(other_tx.amount)) < 0.01 and 
+                    tx.amount * other_tx.amount < 0 and  # Opposite signs
+                    tx.account_id != other_tx.account_id and
+                    tx.account_id in own_account_ids and
+                    other_tx.account_id in own_account_ids):
+                    
+                    # Mark both as internal transfer
+                    tx.transaction_type = "internal_transfer"
+                    tx.is_excluded = True
+                    tx.category = "Internal Transfer"
+                    marked_internal += 1
+                    
+                    if not other_tx.is_excluded:
+                        other_tx.transaction_type = "internal_transfer"
+                        other_tx.is_excluded = True
+                        other_tx.category = "Internal Transfer"
+                        marked_internal += 1
+                    break
+    
+    await db.commit()
+    return {"marked_internal": marked_internal, "marked_family": marked_family}
 
 
 def categorize_transaction(tx: dict) -> str:
@@ -435,10 +510,15 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
         
         await db.commit()
         
+        # Detect and mark internal/family transfers
+        transfer_result = await detect_and_mark_transfers(db)
+        
         return {
             "status": "completed",
             "accounts_synced": accounts_synced,
-            "transactions_synced": transactions_synced
+            "transactions_synced": transactions_synced,
+            "marked_internal_transfers": transfer_result["marked_internal"],
+            "marked_family_transfers": transfer_result["marked_family"]
         }
         
     except Exception as e:
@@ -482,4 +562,15 @@ async def get_sync_status(db: AsyncSession = Depends(get_db)):
         "accounts_synced": sync_status.accounts_synced,
         "transactions_synced": sync_status.transactions_synced,
         "error": sync_status.error_message
+    }
+
+
+@router.post("/detect-transfers")
+async def detect_transfers(db: AsyncSession = Depends(get_db)):
+    """Manually detect and mark internal transfers and family transfers"""
+    result = await detect_and_mark_transfers(db)
+    return {
+        "status": "completed",
+        "marked_internal_transfers": result["marked_internal"],
+        "marked_family_transfers": result["marked_family"]
     }

@@ -19,6 +19,8 @@ class Transaction(BaseModel):
     account_id: str
     account_type: str  # "bank" or "investment"
     account_name: Optional[str] = None
+    transaction_type: str = "normal"  # "normal", "internal_transfer", "family_transfer"
+    is_excluded: bool = False
 
 
 class PaginatedTransactions(BaseModel):
@@ -87,7 +89,9 @@ async def get_transactions(
             category=tx.category,
             account_id=tx.account_id,
             account_type=tx.account_type,
-            account_name=account_name
+            account_name=account_name,
+            transaction_type=tx.transaction_type or "normal",
+            is_excluded=tx.is_excluded or False
         )
         for tx, account_name in rows
     ]
@@ -212,7 +216,60 @@ async def get_available_categories():
             {"value": "Health", "label": "🏥 Zdraví"},
             {"value": "Salary", "label": "💰 Příjem"},
             {"value": "Investment", "label": "📈 Investice"},
+            {"value": "Internal Transfer", "label": "🔄 Interní převod"},
+            {"value": "Family Transfer", "label": "👨‍👩‍👧 Rodinný převod"},
             {"value": "Other", "label": "📦 Ostatní"},
         ]
     }
 
+
+class TransactionTypeUpdate(BaseModel):
+    transaction_type: str  # "normal", "internal_transfer", "family_transfer"
+
+
+@router.patch("/{transaction_id}/type")
+async def update_transaction_type(
+    transaction_id: str,
+    data: TransactionTypeUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Update transaction type (normal, internal_transfer, family_transfer)"""
+    
+    valid_types = ["normal", "internal_transfer", "family_transfer"]
+    if data.transaction_type not in valid_types:
+        raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {valid_types}")
+    
+    tx = await db.get(TransactionModel, transaction_id)
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    old_type = tx.transaction_type
+    tx.transaction_type = data.transaction_type
+    tx.is_excluded = data.transaction_type != "normal"
+    
+    # Update category based on type
+    if data.transaction_type == "internal_transfer":
+        tx.category = "Internal Transfer"
+    elif data.transaction_type == "family_transfer":
+        tx.category = "Family Transfer"
+    
+    await db.commit()
+    
+    return {
+        "id": transaction_id,
+        "old_type": old_type,
+        "new_type": data.transaction_type,
+        "is_excluded": tx.is_excluded
+    }
+
+
+@router.get("/types")
+async def get_transaction_types():
+    """Get available transaction types"""
+    return {
+        "types": [
+            {"value": "normal", "label": "Běžná transakce", "icon": "💳"},
+            {"value": "internal_transfer", "label": "Interní převod", "icon": "🔄"},
+            {"value": "family_transfer", "label": "Rodinný převod", "icon": "👨‍👩‍👧"},
+        ]
+    }

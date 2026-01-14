@@ -22,6 +22,350 @@ interface CategoryRule {
     match_count: number;
 }
 
+interface FamilyAccount {
+    pattern: string;
+    name: string;
+}
+
+interface Category {
+    id: number;
+    name: string;
+    icon: string;
+    color: string;
+    order_index: number;
+    is_income: boolean;
+    is_active: boolean;
+}
+
+function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => void }) {
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [showAdd, setShowAdd] = useState(false);
+    const [newCategory, setNewCategory] = useState({ name: '', icon: '📦', color: '#6366f1', is_income: false });
+    const [editingId, setEditingId] = useState<number | null>(null);
+    const [editData, setEditData] = useState({ name: '', icon: '', color: '', is_income: false });
+
+    useEffect(() => {
+        loadCategories();
+    }, []);
+
+    const loadCategories = async () => {
+        try {
+            const res = await fetch('http://localhost:8000/api/categories');
+            const data = await res.json();
+            setCategories(data);
+        } catch (err) {
+            console.error('Failed to load categories:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAdd = async () => {
+        if (!newCategory.name.trim()) return;
+        try {
+            await fetch('http://localhost:8000/api/categories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newCategory)
+            });
+            setNewCategory({ name: '', icon: '📦', color: '#6366f1', is_income: false });
+            setShowAdd(false);
+            loadCategories();
+            onCategoriesChange?.();
+        } catch (err) {
+            console.error('Failed to add category:', err);
+        }
+    };
+
+    const handleUpdate = async (id: number) => {
+        try {
+            await fetch(`http://localhost:8000/api/categories/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(editData)
+            });
+            setEditingId(null);
+            loadCategories();
+            onCategoriesChange?.();
+        } catch (err) {
+            console.error('Failed to update category:', err);
+        }
+    };
+
+    const handleDelete = async (id: number) => {
+        try {
+            await fetch(`http://localhost:8000/api/categories/${id}`, { method: 'DELETE' });
+            loadCategories();
+            onCategoriesChange?.();
+        } catch (err) {
+            console.error('Failed to delete category:', err);
+        }
+    };
+
+    const EMOJI_OPTIONS = ['🍔', '🚗', '💡', '🎬', '🛒', '💰', '📈', '💵', '🔄', '📦', '🏥', '🏠', '✈️', '🎮', '📱', '👕', '💄', '🐕', '🎁', '⚡'];
+
+    if (loading) return <p className="text-secondary">Načítám kategorie...</p>;
+
+    return (
+        <div>
+            {/* Add new category */}
+            {showAdd ? (
+                <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)' }}>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <select
+                            className="input"
+                            value={newCategory.icon}
+                            onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
+                            style={{ width: '60px' }}
+                        >
+                            {EMOJI_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                        <input
+                            type="text"
+                            className="input"
+                            placeholder="Název kategorie"
+                            value={newCategory.name}
+                            onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                            style={{ flex: 1 }}
+                        />
+                        <input
+                            type="color"
+                            value={newCategory.color}
+                            onChange={(e) => setNewCategory({ ...newCategory, color: e.target.value })}
+                            style={{ width: '40px', height: '36px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.85rem', cursor: 'pointer' }}>
+                            <input
+                                type="checkbox"
+                                checked={newCategory.is_income}
+                                onChange={(e) => setNewCategory({ ...newCategory, is_income: e.target.checked })}
+                            />
+                            Je to příjem
+                        </label>
+                        <div style={{ flex: 1 }} />
+                        <button className="btn btn-primary" onClick={handleAdd} style={{ padding: '6px 12px' }}>Přidat</button>
+                        <button className="btn" onClick={() => setShowAdd(false)} style={{ padding: '6px 12px' }}>Zrušit</button>
+                    </div>
+                </div>
+            ) : (
+                <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ marginBottom: 'var(--spacing-md)', width: '100%' }}>
+                    ➕ Přidat kategorii
+                </button>
+            )}
+
+            {/* Categories list */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '350px', overflowY: 'auto' }}>
+                {categories.filter(c => c.is_active).map(cat => (
+                    <div key={cat.id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 10px',
+                        background: 'rgba(255,255,255,0.05)',
+                        borderRadius: '6px',
+                        borderLeft: `3px solid ${cat.color}`
+                    }}>
+                        {editingId === cat.id ? (
+                            <>
+                                <select
+                                    className="input"
+                                    value={editData.icon}
+                                    onChange={(e) => setEditData({ ...editData, icon: e.target.value })}
+                                    style={{ width: '50px', padding: '4px' }}
+                                >
+                                    {EMOJI_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
+                                </select>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={editData.name}
+                                    onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                                    style={{ flex: 1, padding: '4px 8px' }}
+                                />
+                                <input
+                                    type="color"
+                                    value={editData.color}
+                                    onChange={(e) => setEditData({ ...editData, color: e.target.value })}
+                                    style={{ width: '30px', height: '28px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                />
+                                <button className="btn" onClick={() => handleUpdate(cat.id)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>✓</button>
+                                <button className="btn" onClick={() => setEditingId(null)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>✕</button>
+                            </>
+                        ) : (
+                            <>
+                                <span style={{ fontSize: '1.1rem' }}>{cat.icon}</span>
+                                <span style={{ flex: 1, fontWeight: 500, fontSize: '0.9rem' }}>
+                                    {cat.name}
+                                    {cat.is_income && <span style={{ marginLeft: '6px', fontSize: '0.7rem', color: 'var(--accent-success)' }}>příjem</span>}
+                                </span>
+                                <button
+                                    onClick={() => { setEditingId(cat.id); setEditData({ name: cat.name, icon: cat.icon, color: cat.color, is_income: cat.is_income }); }}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '0.8rem' }}
+                                >✏️</button>
+                                <button
+                                    onClick={() => handleDelete(cat.id)}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff6b6b', fontSize: '0.8rem' }}
+                                >🗑️</button>
+                            </>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+
+function FamilyAccountSettings() {
+    const [familyPattern, setFamilyPattern] = useState('');
+    const [familyName, setFamilyName] = useState('Partner');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [detecting, setDetecting] = useState(false);
+    const [existingAccount, setExistingAccount] = useState<FamilyAccount | null>(null);
+
+    useEffect(() => {
+        loadFamilyAccount();
+    }, []);
+
+    const loadFamilyAccount = async () => {
+        try {
+            const response = await fetch('http://localhost:8000/api/settings/family-accounts');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.accounts && data.accounts.length > 0) {
+                    setExistingAccount(data.accounts[0]);
+                    setFamilyPattern(data.accounts[0].pattern);
+                    setFamilyName(data.accounts[0].name);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load family account:', err);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!familyPattern.trim()) return;
+        setSaving(true);
+        try {
+            const response = await fetch('http://localhost:8000/api/settings/family-accounts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern: familyPattern, name: familyName })
+            });
+            if (response.ok) {
+                setSaved(true);
+                setExistingAccount({ pattern: familyPattern, name: familyName });
+                setTimeout(() => setSaved(false), 3000);
+            }
+        } catch (err) {
+            console.error('Failed to save family account:', err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        try {
+            await fetch('http://localhost:8000/api/settings/family-accounts', { method: 'DELETE' });
+            setExistingAccount(null);
+            setFamilyPattern('');
+            setFamilyName('Partner');
+        } catch (err) {
+            console.error('Failed to delete family account:', err);
+        }
+    };
+
+    const handleDetectTransfers = async () => {
+        setDetecting(true);
+        try {
+            const response = await fetch('http://localhost:8000/api/sync/detect-transfers', { method: 'POST' });
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Detekce dokončena!\n\n🔄 Interní převody: ${data.marked_internal_transfers}\n👨‍👩‍👧 Rodinné převody: ${data.marked_family_transfers}`);
+            }
+        } catch (err) {
+            console.error('Failed to detect transfers:', err);
+        } finally {
+            setDetecting(false);
+        }
+    };
+
+    return (
+        <GlassCard>
+            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>👨‍👩‍👧 Rodinný účet</h3>
+            <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                Transakce obsahující tento text budou automaticky vyloučeny z příjmů a výdajů.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                <div>
+                    <label className="text-secondary" style={{ fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>
+                        Jméno (volitelné)
+                    </label>
+                    <input
+                        type="text"
+                        className="input"
+                        placeholder="Partner, Manželka, ..."
+                        value={familyName}
+                        onChange={(e) => setFamilyName(e.target.value)}
+                    />
+                </div>
+
+                <div>
+                    <label className="text-secondary" style={{ fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>
+                        Text v popisu transakce
+                    </label>
+                    <input
+                        type="text"
+                        className="input"
+                        placeholder="Sandri, Manželka, ..."
+                        value={familyPattern}
+                        onChange={(e) => setFamilyPattern(e.target.value)}
+                    />
+                </div>
+
+                <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleSave}
+                        disabled={saving || !familyPattern.trim()}
+                        style={{ flex: 1 }}
+                    >
+                        {saving ? '⏳ Ukládám...' : saved ? '✅ Uloženo' : '💾 Uložit'}
+                    </button>
+                    {existingAccount && (
+                        <button
+                            className="btn"
+                            onClick={handleDelete}
+                            style={{ color: '#ff6b6b', borderColor: 'rgba(255,100,100,0.3)' }}
+                        >
+                            🗑️
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <button
+                    className="btn"
+                    onClick={handleDetectTransfers}
+                    disabled={detecting}
+                    style={{ width: '100%' }}
+                >
+                    {detecting ? '⏳ Detekuji...' : '🔍 Detekovat převody'}
+                </button>
+                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
+                    Automaticky najde interní převody mezi vlastními účty a transakce s rodinným účtem.
+                </p>
+            </div>
+        </GlassCard>
+    );
+}
+
 export default function SettingsPage() {
     const [gocardlessId, setGocardlessId] = useState('');
     const [gocardlessKey, setGocardlessKey] = useState('');
@@ -52,6 +396,7 @@ export default function SettingsPage() {
     const [newPattern, setNewPattern] = useState('');
     const [newCategory, setNewCategory] = useState('Food');
     const [savingRule, setSavingRule] = useState(false);
+    const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
     // ... (existing useEffect and handlers)
 
@@ -278,6 +623,17 @@ export default function SettingsPage() {
 
     const [activeTab, setActiveTab] = useState<'accounts' | 'connections' | 'preferences' | 'categories'>('accounts');
 
+    // Load categories for rules dropdown
+    const loadRuleCategories = async () => {
+        try {
+            const res = await fetch('http://localhost:8000/api/categories');
+            const data = await res.json();
+            setRuleCategories(data);
+        } catch (err) {
+            console.error('Failed to load categories:', err);
+        }
+    };
+
     // Category rule handlers
     const loadCategoryRules = async () => {
         try {
@@ -286,6 +642,8 @@ export default function SettingsPage() {
                 const data = await response.json();
                 setCategoryRules(data.rules || []);
             }
+            // Also load categories for dropdown
+            loadRuleCategories();
         } catch (err) {
             console.error('Failed to load category rules:', err);
         }
@@ -667,8 +1025,8 @@ export default function SettingsPage() {
 
                     {/* TAB: PREFERENCES */}
                     {activeTab === 'preferences' && (
-                        <div className="animate-fade-in">
-                            <GlassCard style={{ maxWidth: '600px', margin: '0 auto' }}>
+                        <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                            <GlassCard>
                                 <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Preference</h3>
 
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
@@ -708,12 +1066,25 @@ export default function SettingsPage() {
                                     </div>
                                 </div>
                             </GlassCard>
+
+                            {/* Family Account Settings */}
+                            <FamilyAccountSettings />
                         </div>
                     )}
 
                     {/* TAB: CATEGORIES */}
                     {activeTab === 'categories' && (
                         <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                            {/* Manage Categories */}
+                            <GlassCard>
+                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🏷️ Správa kategorií</h3>
+                                <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                                    Přidejte, upravte nebo skryjte kategorie pro transakce.
+                                </p>
+
+                                <CategoryManager onCategoriesChange={() => loadCategoryRules()} />
+                            </GlassCard>
+
                             {/* Add New Rule */}
                             <GlassCard>
                                 <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Přidat pravidlo</h3>
@@ -734,14 +1105,9 @@ export default function SettingsPage() {
                                         value={newCategory}
                                         onChange={(e) => setNewCategory(e.target.value)}
                                     >
-                                        <option value="Food">🍔 Jídlo</option>
-                                        <option value="Transport">🚗 Doprava</option>
-                                        <option value="Utilities">💡 Služby</option>
-                                        <option value="Entertainment">🎬 Zábava</option>
-                                        <option value="Shopping">🛒 Nákupy</option>
-                                        <option value="Health">🏥 Zdraví</option>
-                                        <option value="Salary">💰 Příjem</option>
-                                        <option value="Other">📦 Ostatní</option>
+                                        {ruleCategories.filter(c => c.is_active).map(cat => (
+                                            <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
+                                        ))}
                                     </select>
                                     <button
                                         className="btn btn-primary"

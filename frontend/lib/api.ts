@@ -20,6 +20,8 @@ export interface Transaction {
     account_id: string;
     account_type: string;
     account_name?: string;
+    transaction_type?: 'normal' | 'internal_transfer' | 'family_transfer';
+    is_excluded?: boolean;
 }
 
 export interface DashboardData {
