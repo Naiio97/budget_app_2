@@ -24,12 +24,27 @@ export default function TransactionsPage() {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [selectedAccount, setSelectedAccount] = useState<string>('');
+    const [selectedMonth, setSelectedMonth] = useState<string>('');
+    const [amountType, setAmountType] = useState<string>('');
 
     const [monthlyStats, setMonthlyStats] = useState({ income: 0, expenses: 0 });
 
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
+
+    // Generate last 12 months for dropdown
+    const getMonthOptions = () => {
+        const months = [];
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const label = d.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
+            months.push({ value, label });
+        }
+        return months;
+    };
 
     // Debounce search
     useEffect(() => {
@@ -43,20 +58,33 @@ export default function TransactionsPage() {
     // Reset page on filter change
     useEffect(() => {
         setPage(1);
-    }, [selectedCategory, selectedAccount]);
+    }, [selectedCategory, selectedAccount, selectedMonth, amountType]);
 
     // Fetch Data
     useEffect(() => {
         async function fetchData() {
             setLoading(true);
             try {
+                // Calculate date range for selected month
+                let date_from: string | undefined;
+                let date_to: string | undefined;
+                if (selectedMonth) {
+                    const [year, month] = selectedMonth.split('-').map(Number);
+                    date_from = `${year}-${String(month).padStart(2, '0')}-01`;
+                    const lastDay = new Date(year, month, 0).getDate();
+                    date_to = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+                }
+
                 const [txResponse, dashData] = await Promise.all([
                     getTransactions({
                         page,
                         limit: 20,
-                        search: debouncedSearch,
-                        category: selectedCategory,
-                        account_id: selectedAccount
+                        search: debouncedSearch || undefined,
+                        category: selectedCategory || undefined,
+                        account_id: selectedAccount || undefined,
+                        date_from,
+                        date_to,
+                        amount_type: amountType || undefined
                     }),
                     getDashboard()
                 ]);
@@ -77,7 +105,7 @@ export default function TransactionsPage() {
             }
         }
         fetchData();
-    }, [page, debouncedSearch, selectedCategory, selectedAccount]);
+    }, [page, debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
 
     // Load categories
     useEffect(() => {
@@ -126,7 +154,32 @@ export default function TransactionsPage() {
                                 style={{ padding: '6px 12px', fontSize: '0.9rem' }}
                             />
                         </div>
-                        <div style={{ width: '180px' }}>
+                        <div style={{ width: '160px' }}>
+                            <select
+                                className="input"
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                            >
+                                <option value="">Všechny měsíce</option>
+                                {getMonthOptions().map(m => (
+                                    <option key={m.value} value={m.value}>{m.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div style={{ width: '140px' }}>
+                            <select
+                                className="input"
+                                value={amountType}
+                                onChange={(e) => setAmountType(e.target.value)}
+                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                            >
+                                <option value="">Vše</option>
+                                <option value="income">💰 Příjmy</option>
+                                <option value="expense">💸 Výdaje</option>
+                            </select>
+                        </div>
+                        <div style={{ width: '160px' }}>
                             <select
                                 className="input"
                                 value={selectedCategory}
@@ -139,7 +192,7 @@ export default function TransactionsPage() {
                                 ))}
                             </select>
                         </div>
-                        <div style={{ width: '180px' }}>
+                        <div style={{ width: '160px' }}>
                             <select
                                 className="input"
                                 value={selectedAccount}

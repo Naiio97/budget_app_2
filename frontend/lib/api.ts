@@ -96,6 +96,7 @@ export async function getTransactions(params?: {
     account_id?: string;
     date_from?: string;
     date_to?: string;
+    amount_type?: string;
 }): Promise<PaginatedResponse<Transaction>> {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set('page', params.page.toString());
@@ -105,6 +106,7 @@ export async function getTransactions(params?: {
     if (params?.account_id) searchParams.set('account_id', params.account_id);
     if (params?.date_from) searchParams.set('date_from', params.date_from);
     if (params?.date_to) searchParams.set('date_to', params.date_to);
+    if (params?.amount_type) searchParams.set('amount_type', params.amount_type);
 
     const query = searchParams.toString();
     return fetchApi<PaginatedResponse<Transaction>>(`/transactions/${query ? `?${query}` : ''}`);

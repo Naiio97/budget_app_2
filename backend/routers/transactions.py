@@ -40,6 +40,7 @@ async def get_transactions(
     account_id: Optional[str] = None,
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    amount_type: Optional[str] = Query(None, description="income, expense, or all"),
     db: AsyncSession = Depends(get_db)
 ):
     """Get paginated transactions with filtering"""
@@ -60,6 +61,10 @@ async def get_transactions(
     if search:
         search_term = f"%{search}%"
         conditions.append(TransactionModel.description.ilike(search_term))
+    if amount_type == "income":
+        conditions.append(TransactionModel.amount > 0)
+    elif amount_type == "expense":
+        conditions.append(TransactionModel.amount < 0)
     
     if conditions:
         query = query.where(and_(*conditions))
