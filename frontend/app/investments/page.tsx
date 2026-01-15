@@ -73,7 +73,7 @@ export default function InvestmentsPage() {
 
     if (loading) {
         return (
-            <MainLayout accounts={[]}>
+            <MainLayout>
                 <div style={{
                     display: 'flex',
                     justifyContent: 'center',
@@ -98,7 +98,7 @@ export default function InvestmentsPage() {
 
     if (error) {
         return (
-            <MainLayout accounts={accounts}>
+            <MainLayout>
                 <div style={{ padding: 'var(--spacing-lg)' }}>
                     <GlassCard>
                         <h2>❌ Chyba</h2>
@@ -113,7 +113,7 @@ export default function InvestmentsPage() {
     }
 
     return (
-        <MainLayout accounts={accounts}>
+        <MainLayout>
             <div style={{ padding: 'var(--spacing-lg)' }}>
                 {/* Header */}
                 <div style={{

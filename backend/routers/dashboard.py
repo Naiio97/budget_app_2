@@ -3,8 +3,9 @@ from typing import Optional
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel
 from services.trading212 import trading212_service
 
 router = APIRouter()
@@ -18,12 +19,28 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AccountModel).where(AccountModel.is_visible == True))
     accounts = result.scalars().all()
     
-    # Calculate totals
+    # Get manual accounts with envelopes
+    manual_result = await db.execute(
+        select(ManualAccountModel)
+        .options(selectinload(ManualAccountModel.items))
+        .where(ManualAccountModel.is_visible == True)
+    )
+    manual_accounts = manual_result.scalars().all()
+    
+    # Calculate totals (for manual accounts, only count my_balance)
     total_balance = sum(acc.balance for acc in accounts)
     bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
     investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
     
-    # Get recent transactions from DB
+    # Calculate manual account balances (only my money)
+    manual_balance = 0
+    for macc in manual_accounts:
+        # my_balance = total - cizí obálky
+        borrowed = sum(item.amount for item in macc.items if not getattr(item, 'is_mine', True))
+        manual_balance += macc.balance - borrowed
+    
+    total_balance += manual_balance
+    
     # Get recent transactions from DB with account name
     tx_result = await db.execute(
         select(TransactionModel, AccountModel.name)
@@ -53,13 +70,39 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 categories[cat] = 0
             categories[cat] += abs(tx.amount)
     
+    # Build accounts list including manual accounts
+    accounts_list = [
+        {
+            "id": acc.id,
+            "name": acc.name,
+            "type": acc.type,
+            "balance": acc.balance,
+            "currency": acc.currency,
+            "institution": acc.institution
+        }
+        for acc in accounts
+    ]
+    
+    # Add manual accounts to the list
+    for macc in manual_accounts:
+        borrowed = sum(item.amount for item in macc.items if not getattr(item, 'is_mine', True))
+        accounts_list.append({
+            "id": f"manual-{macc.id}",
+            "name": macc.name,
+            "type": "manual",
+            "balance": macc.balance - borrowed,  # Only show my money
+            "currency": macc.currency,
+            "institution": "Manuální"
+        })
+    
     return {
         "summary": {
             "total_balance": total_balance,
             "bank_balance": bank_balance,
             "investment_balance": investment_balance,
+            "manual_balance": manual_balance,
             "currency": "CZK",
-            "accounts_count": len(accounts)
+            "accounts_count": len(accounts) + len(manual_accounts)
         },
         "monthly": {
             "income": income,
@@ -79,17 +122,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             }
             for tx, account_name in recent_tx_rows
         ],
-        "accounts": [
-            {
-                "id": acc.id,
-                "name": acc.name,
-                "type": acc.type,
-                "balance": acc.balance,
-                "currency": acc.currency,
-                "institution": acc.institution
-            }
-            for acc in accounts
-        ]
+        "accounts": accounts_list
     }
 
 

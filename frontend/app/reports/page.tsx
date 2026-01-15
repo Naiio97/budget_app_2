@@ -124,7 +124,7 @@ export default function ReportsPage() {
 
     if (loading) {
         return (
-            <MainLayout accounts={accounts}>
+            <MainLayout>
                 <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)' }}>
                     <p className="text-secondary">Načítám přehledy...</p>
                 </div>
@@ -135,7 +135,7 @@ export default function ReportsPage() {
     const categoryData = prepareCategoryData();
 
     return (
-        <MainLayout accounts={accounts}>
+        <MainLayout>
             <header style={{ marginBottom: 'var(--spacing-xl)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                     <h1>📊 Měsíční přehledy</h1>

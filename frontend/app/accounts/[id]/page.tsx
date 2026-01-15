@@ -65,7 +65,7 @@ export default function AccountDetailPage() {
     if (loading && !data) {
         // ... (loading spinner) ...
         return (
-            <MainLayout accounts={[]}>
+            <MainLayout>
                 <div style={{
                     display: 'flex',
                     justifyContent: 'center',
@@ -91,7 +91,7 @@ export default function AccountDetailPage() {
     // ... (error handling) ...
     if (error || !data) {
         return (
-            <MainLayout accounts={accounts}>
+            <MainLayout>
                 <div style={{ padding: 'var(--spacing-lg)' }}>
                     <GlassCard>
                         <h2>❌ Chyba</h2>
@@ -108,7 +108,7 @@ export default function AccountDetailPage() {
     const { account, transactions } = data;
 
     return (
-        <MainLayout accounts={accounts} disableScroll={true}>
+        <MainLayout disableScroll={true}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 {/* Header */}
                 <div style={{

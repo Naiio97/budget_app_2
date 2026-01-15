@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
+import { useAccounts } from '@/contexts/AccountsContext';
 
 
 
@@ -367,6 +368,7 @@ function FamilyAccountSettings() {
 }
 
 export default function SettingsPage() {
+    const { refreshAccounts } = useAccounts();
     const [gocardlessId, setGocardlessId] = useState('');
     const [gocardlessKey, setGocardlessKey] = useState('');
     const [trading212Key, setTrading212Key] = useState('');
@@ -404,9 +406,20 @@ export default function SettingsPage() {
         if (!editName.trim()) return;
         setProcessingAccount(id);
         try {
-            await updateAccount(id, { name: editName });
+            // Check if it's a manual account
+            if (id.startsWith('manual-')) {
+                const manualId = id.replace('manual-', '');
+                await fetch(`http://localhost:8000/api/manual-accounts/${manualId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: editName })
+                });
+            } else {
+                await updateAccount(id, { name: editName });
+            }
             setAccounts(accounts.map(acc => acc.id === id ? { ...acc, name: editName } : acc));
             setEditingAccount(null);
+            refreshAccounts(); // Update sidebar instantly
         } catch (err) {
             console.error('Failed to rename account:', err);
         } finally {
@@ -417,8 +430,19 @@ export default function SettingsPage() {
     const handleToggleVisibility = async (id: string, currentVisibility: boolean) => {
         setProcessingAccount(id);
         try {
-            await updateAccount(id, { is_visible: !currentVisibility });
+            // Check if it's a manual account
+            if (id.startsWith('manual-')) {
+                const manualId = id.replace('manual-', '');
+                await fetch(`http://localhost:8000/api/manual-accounts/${manualId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ is_visible: !currentVisibility })
+                });
+            } else {
+                await updateAccount(id, { is_visible: !currentVisibility });
+            }
             setAccounts(accounts.map(acc => acc.id === id ? { ...acc, is_visible: !currentVisibility } : acc));
+            refreshAccounts(); // Update sidebar instantly
         } catch (err) {
             console.error('Failed to toggle visibility:', err);
         } finally {
@@ -431,7 +455,15 @@ export default function SettingsPage() {
 
         setProcessingAccount(id);
         try {
-            await deleteAccount(id);
+            // Check if it's a manual account
+            if (id.startsWith('manual-')) {
+                const manualId = id.replace('manual-', '');
+                await fetch(`http://localhost:8000/api/manual-accounts/${manualId}`, {
+                    method: 'DELETE'
+                });
+            } else {
+                await deleteAccount(id);
+            }
             setAccounts(accounts.filter(acc => acc.id !== id));
         } catch (err) {
             console.error('Failed to delete account:', err);
@@ -693,7 +725,7 @@ export default function SettingsPage() {
     // ... (rest of the component)
 
     return (
-        <MainLayout accounts={accounts} disableScroll={true}>
+        <MainLayout disableScroll={true}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 <div style={{ flexShrink: 0 }}>
                     <header style={{ marginBottom: 'var(--spacing-xl)' }}>

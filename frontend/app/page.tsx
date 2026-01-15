@@ -39,7 +39,7 @@ export default function DashboardPage() {
   // Show loading spinner while fetching data
   if (loading || !data) {
     return (
-      <MainLayout accounts={[]}>
+      <MainLayout>
         <div style={{
           display: 'flex',
           justifyContent: 'center',
@@ -67,7 +67,7 @@ export default function DashboardPage() {
     : '0';
 
   return (
-    <MainLayout accounts={data.accounts} disableScroll={true}>
+    <MainLayout disableScroll={true}>
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         <header style={{ marginBottom: 'var(--spacing-xl)', flexShrink: 0 }}>
           <h1>Dashboard</h1>

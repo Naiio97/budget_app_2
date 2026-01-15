@@ -173,6 +173,19 @@ async def update_transaction_category(
     old_category = tx.category
     tx.category = data.category
     
+    # Set is_excluded flag based on category type
+    excluded_categories = ["Internal Transfer", "Family Transfer"]
+    tx.is_excluded = data.category in excluded_categories
+    
+    # Also update transaction_type if changing to transfer category
+    if data.category == "Internal Transfer":
+        tx.transaction_type = "internal_transfer"
+    elif data.category == "Family Transfer":
+        tx.transaction_type = "family_transfer"
+    elif tx.transaction_type in ["internal_transfer", "family_transfer"]:
+        # Reset to normal if changing away from transfer
+        tx.transaction_type = "normal"
+    
     # Extract merchant name for learning
     if data.learn and tx.description:
         # Get the creditor name from description (usually first word/phrase)
@@ -204,6 +217,7 @@ async def update_transaction_category(
         "id": transaction_id,
         "old_category": old_category,
         "new_category": data.category,
+        "is_excluded": tx.is_excluded,
         "rule_created": data.learn
     }
 

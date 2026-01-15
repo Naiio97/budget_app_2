@@ -185,6 +185,7 @@ class ManualAccountModel(Base):
     name = Column(String, nullable=False)  # "Spořící účet"
     balance = Column(Float, default=0.0)
     currency = Column(String, default="CZK")
+    is_visible = Column(Boolean, default=True)  # Show in sidebar
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -192,15 +193,17 @@ class ManualAccountModel(Base):
 
 
 class ManualAccountItemModel(Base):
-    """Položky na manuálním účtu (peníze co nejsou moje)"""
+    """Položky/obálky na manuálním účtu"""
     __tablename__ = "manual_account_items"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(Integer, ForeignKey("manual_accounts.id"), nullable=False)
-    name = Column(String, nullable=False)  # "GYM", "Líšeňka"
+    name = Column(String, nullable=False)  # "Peníze od partnera", "Rezerva"
     amount = Column(Float, nullable=False)
+    is_mine = Column(Boolean, default=True)  # True = moje peníze, False = cizí/půjčené
     note = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     account = relationship("ManualAccountModel", back_populates="items")
+

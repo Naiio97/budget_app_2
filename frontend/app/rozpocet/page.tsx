@@ -831,7 +831,7 @@ export default function RozpocetPage() {
     };
 
     return (
-        <MainLayout accounts={accounts}>
+        <MainLayout>
             <div style={{ padding: 'var(--spacing-lg)' }}>
                 {/* Header with Year Selector */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>

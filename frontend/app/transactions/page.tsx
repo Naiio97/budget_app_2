@@ -125,7 +125,7 @@ export default function TransactionsPage() {
     };
 
     return (
-        <MainLayout accounts={accounts} disableScroll={true}>
+        <MainLayout disableScroll={true}>
             <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                 <div style={{ alignItems: 'baseline', marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>

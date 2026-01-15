@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AccountsProvider } from "@/contexts/AccountsContext";
 
 export const metadata: Metadata = {
   title: "Budget Tracker",
@@ -13,7 +14,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="cs">
-      <body>{children}</body>
+      <body>
+        <AccountsProvider>
+          {children}
+        </AccountsProvider>
+      </body>
     </html>
   );
 }

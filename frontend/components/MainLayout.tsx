@@ -5,23 +5,17 @@ import { usePathname } from 'next/navigation';
 import { ReactNode, useState } from 'react';
 import { syncData } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
+import { useAccounts } from '@/contexts/AccountsContext';
 
 interface MainLayoutProps {
     children: ReactNode;
-    accounts?: Array<{
-        id: string;
-        name: string;
-        type: string;
-        balance: number;
-        currency: string;
-        institution?: string;
-    }>;
     disableScroll?: boolean;
 }
 
-export default function MainLayout({ children, accounts = [], disableScroll = false }: MainLayoutProps) {
+export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {
     const pathname = usePathname();
     const [isSyncing, setIsSyncing] = useState(false);
+    const { accounts, loading, refreshAccounts } = useAccounts();
 
     const navItems = [
         { href: '/', label: 'Dashboard', icon: '📊' },
@@ -114,9 +108,15 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
                 ) : (
                     accounts.map((account) => {
                         const logoUrl = getBankLogo(account.institution, account.type);
-                        const href = account.type === 'investment'
-                            ? '/investments'
-                            : `/accounts/${account.id}`;
+                        // Route based on account type
+                        let href = `/accounts/${account.id}`;
+                        if (account.type === 'investment') {
+                            href = '/investments';
+                        } else if (account.type === 'manual' || account.id.startsWith('manual-')) {
+                            // Manual account - extract the numeric ID
+                            const manualId = account.id.replace('manual-', '');
+                            href = `/manual-account/${manualId}`;
+                        }
 
                         return (
                             <Link
@@ -130,7 +130,7 @@ export default function MainLayout({ children, accounts = [], disableScroll = fa
                                     </div>
                                 ) : (
                                     <div className={`account-icon ${account.type}`}>
-                                        {account.type === 'bank' ? '🏦' : '📈'}
+                                        {account.type === 'bank' ? '🏦' : account.type === 'manual' ? '💼' : '📈'}
                                     </div>
                                 )}
                                 <div className="account-info">

@@ -144,7 +144,7 @@ export default function BudgetsPage() {
     const monthName = now.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
 
     return (
-        <MainLayout accounts={accounts}>
+        <MainLayout>
             <div style={{ padding: 'var(--spacing-lg)' }}>
                 {/* Header */}
                 <div style={{ marginBottom: 'var(--spacing-lg)' }}>
