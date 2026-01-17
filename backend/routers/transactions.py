@@ -21,6 +21,8 @@ class Transaction(BaseModel):
     account_name: Optional[str] = None
     transaction_type: str = "normal"  # "normal", "internal_transfer", "family_transfer"
     is_excluded: bool = False
+    creditor_name: Optional[str] = None  # From raw_json creditorName
+    debtor_name: Optional[str] = None  # From raw_json debtorName
 
 
 class PaginatedTransactions(BaseModel):
@@ -84,8 +86,21 @@ async def get_transactions(
     result = await db.execute(query)
     rows = result.all()
     
-    items = [
-        Transaction(
+    import json
+    items = []
+    for tx, account_name in rows:
+        # Extract creditor/debtor names from raw_json
+        creditor_name = None
+        debtor_name = None
+        if tx.raw_json:
+            try:
+                raw_data = json.loads(tx.raw_json)
+                creditor_name = raw_data.get("creditorName")
+                debtor_name = raw_data.get("debtorName")
+            except:
+                pass
+        
+        items.append(Transaction(
             id=tx.id,
             date=tx.date,
             description=tx.description,
@@ -96,10 +111,10 @@ async def get_transactions(
             account_type=tx.account_type,
             account_name=account_name,
             transaction_type=tx.transaction_type or "normal",
-            is_excluded=tx.is_excluded or False
-        )
-        for tx, account_name in rows
-    ]
+            is_excluded=tx.is_excluded or False,
+            creditor_name=creditor_name,
+            debtor_name=debtor_name
+        ))
     
     return PaginatedTransactions(
         items=items,

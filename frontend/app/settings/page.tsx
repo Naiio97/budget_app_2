@@ -367,6 +367,152 @@ function FamilyAccountSettings() {
     );
 }
 
+
+function MyAccountPatterns() {
+    const [patterns, setPatterns] = useState<string[]>([]);
+    const [newPattern, setNewPattern] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [detecting, setDetecting] = useState(false);
+
+    useEffect(() => {
+        loadPatterns();
+    }, []);
+
+    const loadPatterns = async () => {
+        try {
+            const response = await fetch('http://localhost:8000/api/settings/my-account-patterns');
+            if (response.ok) {
+                const data = await response.json();
+                setPatterns(data.patterns || []);
+            }
+        } catch (err) {
+            console.error('Failed to load patterns:', err);
+        }
+    };
+
+    const handleAddPattern = () => {
+        if (!newPattern.trim() || patterns.includes(newPattern.toLowerCase().trim())) return;
+        setPatterns([...patterns, newPattern.toLowerCase().trim()]);
+        setNewPattern('');
+    };
+
+    const handleRemovePattern = (pattern: string) => {
+        setPatterns(patterns.filter(p => p !== pattern));
+    };
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const response = await fetch('http://localhost:8000/api/settings/my-account-patterns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ patterns })
+            });
+            if (response.ok) {
+                setSaved(true);
+                setTimeout(() => setSaved(false), 3000);
+            }
+        } catch (err) {
+            console.error('Failed to save patterns:', err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDetectTransfers = async () => {
+        setDetecting(true);
+        try {
+            const response = await fetch('http://localhost:8000/api/sync/detect-transfers', { method: 'POST' });
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Detekce dokončena!\n\n🔄 Interní převody: ${data.marked_internal_transfers}\n💼 Moje účty: ${data.marked_my_account_transfers}\n👨‍👩‍👧 Rodinné: ${data.marked_family_transfers}`);
+            }
+        } catch (err) {
+            console.error('Failed to detect transfers:', err);
+        } finally {
+            setDetecting(false);
+        }
+    };
+
+    return (
+        <GlassCard>
+            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>💼 Moje účty (spořící, atd.)</h3>
+            <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                Transakce obsahující tyto texty budou označeny jako interní převody a nebudou se počítat do příjmů/výdajů.
+            </p>
+
+            {/* Current patterns */}
+            {patterns.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: 'var(--spacing-md)' }}>
+                    {patterns.map(pattern => (
+                        <span
+                            key={pattern}
+                            style={{
+                                padding: '4px 8px',
+                                background: 'rgba(34, 197, 94, 0.2)',
+                                border: '1px solid rgba(34, 197, 94, 0.3)',
+                                borderRadius: '12px',
+                                fontSize: '0.85rem',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px'
+                            }}
+                        >
+                            {pattern}
+                            <button
+                                onClick={() => handleRemovePattern(pattern)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7, padding: 0 }}
+                            >✕</button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {/* Add new pattern */}
+            <div style={{ display: 'flex', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-md)' }}>
+                <input
+                    type="text"
+                    className="input"
+                    placeholder="Např: spořící, savings, CZ1234..."
+                    value={newPattern}
+                    onChange={(e) => setNewPattern(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddPattern()}
+                    style={{ flex: 1 }}
+                />
+                <button className="btn" onClick={handleAddPattern} disabled={!newPattern.trim()}>
+                    ➕
+                </button>
+            </div>
+
+            {/* Save button */}
+            <button
+                className="btn btn-primary"
+                onClick={handleSave}
+                disabled={saving}
+                style={{ width: '100%' }}
+            >
+                {saving ? '⏳ Ukládám...' : saved ? '✅ Uloženo' : '💾 Uložit vzory'}
+            </button>
+
+            {/* Detect transfers */}
+            <div style={{ marginTop: 'var(--spacing-lg)', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                <button
+                    className="btn"
+                    onClick={handleDetectTransfers}
+                    disabled={detecting}
+                    style={{ width: '100%' }}
+                >
+                    {detecting ? '⏳ Detekuji...' : '🔍 Detekovat převody'}
+                </button>
+                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
+                    Automaticky označí transakce odpovídající těmto vzorům jako interní převody.
+                </p>
+            </div>
+        </GlassCard>
+    );
+}
+
 export default function SettingsPage() {
     const { refreshAccounts } = useAccounts();
     const [gocardlessId, setGocardlessId] = useState('');
@@ -1101,6 +1247,9 @@ export default function SettingsPage() {
 
                             {/* Family Account Settings */}
                             <FamilyAccountSettings />
+
+                            {/* My Account Patterns (Internal Transfers) */}
+                            <MyAccountPatterns />
                         </div>
                     )}
 

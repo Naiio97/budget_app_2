@@ -151,6 +151,7 @@ class RecurringExpenseModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)  # "Nájem + Služby", "Netflix"
     default_amount = Column(Float, nullable=False)
+    my_percentage = Column(Integer, default=100)  # Můj podíl v % (50 = platím půlku)
     is_auto_paid = Column(Boolean, default=False)  # Zelené = automtatická platba z účtu
     match_pattern = Column(String, nullable=True)  # Pattern pro auto-match s transakcemi
     category = Column(String, nullable=True)  # Pro seskupení
@@ -168,7 +169,8 @@ class MonthlyExpenseModel(Base):
     recurring_expense_id = Column(Integer, ForeignKey("recurring_expenses.id"), nullable=True)
     
     name = Column(String, nullable=False)  # Může být jiný než recurring
-    amount = Column(Float, nullable=False)  # Může se lišit od default
+    amount = Column(Float, nullable=False)  # Celková částka platby
+    my_percentage = Column(Integer, default=100)  # Můj podíl v %
     is_paid = Column(Boolean, default=False)
     is_auto_paid = Column(Boolean, default=False)
     matched_transaction_id = Column(String, nullable=True)  # ID transakce co to zaplatila
@@ -183,6 +185,7 @@ class ManualAccountModel(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)  # "Spořící účet"
+    account_number = Column(String, nullable=True)  # "2049290001/6000" for internal transfer detection
     balance = Column(Float, default=0.0)
     currency = Column(String, default="CZK")
     is_visible = Column(Boolean, default=True)  # Show in sidebar

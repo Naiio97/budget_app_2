@@ -20,73 +20,142 @@ async def get_family_account_pattern(db: AsyncSession) -> str | None:
     return setting.value if setting else None
 
 
+async def get_my_account_patterns(db: AsyncSession) -> list[str]:
+    """Get configured patterns for user's own accounts (for internal transfer detection)"""
+    import json
+    result = await db.execute(select(SettingsModel).where(SettingsModel.key == "my_account_patterns"))
+    setting = result.scalar_one_or_none()
+    if setting and setting.value:
+        return json.loads(setting.value)
+    return []
+
+
 async def detect_and_mark_transfers(db: AsyncSession):
-    """Detect and mark internal transfers and family transfers after sync"""
+    """Detect and mark internal transfers based on creditor/debtor account matching"""
+    from models import ManualAccountModel
+    import re
     
-    # Get all own account IDs
-    result = await db.execute(select(AccountModel.id))
-    own_account_ids = [row[0] for row in result.all()]
+    def extract_account_number(value: str) -> set:
+        """Extract account number from IBAN, BBAN or plain account number"""
+        result = set()
+        if not value:
+            return result
+        
+        value = value.upper().strip()
+        result.add(value)
+        
+        # Czech IBAN format: CZ + 2 check digits + 4 bank code + 16 account number
+        # Example: CZ1208000000004568285043 -> account number is 4568285043
+        if value.startswith("CZ") and len(value) == 24:
+            # Full IBAN
+            bank_code = value[4:8]
+            account_num = value[8:].lstrip("0")  # Remove leading zeros
+            result.add(account_num)
+            result.add(f"{account_num}/{bank_code}")
+        
+        # BBAN format: account_number/bank_code (e.g., 4568285043/0800)
+        if "/" in value:
+            parts = value.split("/")
+            account_num = parts[0].lstrip("0")
+            result.add(account_num)
+            result.add(parts[0])  # With leading zeros too
+        
+        return result
+    
+    # 1. Collect all user's account identifiers (IBANs and account numbers)
+    my_account_identifiers = set()
+    
+    # Get IBANs from bank accounts (from details_json)
+    result = await db.execute(select(AccountModel).where(AccountModel.type == "bank"))
+    bank_accounts = result.scalars().all()
+    for acc in bank_accounts:
+        if acc.details_json:
+            try:
+                details = json.loads(acc.details_json)
+                account_info = details.get("account", {})
+                if account_info.get("iban"):
+                    my_account_identifiers.update(extract_account_number(account_info["iban"]))
+                if account_info.get("bban"):
+                    my_account_identifiers.update(extract_account_number(account_info["bban"]))
+            except:
+                pass
+    
+    # Get account numbers from manual accounts
+    result = await db.execute(select(ManualAccountModel))
+    manual_accounts = result.scalars().all()
+    for acc in manual_accounts:
+        if acc.account_number:
+            my_account_identifiers.update(extract_account_number(acc.account_number))
+    
+    print(f"My account identifiers for transfer detection: {my_account_identifiers}")
     
     # Get family account pattern (e.g., "sandri")
     family_pattern = await get_family_account_pattern(db)
     
-    # Get all transactions
+    # Get all bank transactions
     tx_result = await db.execute(select(TransactionModel).where(TransactionModel.account_type == "bank"))
     transactions = tx_result.scalars().all()
-    
-    # Group transactions by date for internal transfer detection
-    by_date = {}
-    for tx in transactions:
-        date = tx.date[:10] if tx.date else ""
-        if date not in by_date:
-            by_date[date] = []
-        by_date[date].append(tx)
     
     marked_internal = 0
     marked_family = 0
     
     for tx in transactions:
-        if tx.is_excluded:
+        if tx.is_excluded and tx.transaction_type != "normal":
             continue  # Already marked
         
-        # Check for family transfer (based on pattern in description)
-        if family_pattern:
-            desc_lower = (tx.description or "").lower()
-            if family_pattern in desc_lower:
-                tx.transaction_type = "family_transfer"
-                tx.is_excluded = True
-                tx.category = "Family Transfer"
-                marked_family += 1
-                continue
+        desc_lower = (tx.description or "").lower()
         
-        # Check for internal transfer (same amount, opposite direction, same day, different accounts)
-        date = tx.date[:10] if tx.date else ""
-        if date and date in by_date:
-            for other_tx in by_date[date]:
-                if other_tx.id == tx.id:
-                    continue
-                # Same amount, opposite sign, different account
-                if (abs(abs(tx.amount) - abs(other_tx.amount)) < 0.01 and 
-                    tx.amount * other_tx.amount < 0 and  # Opposite signs
-                    tx.account_id != other_tx.account_id and
-                    tx.account_id in own_account_ids and
-                    other_tx.account_id in own_account_ids):
-                    
-                    # Mark both as internal transfer
+        # Check for family transfer (based on pattern in description)
+        if family_pattern and family_pattern in desc_lower:
+            tx.transaction_type = "family_transfer"
+            tx.is_excluded = True
+            tx.category = "Family Transfer"
+            marked_family += 1
+            continue
+        
+        # Check creditor/debtor from raw_json
+        if tx.raw_json:
+            try:
+                raw_data = json.loads(tx.raw_json)
+                
+                # Get creditor account info and extract all variations
+                creditor_acc = raw_data.get("creditorAccount", {})
+                creditor_ids = set()
+                creditor_ids.update(extract_account_number(creditor_acc.get("iban", "")))
+                creditor_ids.update(extract_account_number(creditor_acc.get("bban", "")))
+                
+                # Get debtor account info and extract all variations
+                debtor_acc = raw_data.get("debtorAccount", {})
+                debtor_ids = set()
+                debtor_ids.update(extract_account_number(debtor_acc.get("iban", "")))
+                debtor_ids.update(extract_account_number(debtor_acc.get("bban", "")))
+                
+                # Remove empty strings
+                creditor_ids.discard("")
+                debtor_ids.discard("")
+                
+                # Both creditor and debtor must have account info
+                if not creditor_ids or not debtor_ids:
+                    continue  # Skip - not both accounts present
+                
+                # Check if BOTH creditor AND debtor match my accounts
+                # Use set intersection for accurate matching
+                creditor_is_mine = bool(creditor_ids & my_account_identifiers)
+                debtor_is_mine = bool(debtor_ids & my_account_identifiers)
+                
+                # Only mark as internal if BOTH sides are my accounts
+                if creditor_is_mine and debtor_is_mine:
                     tx.transaction_type = "internal_transfer"
                     tx.is_excluded = True
                     tx.category = "Internal Transfer"
                     marked_internal += 1
+                    print(f"Internal transfer: {tx.description[:50]} (creditor: {creditor_ids & my_account_identifiers}, debtor: {debtor_ids & my_account_identifiers})")
                     
-                    if not other_tx.is_excluded:
-                        other_tx.transaction_type = "internal_transfer"
-                        other_tx.is_excluded = True
-                        other_tx.category = "Internal Transfer"
-                        marked_internal += 1
-                    break
+            except Exception as e:
+                print(f"Error parsing raw_json for tx {tx.id}: {e}")
     
     await db.commit()
-    return {"marked_internal": marked_internal, "marked_family": marked_family}
+    return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": 0}
 
 
 def categorize_transaction(tx: dict) -> str:
@@ -284,11 +353,10 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
     transactions_synced = 0
     
     try:
-        # Clear existing transactions (fresh sync)
-        await db.execute(delete(TransactionModel))
-        await db.commit()  # Commit the delete before adding new transactions
+        # Get existing transactions to preserve their categories
+        existing_result = await db.execute(select(TransactionModel))
+        existing_txs = {tx.id: tx for tx in existing_result.scalars().all()}
         
-        # Sync bank accounts from GoCardless
         # Sync bank accounts from GoCardless
         try:
             # Get connected bank accounts from DB
@@ -363,6 +431,19 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                             "Transaction"
                         )
                         
+                        # Check if transaction exists and has a category - preserve it
+                        existing_tx = existing_txs.get(tx_id)
+                        if existing_tx and existing_tx.category:
+                            # Preserve existing category, transaction_type, and is_excluded
+                            preserved_category = existing_tx.category
+                            preserved_tx_type = existing_tx.transaction_type
+                            preserved_excluded = existing_tx.is_excluded
+                        else:
+                            # New transaction - auto-categorize
+                            preserved_category = categorize_transaction(tx_data)
+                            preserved_tx_type = "normal"
+                            preserved_excluded = False
+                        
                         tx = TransactionModel(
                             id=tx_id,
                             account_id=account.id,
@@ -370,8 +451,10 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                             description=description,
                             amount=amount_val,
                             currency=currency_val,
-                            category=categorize_transaction(tx_data),
+                            category=preserved_category,
                             account_type="bank",
+                            transaction_type=preserved_tx_type,
+                            is_excluded=preserved_excluded,
                             raw_json=json.dumps(tx_data)
                         )
                         await db.merge(tx)  # Use merge to handle duplicates
@@ -457,14 +540,18 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 # Convert to CZK
                 czk_amount = eur_amount * exchange_rate
                 
+                order_id = order.get("id", "")
+                existing_tx = existing_txs.get(order_id)
+                preserved_category = existing_tx.category if existing_tx and existing_tx.category else "Investment"
+                
                 tx = TransactionModel(
-                    id=order.get("id", ""),
+                    id=order_id,
                     account_id="trading212",
                     date=order.get("dateExecuted", order.get("dateCreated", ""))[:10],
                     description=f"{order.get('type', 'ORDER')} {order.get('ticker', '')} ({eur_amount:.2f} {base_currency})",
                     amount=czk_amount,
                     currency=target_currency,
-                    category="Investment",
+                    category=preserved_category,
                     account_type="investment",
                     raw_json=json.dumps(order)
                 )
@@ -485,14 +572,18 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 
                 czk_div_amount = div_amount * div_rate
                 
+                div_id = f"div_{div.get('reference', '')}"
+                existing_tx = existing_txs.get(div_id)
+                preserved_category = existing_tx.category if existing_tx and existing_tx.category else "Dividend"
+                
                 tx = TransactionModel(
-                    id=f"div_{div.get('reference', '')}",
+                    id=div_id,
                     account_id="trading212",
                     date=div.get("paidOn", "")[:10] if div.get("paidOn") else "",
                     description=f"Dividend: {div.get('ticker', '')} ({div_amount:.2f} {div_currency})",
                     amount=czk_div_amount,
                     currency=target_currency,
-                    category="Dividend",
+                    category=preserved_category,
                     account_type="investment",
                     raw_json=json.dumps(div)
                 )
@@ -518,7 +609,8 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
             "accounts_synced": accounts_synced,
             "transactions_synced": transactions_synced,
             "marked_internal_transfers": transfer_result["marked_internal"],
-            "marked_family_transfers": transfer_result["marked_family"]
+            "marked_family_transfers": transfer_result["marked_family"],
+            "marked_my_account_transfers": transfer_result["marked_my_account"]
         }
         
     except Exception as e:
@@ -572,5 +664,6 @@ async def detect_transfers(db: AsyncSession = Depends(get_db)):
     return {
         "status": "completed",
         "marked_internal_transfers": result["marked_internal"],
-        "marked_family_transfers": result["marked_family"]
+        "marked_family_transfers": result["marked_family"],
+        "marked_my_account_transfers": result["marked_my_account"]
     }

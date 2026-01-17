@@ -29,6 +29,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [editingId, setEditingId] = useState<string | null>(null);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [categories, setCategories] = useState<Category[]>([]);
+    const [dropdownPosition, setDropdownPosition] = useState<'below' | 'above'>('below');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Load categories from API
@@ -84,8 +85,18 @@ export default function TransactionList({ transactions: initialTransactions, sho
         }).format(date);
     };
 
-    const handleCategoryClick = (txId: string) => {
-        setEditingId(editingId === txId ? null : txId);
+    const handleCategoryClick = (txId: string, event: React.MouseEvent) => {
+        if (editingId === txId) {
+            setEditingId(null);
+        } else {
+            // Calculate if dropdown should appear above or below
+            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const dropdownHeight = 280; // Approximate dropdown height
+
+            setDropdownPosition(spaceBelow < dropdownHeight ? 'above' : 'below');
+            setEditingId(txId);
+        }
     };
 
     const handleCategorySelect = async (txId: string, newCategory: string) => {
@@ -156,7 +167,13 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             )}
                         </div>
                         <div className="transaction-details">
-                            <div className="transaction-name">{tx.description}</div>
+                            <div className="transaction-name">
+                                {/* Prefer creditor_name for outgoing payments, debtor_name for incoming, fallback to description */}
+                                {tx.amount < 0
+                                    ? (tx.creditor_name || tx.description)
+                                    : (tx.debtor_name || tx.creditor_name || tx.description)
+                                }
+                            </div>
                             <div className="transaction-date">
                                 {formatDate(tx.date)}
                                 {showAccount && tx.account_type && (
@@ -167,7 +184,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 {/* Category Badge - Clickable */}
                                 <span ref={editingId === tx.id ? dropdownRef : null} style={{ position: 'relative', display: 'inline-block' }}>
                                     <span
-                                        onClick={() => handleCategoryClick(tx.id)}
+                                        onClick={(e) => handleCategoryClick(tx.id, e)}
                                         style={{
                                             marginLeft: '8px',
                                             padding: '2px 8px',
@@ -188,9 +205,10 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     {editingId === tx.id && (
                                         <div style={{
                                             position: 'absolute',
-                                            top: '100%',
+                                            ...(dropdownPosition === 'above'
+                                                ? { bottom: '100%', marginBottom: '4px' }
+                                                : { top: '100%', marginTop: '4px' }),
                                             left: 0,
-                                            marginTop: '4px',
                                             background: 'rgba(30, 30, 40, 0.98)',
                                             border: '1px solid rgba(255,255,255,0.15)',
                                             borderRadius: '8px',

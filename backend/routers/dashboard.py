@@ -118,7 +118,9 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
                 "amount": tx.amount,
                 "currency": tx.currency,
                 "category": tx.category,
-                "account_name": account_name
+                "account_name": account_name,
+                "transaction_type": tx.transaction_type,
+                "is_excluded": tx.is_excluded
             }
             for tx, account_name in recent_tx_rows
         ],

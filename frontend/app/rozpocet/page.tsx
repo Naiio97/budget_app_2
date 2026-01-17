@@ -9,6 +9,8 @@ interface MonthlyExpense {
     id: number;
     name: string;
     amount: number;
+    my_percentage: number;
+    my_amount: number;
     is_paid: boolean;
     is_auto_paid: boolean;
     matched_transaction_id: string | null;
@@ -217,6 +219,19 @@ export default function RozpocetPage() {
         }
     };
 
+    const updateExpensePercentage = async (expenseId: number, my_percentage: number) => {
+        try {
+            await fetch(`http://localhost:8000/api/monthly-expenses/${expenseId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ my_percentage })
+            });
+            fetchMonthlyBudget();
+        } catch (err) {
+            console.error('Failed to update expense percentage:', err);
+        }
+    };
+
     const createRecurringExpense = async () => {
         if (!newExpense.name || !newExpense.amount) return;
         try {
@@ -264,11 +279,34 @@ export default function RozpocetPage() {
         }
     };
 
+    const deleteMonthlyExpense = async (expenseId: number, recurringExpenseId: number | null) => {
+        const deleteRecurring = recurringExpenseId && confirm('Smazat také šablonu pravidelného výdaje?\n\nANO = smazat ze všech budoucích měsíců\nNE = smazat jen z tohoto měsíce');
+
+        try {
+            // Delete from current month
+            await fetch(`http://localhost:8000/api/monthly-expenses/${expenseId}`, { method: 'DELETE' });
+
+            // Optionally delete recurring template
+            if (deleteRecurring && recurringExpenseId) {
+                await fetch(`http://localhost:8000/api/recurring-expenses/${recurringExpenseId}`, { method: 'DELETE' });
+                setRecurringExpenses(recurringExpenses.filter(e => e.id !== recurringExpenseId));
+            }
+
+            fetchMonthlyBudget();
+        } catch (err) {
+            console.error('Failed to delete expense:', err);
+        }
+    };
+
     const matchTransactions = async () => {
         try {
             const res = await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
             const data = await res.json();
-            alert(`Spárováno ${data.matched_count} výdajů s transakcemi`);
+            const details = data.details || {};
+            alert(`Spárováno ${data.matched_count} výdajů:\n\n` +
+                `📝 Podle patternu: ${details.by_pattern || 0}\n` +
+                `💰 Podle částky: ${details.by_amount || 0}\n` +
+                `📂 Podle kategorie: ${details.by_category || 0}`);
             fetchMonthlyBudget();
         } catch (err) {
             console.error('Failed to match transactions:', err);
@@ -281,6 +319,19 @@ export default function RozpocetPage() {
             fetchMonthlyBudget();
         } catch (err) {
             console.error('Failed to copy from previous:', err);
+        }
+    };
+
+    const deleteBudget = async () => {
+        if (!confirm(`Opravdu chcete smazat rozpočet pro ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}?`)) {
+            return;
+        }
+        try {
+            await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}`, { method: 'DELETE' });
+            setBudget(null);
+            // Fetch will create a new empty one if navigated to again
+        } catch (err) {
+            console.error('Failed to delete budget:', err);
         }
     };
 
@@ -532,7 +583,7 @@ export default function RozpocetPage() {
                             marginBottom: '4px'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                             <input
                                 type="checkbox"
                                 checked={expense.is_paid}
@@ -541,19 +592,67 @@ export default function RozpocetPage() {
                             />
                             <span style={{
                                 textDecoration: expense.is_paid ? 'line-through' : 'none',
-                                opacity: expense.is_paid ? 0.6 : 1
+                                opacity: expense.is_paid ? 0.6 : 1,
+                                flex: 1
                             }}>
                                 {expense.name}
                                 {expense.matched_transaction_id && <span style={{ marginLeft: '4px', fontSize: '0.7rem' }}>✓</span>}
                             </span>
                         </div>
-                        <input
-                            type="number"
-                            className="input"
-                            value={expense.amount}
-                            onChange={(e) => updateExpenseAmount(expense.id, parseFloat(e.target.value) || 0)}
-                            style={{ width: '100px', textAlign: 'right', padding: '4px 8px' }}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {/* Percentage selector */}
+                            <select
+                                className="input"
+                                value={expense.my_percentage}
+                                onChange={(e) => updateExpensePercentage(expense.id, parseInt(e.target.value))}
+                                style={{
+                                    width: '60px',
+                                    padding: '4px',
+                                    fontSize: '0.75rem',
+                                    background: expense.my_percentage < 100 ? 'rgba(168, 85, 247, 0.2)' : undefined
+                                }}
+                                title="Můj podíl v %"
+                            >
+                                <option value={100}>100%</option>
+                                <option value={50}>50%</option>
+                                <option value={33}>33%</option>
+                                <option value={25}>25%</option>
+                            </select>
+                            {/* Amount input */}
+                            <input
+                                type="number"
+                                className="input"
+                                value={expense.amount}
+                                onChange={(e) => updateExpenseAmount(expense.id, parseFloat(e.target.value) || 0)}
+                                style={{ width: '85px', textAlign: 'right', padding: '4px 8px' }}
+                                title="Celková platba"
+                            />
+                            {/* Show my_amount if not 100% */}
+                            {expense.my_percentage < 100 && (
+                                <span style={{
+                                    fontSize: '0.75rem',
+                                    color: 'var(--accent-primary)',
+                                    minWidth: '70px',
+                                    textAlign: 'right'
+                                }} title="Můj podíl">
+                                    → {formatCurrency(expense.my_amount)}
+                                </span>
+                            )}
+                            <button
+                                onClick={() => deleteMonthlyExpense(expense.id, expense.recurring_expense_id)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: '0.8rem',
+                                    opacity: 0.5,
+                                    padding: '4px'
+                                }}
+                                title="Smazat výdaj"
+                            >
+                                🗑️
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>
@@ -855,9 +954,19 @@ export default function RozpocetPage() {
                             →
                         </button>
                         {viewMode === 'month' && (
-                            <button className="btn" onClick={copyFromPrevious} style={{ marginLeft: '16px', fontSize: '0.8rem' }}>
-                                📋 Kopírovat z předchozího
-                            </button>
+                            <>
+                                <button className="btn" onClick={copyFromPrevious} style={{ marginLeft: '16px', fontSize: '0.8rem' }}>
+                                    📋 Kopírovat z předchozího
+                                </button>
+                                <button
+                                    className="btn"
+                                    onClick={deleteBudget}
+                                    style={{ fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-error)' }}
+                                    title="Smazat tento měsíc"
+                                >
+                                    🗑️ Smazat měsíc
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>

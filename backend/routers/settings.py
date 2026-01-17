@@ -223,3 +223,40 @@ async def delete_family_account(db: AsyncSession = Depends(get_db)):
     await db.commit()
     
     return {"status": "deleted"}
+
+
+# ============== My Account Patterns (Internal Transfers) ==============
+
+class MyAccountPatternRequest(BaseModel):
+    patterns: list[str]  # List of patterns to match (e.g., ["spořící", "savings", "CZ123456"])
+
+
+@router.get("/my-account-patterns")
+async def get_my_account_patterns(db: AsyncSession = Depends(get_db)):
+    """Get patterns that identify user's own accounts for internal transfer detection"""
+    import json
+    patterns_json = await get_setting(db, "my_account_patterns")
+    patterns = json.loads(patterns_json) if patterns_json else []
+    return {"patterns": patterns}
+
+
+@router.post("/my-account-patterns")
+async def save_my_account_patterns(request: MyAccountPatternRequest, db: AsyncSession = Depends(get_db)):
+    """Save patterns for internal transfer detection"""
+    import json
+    # Clean and lowercase patterns
+    clean_patterns = [p.lower().strip() for p in request.patterns if p.strip()]
+    await set_setting(db, "my_account_patterns", json.dumps(clean_patterns))
+    await db.commit()
+    return {"status": "saved", "patterns": clean_patterns}
+
+
+@router.delete("/my-account-patterns")
+async def delete_my_account_patterns(db: AsyncSession = Depends(get_db)):
+    """Remove all my account patterns"""
+    existing = await db.get(SettingsModel, "my_account_patterns")
+    if existing:
+        await db.delete(existing)
+    await db.commit()
+    return {"status": "deleted"}
+

@@ -36,12 +36,14 @@ class Envelope(BaseModel):
 
 class ManualAccountCreate(BaseModel):
     name: str
+    account_number: Optional[str] = None  # e.g. "2049290001/6000" for transfer detection
     balance: float = 0.0
     currency: str = "CZK"
 
 
 class ManualAccountUpdate(BaseModel):
     name: Optional[str] = None
+    account_number: Optional[str] = None
     balance: Optional[float] = None
     is_visible: Optional[bool] = None
 
@@ -49,6 +51,7 @@ class ManualAccountUpdate(BaseModel):
 class ManualAccount(BaseModel):
     id: int
     name: str
+    account_number: Optional[str] = None
     balance: float
     currency: str
     is_visible: bool
@@ -70,6 +73,7 @@ async def get_manual_accounts(db: AsyncSession = Depends(get_db)):
         ManualAccount(
             id=acc.id,
             name=acc.name,
+            account_number=acc.account_number,
             balance=acc.balance,
             currency=acc.currency,
             is_visible=acc.is_visible if acc.is_visible is not None else True,
@@ -94,6 +98,7 @@ async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = De
     """Create a new manual account"""
     account = ManualAccountModel(
         name=data.name,
+        account_number=data.account_number,
         balance=data.balance,
         currency=data.currency
     )
@@ -104,6 +109,7 @@ async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = De
     return ManualAccount(
         id=account.id,
         name=account.name,
+        account_number=account.account_number,
         balance=account.balance,
         currency=account.currency,
         is_visible=True,
@@ -128,6 +134,7 @@ async def get_manual_account(account_id: int, db: AsyncSession = Depends(get_db)
     return ManualAccount(
         id=account.id,
         name=account.name,
+        account_number=account.account_number,
         balance=account.balance,
         currency=account.currency,
         is_visible=account.is_visible if account.is_visible is not None else True,
@@ -160,6 +167,8 @@ async def update_manual_account(account_id: int, data: ManualAccountUpdate, db: 
     
     if data.name is not None:
         account.name = data.name
+    if data.account_number is not None:
+        account.account_number = data.account_number
     if data.balance is not None:
         account.balance = data.balance
     if data.is_visible is not None:
@@ -171,6 +180,7 @@ async def update_manual_account(account_id: int, data: ManualAccountUpdate, db: 
     return ManualAccount(
         id=account.id,
         name=account.name,
+        account_number=account.account_number,
         balance=account.balance,
         currency=account.currency,
         is_visible=account.is_visible if account.is_visible is not None else True,

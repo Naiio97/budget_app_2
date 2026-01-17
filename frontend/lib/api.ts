@@ -22,6 +22,8 @@ export interface Transaction {
     account_name?: string;
     transaction_type?: 'normal' | 'internal_transfer' | 'family_transfer';
     is_excluded?: boolean;
+    creditor_name?: string;
+    debtor_name?: string;
 }
 
 export interface DashboardData {

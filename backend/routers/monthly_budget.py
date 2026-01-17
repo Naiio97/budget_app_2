@@ -41,6 +41,8 @@ class MonthlyExpenseResponse(BaseModel):
     id: int
     name: str
     amount: float
+    my_percentage: int = 100
+    my_amount: float = 0  # Calculated: amount * my_percentage / 100
     is_paid: bool
     is_auto_paid: bool
     matched_transaction_id: Optional[str] = None
@@ -65,6 +67,7 @@ class MonthlyBudgetResponse(BaseModel):
 class RecurringExpenseCreate(BaseModel):
     name: str
     default_amount: float
+    my_percentage: int = 100
     is_auto_paid: bool = False
     match_pattern: Optional[str] = None
     category: Optional[str] = None
@@ -73,6 +76,7 @@ class RecurringExpenseCreate(BaseModel):
 class RecurringExpenseUpdate(BaseModel):
     name: Optional[str] = None
     default_amount: Optional[float] = None
+    my_percentage: Optional[int] = None
     is_auto_paid: Optional[bool] = None
     match_pattern: Optional[str] = None
     category: Optional[str] = None
@@ -84,6 +88,7 @@ class RecurringExpenseResponse(BaseModel):
     id: int
     name: str
     default_amount: float
+    my_percentage: int = 100
     is_auto_paid: bool
     match_pattern: Optional[str]
     category: Optional[str]
@@ -93,6 +98,7 @@ class RecurringExpenseResponse(BaseModel):
 
 class MonthlyExpenseUpdate(BaseModel):
     amount: Optional[float] = None
+    my_percentage: Optional[int] = None
     is_paid: Optional[bool] = None
     name: Optional[str] = None
 
@@ -160,6 +166,7 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
                 recurring_expense_id=rec.id,
                 name=rec.name,
                 amount=rec.default_amount,
+                my_percentage=rec.my_percentage or 100,
                 is_auto_paid=rec.is_auto_paid,
                 is_paid=False
             )
@@ -175,7 +182,8 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
     expenses = expenses_result.scalars().all()
     
     total_income = budget.salary + budget.other_income + budget.meal_vouchers
-    total_expenses = sum(e.amount for e in expenses)
+    # Calculate total using my_amount (amount * my_percentage / 100)
+    total_expenses = sum(e.amount * (e.my_percentage or 100) / 100 for e in expenses)
     
     return MonthlyBudgetResponse(
         id=budget.id,
@@ -193,6 +201,8 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
             id=e.id,
             name=e.name,
             amount=e.amount,
+            my_percentage=e.my_percentage or 100,
+            my_amount=e.amount * (e.my_percentage or 100) / 100,
             is_paid=e.is_paid,
             is_auto_paid=e.is_auto_paid,
             matched_transaction_id=e.matched_transaction_id,
@@ -227,6 +237,29 @@ async def update_monthly_budget(year_month: str, data: MonthlyBudgetUpdate, db: 
     
     await db.commit()
     return {"status": "updated"}
+
+
+@router.delete("/monthly-budget/{year_month}")
+async def delete_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)):
+    """Smazat měsíční rozpočet včetně všech výdajů"""
+    result = await db.execute(
+        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
+    )
+    budget = result.scalar_one_or_none()
+    
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    
+    # Delete all monthly expenses for this budget
+    await db.execute(
+        MonthlyExpenseModel.__table__.delete().where(MonthlyExpenseModel.budget_id == budget.id)
+    )
+    
+    # Delete the budget itself
+    await db.delete(budget)
+    await db.commit()
+    
+    return {"status": "deleted", "year_month": year_month}
 
 
 @router.post("/monthly-budget/{year_month}/copy-previous")
@@ -280,14 +313,24 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
     
-    # Get expenses with match patterns
+    # Get all expenses for this month
     expenses_result = await db.execute(
-        select(MonthlyExpenseModel, RecurringExpenseModel)
-        .join(RecurringExpenseModel, MonthlyExpenseModel.recurring_expense_id == RecurringExpenseModel.id)
-        .where(MonthlyExpenseModel.budget_id == budget.id)
-        .where(RecurringExpenseModel.match_pattern != None)
+        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id)
     )
-    expenses_with_patterns = expenses_result.all()
+    expenses = expenses_result.scalars().all()
+    
+    # Get all recurring expenses with patterns (for matching by name)
+    recurring_result = await db.execute(
+        select(RecurringExpenseModel).where(RecurringExpenseModel.match_pattern != None)
+    )
+    recurring_expenses = recurring_result.scalars().all()
+    
+    # Build pattern lookup by expense name
+    pattern_by_name = {}
+    for rec in recurring_expenses:
+        pattern_by_name[rec.name.lower()] = rec.match_pattern.lower()
+        if rec.id:
+            pattern_by_name[f"id_{rec.id}"] = rec.match_pattern.lower()
     
     # Get transactions for this month
     start_date = f"{year_month}-01"
@@ -302,24 +345,96 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
         select(TransactionModel)
         .where(TransactionModel.date >= start_date)
         .where(TransactionModel.date < end_date)
+        .where(TransactionModel.amount < 0)  # Only expenses
     )
     transactions = tx_result.scalars().all()
     
+    # Build category lookup from recurring expenses
+    category_by_name = {}
+    for rec in recurring_expenses:
+        if rec.category:
+            category_by_name[rec.name.lower()] = rec.category
+    
+    # Track used transactions to avoid double-matching
+    used_tx_ids = set()
+    
     matched_count = 0
-    for expense, recurring in expenses_with_patterns:
+    matched_by_amount = 0
+    matched_by_category = 0
+    
+    for expense in expenses:
         if expense.is_paid:
             continue
-            
-        pattern = recurring.match_pattern.lower()
+        
+        matched = False
+        
+        # === Strategy 1: Pattern matching ===
+        pattern = None
+        if expense.recurring_expense_id:
+            pattern = pattern_by_name.get(f"id_{expense.recurring_expense_id}")
+        if not pattern:
+            pattern = pattern_by_name.get(expense.name.lower())
+        
+        if pattern:
+            for tx in transactions:
+                if tx.id in used_tx_ids:
+                    continue
+                if pattern in tx.description.lower():
+                    expense.is_paid = True
+                    expense.matched_transaction_id = tx.id
+                    used_tx_ids.add(tx.id)
+                    matched_count += 1
+                    matched = True
+                    break
+        
+        if matched:
+            continue
+        
+        # === Strategy 2: Exact amount match (within 5% tolerance) ===
+        expense_amount = abs(expense.amount)
+        tolerance = expense_amount * 0.05  # 5% tolerance
+        
         for tx in transactions:
-            if pattern in tx.description.lower():
+            if tx.id in used_tx_ids:
+                continue
+            tx_amount = abs(tx.amount)
+            if abs(tx_amount - expense_amount) <= tolerance:
                 expense.is_paid = True
                 expense.matched_transaction_id = tx.id
-                matched_count += 1
+                used_tx_ids.add(tx.id)
+                matched_by_amount += 1
+                matched = True
                 break
+        
+        if matched:
+            continue
+        
+        # === Strategy 3: Category + approximate amount (within 20%) ===
+        expense_category = category_by_name.get(expense.name.lower())
+        if expense_category:
+            tolerance_wide = expense_amount * 0.20  # 20% tolerance
+            for tx in transactions:
+                if tx.id in used_tx_ids:
+                    continue
+                if tx.category == expense_category:
+                    tx_amount = abs(tx.amount)
+                    if abs(tx_amount - expense_amount) <= tolerance_wide:
+                        expense.is_paid = True
+                        expense.matched_transaction_id = tx.id
+                        used_tx_ids.add(tx.id)
+                        matched_by_category += 1
+                        break
     
     await db.commit()
-    return {"status": "matched", "matched_count": matched_count}
+    return {
+        "status": "matched", 
+        "matched_count": matched_count + matched_by_amount + matched_by_category,
+        "details": {
+            "by_pattern": matched_count,
+            "by_amount": matched_by_amount,
+            "by_category": matched_by_category
+        }
+    }
 
 
 @router.post("/monthly-budget/{year_month}/sync-income")
@@ -388,6 +503,7 @@ async def get_recurring_expenses(db: AsyncSession = Depends(get_db)):
         id=e.id,
         name=e.name,
         default_amount=e.default_amount,
+        my_percentage=e.my_percentage or 100,
         is_auto_paid=e.is_auto_paid,
         match_pattern=e.match_pattern,
         category=e.category,
@@ -406,6 +522,7 @@ async def create_recurring_expense(data: RecurringExpenseCreate, db: AsyncSessio
     expense = RecurringExpenseModel(
         name=data.name,
         default_amount=data.default_amount,
+        my_percentage=data.my_percentage,
         is_auto_paid=data.is_auto_paid,
         match_pattern=data.match_pattern,
         category=data.category,
@@ -419,6 +536,7 @@ async def create_recurring_expense(data: RecurringExpenseCreate, db: AsyncSessio
         id=expense.id,
         name=expense.name,
         default_amount=expense.default_amount,
+        my_percentage=expense.my_percentage or 100,
         is_auto_paid=expense.is_auto_paid,
         match_pattern=expense.match_pattern,
         category=expense.category,
@@ -442,6 +560,8 @@ async def update_recurring_expense(expense_id: int, data: RecurringExpenseUpdate
         expense.name = data.name
     if data.default_amount is not None:
         expense.default_amount = data.default_amount
+    if data.my_percentage is not None:
+        expense.my_percentage = data.my_percentage
     if data.is_auto_paid is not None:
         expense.is_auto_paid = data.is_auto_paid
     if data.match_pattern is not None:
@@ -488,6 +608,8 @@ async def update_monthly_expense(expense_id: int, data: MonthlyExpenseUpdate, db
     
     if data.amount is not None:
         expense.amount = data.amount
+    if data.my_percentage is not None:
+        expense.my_percentage = data.my_percentage
     if data.is_paid is not None:
         expense.is_paid = data.is_paid
     if data.name is not None:

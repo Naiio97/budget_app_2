@@ -17,6 +17,7 @@ interface Envelope {
 interface ManualAccount {
     id: number;
     name: string;
+    account_number: string | null;
     balance: number;
     currency: string;
     my_balance: number;
@@ -39,7 +40,8 @@ export default function ManualAccountDetailPage() {
     const [newEnvelope, setNewEnvelope] = useState({ name: '', amount: 0, is_mine: false, note: '' });
     const [editingEnvelope, setEditingEnvelope] = useState<number | null>(null);
     const [editEnvelopeData, setEditEnvelopeData] = useState<{ name: string; amount: number; is_mine: boolean; note: string }>({ name: '', amount: 0, is_mine: false, note: '' });
-
+    const [editingAccountNumber, setEditingAccountNumber] = useState(false);
+    const [accountNumber, setAccountNumber] = useState('');
     useEffect(() => {
         loadAccount();
     }, [accountId]);
@@ -51,6 +53,7 @@ export default function ManualAccountDetailPage() {
                 const data = await res.json();
                 setAccount(data);
                 setBalance(data.balance);
+                setAccountNumber(data.account_number || '');
             }
         } catch (err) {
             console.error('Failed to load account:', err);
@@ -247,6 +250,42 @@ export default function ManualAccountDetailPage() {
                 </GlassCard>
 
                 <GlassCard>
+                    <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                        🏦 Číslo účtu (pro detekci převodů)
+                    </div>
+                    {editingAccountNumber ? (
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input
+                                type="text"
+                                className="input"
+                                value={accountNumber}
+                                onChange={(e) => setAccountNumber(e.target.value)}
+                                placeholder="např. 2049290001/6000"
+                                style={{ width: '200px' }}
+                            />
+                            <button className="btn btn-primary" onClick={async () => {
+                                await fetch(`http://localhost:8000/api/manual-accounts/${accountId}`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ account_number: accountNumber })
+                                });
+                                setEditingAccountNumber(false);
+                                loadAccount();
+                            }} style={{ padding: '4px 8px' }}>✓</button>
+                            <button className="btn" onClick={() => setEditingAccountNumber(false)} style={{ padding: '4px 8px' }}>✕</button>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                            <div style={{ fontSize: '1rem', fontWeight: 500, color: accountNumber ? 'inherit' : 'var(--text-tertiary)' }}>
+                                {accountNumber || 'Nenastaveno'}
+                            </div>
+                            <button
+                                onClick={() => setEditingAccountNumber(true)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}
+                            >✏️</button>
+                        </div>
+                    )}
+                </GlassCard>                <GlassCard>
                     <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
                         💚 Volné k utracení
                     </div>
