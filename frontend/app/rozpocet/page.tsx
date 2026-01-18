@@ -315,7 +315,13 @@ export default function RozpocetPage() {
 
     const copyFromPrevious = async () => {
         try {
-            await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
+            const res = await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`Zkopírováno ${data.expenses_copied} výdajů z ${data.from}`);
+            } else {
+                alert(data.detail || 'Chyba při kopírování');
+            }
             fetchMonthlyBudget();
         } catch (err) {
             console.error('Failed to copy from previous:', err);
@@ -512,6 +518,9 @@ export default function RozpocetPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
                 <h3 style={{ margin: 0, color: 'var(--accent-error)' }}>📋 Pravidelné výdaje</h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn" onClick={copyFromPrevious} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+                        📋 Z minulého měsíce
+                    </button>
                     <button className="btn" onClick={matchTransactions} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
                         🔄 Spárovat
                     </button>
@@ -940,7 +949,13 @@ export default function RozpocetPage() {
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <button
                             className="btn"
-                            onClick={() => setSelectedYear(selectedYear - 1)}
+                            onClick={() => {
+                                if (selectedMonth === 1) {
+                                    // From January, go to December of previous year
+                                    setSelectedMonth(12);
+                                }
+                                setSelectedYear(selectedYear - 1);
+                            }}
                             style={{ padding: '4px 12px' }}
                         >
                             ←
@@ -948,25 +963,26 @@ export default function RozpocetPage() {
                         <span style={{ fontWeight: 600, minWidth: '60px', textAlign: 'center' }}>{selectedYear}</span>
                         <button
                             className="btn"
-                            onClick={() => setSelectedYear(selectedYear + 1)}
+                            onClick={() => {
+                                if (selectedMonth === 12) {
+                                    // From December, go to January of next year
+                                    setSelectedMonth(1);
+                                }
+                                setSelectedYear(selectedYear + 1);
+                            }}
                             style={{ padding: '4px 12px' }}
                         >
                             →
                         </button>
                         {viewMode === 'month' && (
-                            <>
-                                <button className="btn" onClick={copyFromPrevious} style={{ marginLeft: '16px', fontSize: '0.8rem' }}>
-                                    📋 Kopírovat z předchozího
-                                </button>
-                                <button
-                                    className="btn"
-                                    onClick={deleteBudget}
-                                    style={{ fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-error)' }}
-                                    title="Smazat tento měsíc"
-                                >
-                                    🗑️ Smazat měsíc
-                                </button>
-                            </>
+                            <button
+                                className="btn"
+                                onClick={deleteBudget}
+                                style={{ marginLeft: '16px', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-error)' }}
+                                title="Smazat tento měsíc"
+                            >
+                                🗑️ Smazat měsíc
+                            </button>
                         )}
                     </div>
                 </div>

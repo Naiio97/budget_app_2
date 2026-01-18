@@ -264,7 +264,7 @@ async def delete_monthly_budget(year_month: str, db: AsyncSession = Depends(get_
 
 @router.post("/monthly-budget/{year_month}/copy-previous")
 async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(get_db)):
-    """Zkopírovat hodnoty z předchozího měsíce"""
+    """Zkopírovat výdaje z předchozího měsíce"""
     # Parse year_month to get previous month
     year, month = map(int, year_month.split("-"))
     if month == 1:
@@ -280,7 +280,7 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
     prev_budget = prev_result.scalar_one_or_none()
     
     if not prev_budget:
-        raise HTTPException(status_code=404, detail="Previous month budget not found")
+        raise HTTPException(status_code=404, detail="Předchozí měsíc neexistuje")
     
     # Get or create current budget
     curr_result = await db.execute(
@@ -291,14 +291,37 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
     if not curr_budget:
         curr_budget = MonthlyBudgetModel(year_month=year_month)
         db.add(curr_budget)
+        await db.commit()
+        await db.refresh(curr_budget)
     
-    # Copy values
-    curr_budget.salary = prev_budget.salary
-    curr_budget.other_income = prev_budget.other_income
-    curr_budget.meal_vouchers = prev_budget.meal_vouchers
+    # Delete existing expenses for current month
+    await db.execute(
+        MonthlyExpenseModel.__table__.delete().where(MonthlyExpenseModel.budget_id == curr_budget.id)
+    )
+    
+    # Get previous month expenses
+    prev_expenses_result = await db.execute(
+        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == prev_budget.id)
+    )
+    prev_expenses = prev_expenses_result.scalars().all()
+    
+    # Copy expenses to current month
+    copied_count = 0
+    for exp in prev_expenses:
+        new_expense = MonthlyExpenseModel(
+            budget_id=curr_budget.id,
+            recurring_expense_id=exp.recurring_expense_id,
+            name=exp.name,
+            amount=exp.amount,
+            my_percentage=exp.my_percentage or 100,
+            is_auto_paid=exp.is_auto_paid,
+            is_paid=False  # Reset paid status for new month
+        )
+        db.add(new_expense)
+        copied_count += 1
     
     await db.commit()
-    return {"status": "copied", "from": prev_year_month}
+    return {"status": "copied", "from": prev_year_month, "expenses_copied": copied_count}
 
 
 @router.post("/monthly-budget/{year_month}/match-transactions")
