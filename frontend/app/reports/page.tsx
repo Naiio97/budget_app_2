@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
-import { getDashboard, Account } from '@/lib/api';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     AreaChart, Area
@@ -50,11 +49,15 @@ const FALLBACK_COLORS: Record<string, string> = {
 };
 
 export default function ReportsPage() {
-    const [accounts, setAccounts] = useState<Account[]>([]);
     const [report, setReport] = useState<MonthlyReport | null>(null);
     const [loading, setLoading] = useState(true);
     const [months, setMonths] = useState(6);
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>(FALLBACK_COLORS);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -88,11 +91,7 @@ export default function ReportsPage() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const [dashData, reportData] = await Promise.all([
-                    getDashboard(),
-                    fetch(`http://localhost:8000/api/dashboard/monthly-report?months=${months}`).then(r => r.json())
-                ]);
-                setAccounts(dashData.accounts || []);
+                const reportData = await fetch(`http://localhost:8000/api/dashboard/monthly-report?months=${months}`).then(r => r.json());
                 setReport(reportData);
             } catch (err) {
                 console.error('Failed to load report:', err);
@@ -122,7 +121,7 @@ export default function ReportsPage() {
         }));
     };
 
-    if (loading) {
+    if (!mounted || loading) {
         return (
             <MainLayout>
                 <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)' }}>
@@ -213,7 +212,7 @@ export default function ReportsPage() {
                                     border: '1px solid rgba(255,255,255,0.1)',
                                     borderRadius: '8px'
                                 }}
-                                formatter={(value: number) => formatCurrency(value)}
+                                formatter={(value) => formatCurrency(Number(value))}
                             />
                             <Legend />
                             <Bar dataKey="income" name="Příjmy" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -238,7 +237,7 @@ export default function ReportsPage() {
                                     border: '1px solid rgba(255,255,255,0.1)',
                                     borderRadius: '8px'
                                 }}
-                                formatter={(value: number) => formatCurrency(value)}
+                                formatter={(value) => formatCurrency(Number(value))}
                             />
                             <Legend />
                             {report?.categories.map(cat => (
