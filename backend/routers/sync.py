@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from datetime import datetime
 import json
+import logging
 
 from database import get_db
 from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel
@@ -11,6 +12,8 @@ from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 async def get_family_account_pattern(db: AsyncSession) -> str | None:
@@ -87,7 +90,7 @@ async def detect_and_mark_transfers(db: AsyncSession):
         if acc.account_number:
             my_account_identifiers.update(extract_account_number(acc.account_number))
     
-    print(f"My account identifiers for transfer detection: {my_account_identifiers}")
+    logger.debug(f"My account identifiers for transfer detection: {my_account_identifiers}")
     
     # Get family account pattern (e.g., "sandri")
     family_pattern = await get_family_account_pattern(db)
@@ -149,10 +152,10 @@ async def detect_and_mark_transfers(db: AsyncSession):
                     tx.is_excluded = True
                     tx.category = "Internal Transfer"
                     marked_internal += 1
-                    print(f"Internal transfer: {tx.description[:50]} (creditor: {creditor_ids & my_account_identifiers}, debtor: {debtor_ids & my_account_identifiers})")
+                    logger.debug(f"Internal transfer: {tx.description[:50]} (creditor: {creditor_ids & my_account_identifiers}, debtor: {debtor_ids & my_account_identifiers})")
                     
             except Exception as e:
-                print(f"Error parsing raw_json for tx {tx.id}: {e}")
+                logger.error(f"Error parsing raw_json for tx {tx.id}: {e}")
     
     await db.commit()
     return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": 0}
@@ -372,7 +375,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     if balance_list:
                         # Log available balance types for debugging
                         balance_types = [b.get("balanceType") for b in balance_list]
-                        print(f"Account {account.id} has balance types: {balance_types}")
+                        logger.debug(f"Account {account.id} has balance types: {balance_types}")
                         
                         # Smart selection login
                         selected_balance = None
@@ -399,7 +402,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                         if selected_balance:
                             amount = float(selected_balance["balanceAmount"]["amount"])
                             currency = selected_balance["balanceAmount"]["currency"]
-                            print(f"Selected balance for {account.id}: {amount} {currency} ({selected_balance.get('balanceType')})")
+                            logger.info(f"Selected balance for {account.id}: {amount} {currency} ({selected_balance.get('balanceType')})")
                             
                             account.balance = amount
                             account.currency = currency
@@ -464,13 +467,13 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     
                 except Exception as inner_e:
                     error_msg = f"Failed to sync account {account.id}: {str(inner_e)}"
-                    print(error_msg)
+                    logger.error(error_msg)
                     sync_status.error_message = (sync_status.error_message or "") + error_msg + "; "
                     # Do not raise, just continue to try other accounts
                     continue
                     
         except Exception as e:
-            print(f"GoCardless sync skipped: {e}")
+            logger.warning(f"GoCardless sync skipped: {e}")
             sync_status.error_message = (sync_status.error_message or "") + f"GoCardless Error: {str(e)}; "
             if "429" in str(e):
                  raise e
@@ -496,7 +499,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
             # Convert total value
             czk_total_value = eur_total_value * exchange_rate
             
-            print(f"Trading 212: {eur_total_value} {base_currency} -> {czk_total_value} {target_currency} (Rate: {exchange_rate})")
+            logger.info(f"Trading 212: {eur_total_value} {base_currency} -> {czk_total_value} {target_currency} (Rate: {exchange_rate})")
             
             # Upsert Trading 212 account
             t212_account = await db.get(AccountModel, "trading212")
@@ -591,7 +594,8 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 transactions_synced += 1
                 
         except Exception as e:
-            print(f"Trading 212 sync error: {e}")
+            logger.error(f"Trading 212 sync error: {e}")
+            raise 
         
         # Update sync status
         sync_status.status = "completed"

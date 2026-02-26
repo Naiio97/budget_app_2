@@ -1,4 +1,8 @@
 import httpx
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 async def get_exchange_rate(from_currency: str, to_currency: str) -> float:
     """
@@ -10,7 +14,7 @@ async def get_exchange_rate(from_currency: str, to_currency: str) -> float:
         
     try:
         url = f"https://api.frankfurter.app/latest?from={from_currency}&to={to_currency}"
-        print(f"Fetching exchange rate: {url}")
+        logger.debug(f"Fetching exchange rate: {url}")
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=10.0)
             response.raise_for_status()
@@ -18,12 +22,12 @@ async def get_exchange_rate(from_currency: str, to_currency: str) -> float:
             rate = data.get("rates", {}).get(to_currency)
             
             if rate:
-                print(f"Exchange rate {from_currency} -> {to_currency}: {rate}")
+                logger.info(f"Exchange rate {from_currency} -> {to_currency}: {rate}")
                 return float(rate)
             else:
-                print(f"Rate not found in response: {data}")
+                logger.warning(f"Rate not found in response: {data}")
                 return 1.0
                 
     except Exception as e:
-        print(f"Failed to fetch exchange rate: {e}")
+        logger.error(f"Failed to fetch exchange rate: {e}")
         return 1.0
