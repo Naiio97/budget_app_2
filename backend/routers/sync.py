@@ -535,7 +535,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
             accounts_synced += 1
             
             # Sync orders as transactions
-            orders = await trading212_service.get_orders(limit=100)
+            orders = await trading212_service.get_orders(limit=50)
             for order in orders.get("items", []):
                 # Calculate amount in original currency
                 eur_amount = -float(order.get("fillPrice", 0)) * float(order.get("filledQuantity", 0))
@@ -562,7 +562,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 transactions_synced += 1
             
             # Sync dividends
-            dividends = await trading212_service.get_dividends(limit=100)
+            dividends = await trading212_service.get_dividends(limit=50)
             for div in dividends.get("items", []):
                 div_amount = float(div.get("amount", 0))
                 div_currency = div.get("currency", "EUR")
@@ -595,7 +595,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 
         except Exception as e:
             logger.error(f"Trading 212 sync error: {e}")
-            raise 
+            sync_status.error_message = (sync_status.error_message or "") + f"Trading 212 Error: {str(e)}; "
         
         # Update sync status
         sync_status.status = "completed"
