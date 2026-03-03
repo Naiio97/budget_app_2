@@ -1,16 +1,21 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 import os
+from dotenv import load_dotenv
 
-# SQLite database file path
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./budget.db")
+# Načtení proměnných z .env souboru (důležité pro lokální testování mimo Docker)
+load_dotenv()
 
+# Striktní vyžadování proměnné. Žádný fallback.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("Kritická chyba: DATABASE_URL nenalezena v prostředí!")
 
 class Base(DeclarativeBase):
     """Base class for all models"""
     pass
-
 
 # Create async engine
 engine = create_async_engine(
@@ -25,21 +30,18 @@ async_session_maker = async_sessionmaker(
     expire_on_commit=False
 )
 
-
 async def init_db():
     """Initialize database - create all tables"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting database session"""
     async with async_session_maker() as session:
         try:
             yield session
         finally:
             await session.close()
-
 
 @asynccontextmanager
 async def get_db_context():

@@ -741,7 +741,7 @@ async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = De
 
 
 @router.put("/manual-accounts/{account_id}")
-async def update_manual_account(account_id: int, data: ManualAccountUpdate, db: AsyncSession = Depends(get_db)):
+async def update_manual_account_budget(account_id: int, data: ManualAccountUpdate, db: AsyncSession = Depends(get_db)):
     """Aktualizovat manuální účet"""
     result = await db.execute(
         select(ManualAccountModel).where(ManualAccountModel.id == account_id)
