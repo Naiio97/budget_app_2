@@ -1,0 +1,18 @@
+# Tajemství
+.env
+.env.*
+
+# Databáze (všechny soubory s těmito koncovkami)
+*.db
+*.sqlite3
+
+# Logy (všechny, bez ohledu na název)
+*.log
+
+# Virtuální prostředí Windows (lomítko značí složku)
+venv/
+env/
+
+# Cache Pythonu (dvě hvězdičky znamenají "kdekoliv v jakékoliv podsložce")
+**/__pycache__/
+*.pyc
