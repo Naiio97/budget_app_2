@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 import json
 import logging
@@ -370,99 +371,98 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 try:
                     # Sync Balance
                     balances = await gocardless_service.get_account_balances(account.id)
-                    balance_list = balances.get("balances", [])
+                    balance_list = balances.balances or []
                     
                     if balance_list:
                         # Log available balance types for debugging
-                        balance_types = [b.get("balanceType") for b in balance_list]
+                        balance_types = [b.balanceType for b in balance_list]
                         logger.debug(f"Account {account.id} has balance types: {balance_types}")
                         
-                        # Smart selection login
+                        # Smart selection logic
                         selected_balance = None
                         
                         # 1. Try interimAvailable (what you verify usually see in bank app)
-                        selected_balance = next((b for b in balance_list if b.get("balanceType") == "interimAvailable"), None)
+                        selected_balance = next((b for b in balance_list if b.balanceType == "interimAvailable"), None)
                         
                         # 2. Try closingBooked (confirmed balance)
                         if not selected_balance:
-                            selected_balance = next((b for b in balance_list if b.get("balanceType") == "closingBooked"), None)
+                            selected_balance = next((b for b in balance_list if b.balanceType == "closingBooked"), None)
                             
                         # 3. Try interimBooked
                         if not selected_balance:
-                            selected_balance = next((b for b in balance_list if b.get("balanceType") == "interimBooked"), None)
+                            selected_balance = next((b for b in balance_list if b.balanceType == "interimBooked"), None)
                             
                         # 4. Try openingBooked
                         if not selected_balance:
-                             selected_balance = next((b for b in balance_list if b.get("balanceType") == "openingBooked"), None)
+                             selected_balance = next((b for b in balance_list if b.balanceType == "openingBooked"), None)
                              
                         # 5. Fallback to first one
                         if not selected_balance:
                             selected_balance = balance_list[0]
                             
                         if selected_balance:
-                            amount = float(selected_balance["balanceAmount"]["amount"])
-                            currency = selected_balance["balanceAmount"]["currency"]
-                            logger.info(f"Selected balance for {account.id}: {amount} {currency} ({selected_balance.get('balanceType')})")
+                            amount = float(selected_balance.balanceAmount.amount)
+                            currency = selected_balance.balanceAmount.currency
+                            logger.info(f"Selected balance for {account.id}: {amount} {currency} ({selected_balance.balanceType})")
                             
                             account.balance = amount
                             account.currency = currency
                             account.last_synced = datetime.utcnow()
                         
                     # Sync Transactions (last 90 days)
-                    transactions = await gocardless_service.get_account_transactions(account.id)
+                    # get_account_transactions nyní vrací list[TransactionSchema] — validované Pydantic modely
+                    clean_transactions = await gocardless_service.get_account_transactions(account.id)
                     
-                    # Process booked transactions
-                    for tx_data in transactions.get("transactions", {}).get("booked", []):
+                    # --- BULK UPSERT: Sestavíme dávku slovníků z Pydantic objektů ---
+                    rows_to_upsert = []
+                    for tx_data in clean_transactions:
                         tx_id = (
-                            tx_data.get("transactionId") or 
-                            tx_data.get("internalTransactionId") or 
-                            tx_data.get("entryReference", "")
+                            tx_data.transactionId or 
+                            tx_data.internalTransactionId or 
+                            tx_data.entryReference or ""
                         )
                         if not tx_id:
                             continue
-                            
-                        amount_val = float(tx_data.get("transactionAmount", {}).get("amount", 0))
-                        currency_val = tx_data.get("transactionAmount", {}).get("currency", "CZK")
-                        date_val = tx_data.get("bookingDate", "")
                         
-                        # Description fallback chain
                         description = (
-                            tx_data.get("remittanceInformationUnstructured") or 
-                            tx_data.get("remittanceInformationStructured") or
-                            tx_data.get("creditorName") or 
-                            tx_data.get("debtorName") or 
+                            tx_data.remittanceInformationUnstructured or 
+                            tx_data.remittanceInformationStructured or
+                            tx_data.creditorName or 
+                            tx_data.debtorName or 
                             "Transaction"
                         )
                         
-                        # Check if transaction exists and has a category - preserve it
-                        existing_tx = existing_txs.get(tx_id)
-                        if existing_tx and existing_tx.category:
-                            # Preserve existing category, transaction_type, and is_excluded
-                            preserved_category = existing_tx.category
-                            preserved_tx_type = existing_tx.transaction_type
-                            preserved_excluded = existing_tx.is_excluded
-                        else:
-                            # New transaction - auto-categorize
-                            preserved_category = categorize_transaction(tx_data)
-                            preserved_tx_type = "normal"
-                            preserved_excluded = False
+                        tx_dict = tx_data.model_dump(mode="json")
                         
-                        tx = TransactionModel(
-                            id=tx_id,
-                            account_id=account.id,
-                            date=date_val,
-                            description=description,
-                            amount=amount_val,
-                            currency=currency_val,
-                            category=preserved_category,
-                            account_type="bank",
-                            transaction_type=preserved_tx_type,
-                            is_excluded=preserved_excluded,
-                            raw_json=json.dumps(tx_data)
+                        rows_to_upsert.append({
+                            "id": tx_id,
+                            "account_id": account.id,
+                            "date": str(tx_data.bookingDate) if tx_data.bookingDate else "",
+                            "description": description,
+                            "amount": float(tx_data.transactionAmount.amount),
+                            "currency": tx_data.transactionAmount.currency,
+                            "category": categorize_transaction(tx_dict),
+                            "account_type": "bank",
+                            "transaction_type": "normal",
+                            "is_excluded": False,
+                            "raw_json": json.dumps(tx_dict),
+                        })
+                    
+                    # Dávkový zápis — jeden INSERT pro celý účet
+                    if rows_to_upsert:
+                        stmt = pg_insert(TransactionModel).values(rows_to_upsert)
+                        stmt = stmt.on_conflict_do_update(
+                            index_elements=["id"],
+                            set_={
+                                # Aktualizujeme POUZE popis a surová data.
+                                # category, transaction_type, is_excluded se NIKDY nepřepisují.
+                                "description": stmt.excluded.description,
+                                "raw_json": stmt.excluded.raw_json,
+                            }
                         )
-                        await db.merge(tx)  # Use merge to handle duplicates
-                        transactions_synced += 1
-                        
+                        await db.execute(stmt)
+                        transactions_synced += len(rows_to_upsert)
+                    
                     accounts_synced += 1
                     
                 except Exception as inner_e:

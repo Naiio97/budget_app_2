@@ -2,25 +2,29 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
-import os
-from dotenv import load_dotenv
+from config import get_settings
 
-# Načtení proměnných z .env souboru (důležité pro lokální testování mimo Docker)
-load_dotenv()
+settings = get_settings()
 
-# Striktní vyžadování proměnné. Žádný fallback.
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("Kritická chyba: DATABASE_URL nenalezena v prostředí!")
+# Validace formátu — musí být async PostgreSQL driver
+if not settings.database_url.startswith("postgresql+asyncpg://"):
+    raise ValueError(
+        f"DATABASE_URL musí začínat 'postgresql+asyncpg://'. "
+        f"Aktuální hodnota začíná: '{settings.database_url[:30]}...'"
+    )
+
 
 class Base(DeclarativeBase):
     """Base class for all models"""
     pass
 
+
 # Create async engine
 engine = create_async_engine(
-    DATABASE_URL,
+    settings.database_url,
     echo=False,  # Set to True for SQL debugging
+    pool_size=5,
+    max_overflow=10,
 )
 
 # Create async session factory
@@ -30,10 +34,12 @@ async_session_maker = async_sessionmaker(
     expire_on_commit=False
 )
 
+
 async def init_db():
     """Initialize database - create all tables"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency for getting database session"""
@@ -42,6 +48,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
 
 @asynccontextmanager
 async def get_db_context():

@@ -1,6 +1,10 @@
 import httpx
 from typing import Optional
 from config import get_settings
+from schemas import (
+    TransactionSchema, Integration, SpectacularRequisition, 
+    Requisition, AccountDetail, AccountBalance, BalanceSchema
+)
 
 settings = get_settings()
 
@@ -28,6 +32,20 @@ class GoCardlessService:
         self.access_token: Optional[str] = None
         self.refresh_token: Optional[str] = None
     
+    async def _request(self, method: str, path: str, **kwargs) -> dict:
+        """Centrální metoda pro všechny HTTP požadavky na GoCardless API.
+        Zajistí token, vytvoří jedno spojení, provede request a vrátí surový JSON."""
+        token = await self.get_access_token()
+        async with httpx.AsyncClient() as client:
+            response = await client.request(
+                method,
+                f"{BASE_URL}{path}",
+                headers={"Authorization": f"Bearer {token}"},
+                **kwargs
+            )
+            response.raise_for_status()
+            return response.json()
+    
     async def get_access_token(self) -> str:
         """Get or refresh access token"""
         if self.access_token:
@@ -38,6 +56,7 @@ class GoCardlessService:
         if not secret_id or not secret_key:
             raise Exception("GoCardless credentials not configured")
         
+        # Token request nemůže použít _request() — nemáme ještě token
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{BASE_URL}/token/new/",
@@ -57,84 +76,62 @@ class GoCardlessService:
         self.access_token = None
         self.refresh_token = None
     
-    async def get_institutions(self, country: str = "CZ") -> list:
-        """Get available banks for a country"""
-        token = await self.get_access_token()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/institutions/",
-                params={"country": country},
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+    async def get_institutions(self, country: str = "CZ") -> list[Integration]:
+        """Get available banks for a country — validated Pydantic models."""
+        raw_list = await self._request("GET", "/institutions/", params={"country": country})
+        return [Integration(**item) for item in raw_list]
     
-    async def create_requisition(self, institution_id: str, redirect_url: str) -> dict:
-        """Create a requisition (link to connect bank)"""
-        token = await self.get_access_token()
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{BASE_URL}/requisitions/",
-                json={
-                    "redirect": redirect_url,
-                    "institution_id": institution_id,
-                    "user_language": "CS"
-                },
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+    async def create_requisition(self, institution_id: str, redirect_url: str) -> SpectacularRequisition:
+        """Create a requisition (link to connect bank) — validated Pydantic model."""
+        raw_data = await self._request(
+            "POST",
+            "/requisitions/",
+            json={
+                "redirect": redirect_url,
+                "institution_id": institution_id,
+                "user_language": "CS"
+            }
+        )
+        return SpectacularRequisition(**raw_data)
     
-    async def get_requisition(self, requisition_id: str) -> dict:
-        """Get requisition status and linked accounts"""
-        token = await self.get_access_token()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/requisitions/{requisition_id}/",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+    async def get_requisition(self, requisition_id: str) -> Requisition:
+        """Get requisition status and linked accounts — validated Pydantic model."""
+        raw_data = await self._request("GET", f"/requisitions/{requisition_id}/")
+        return Requisition(**raw_data)
     
-    async def get_account_details(self, account_id: str) -> dict:
-        """Get account details"""
-        token = await self.get_access_token()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/accounts/{account_id}/details/",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+    async def get_account_details(self, account_id: str) -> AccountDetail:
+        """Get account details — validated Pydantic model."""
+        raw_data = await self._request("GET", f"/accounts/{account_id}/details/")
+        return AccountDetail(**raw_data)
     
-    async def get_account_balances(self, account_id: str) -> dict:
-        """Get account balances"""
-        token = await self.get_access_token()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/accounts/{account_id}/balances/",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+    async def get_account_balances(self, account_id: str) -> AccountBalance:
+        """Get account balances — validated Pydantic model."""
+        raw_data = await self._request("GET", f"/accounts/{account_id}/balances/")
+        return AccountBalance(**raw_data)
     
-    async def get_account_transactions(self, account_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
-        """Get account transactions"""
-        token = await self.get_access_token()
+    async def get_account_transactions(self, account_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> list[TransactionSchema]:
+        """Get account transactions and return strictly validated Pydantic models."""
         params = {}
-        if date_from:
-            params["date_from"] = date_from
-        if date_to:
-            params["date_to"] = date_to
+        if date_from: params["date_from"] = date_from
+        if date_to: params["date_to"] = date_to
         
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/accounts/{account_id}/transactions/",
-                params=params,
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            response.raise_for_status()
-            return response.json()
+        # Voláme tvou novou, čistou _request metodu s jedním spojením (co jsme řešili minule)
+        raw_data = await self._request(
+            "GET", 
+            f"/accounts/{account_id}/transactions/",
+            params=params
+        )
+        
+        # Ošetření struktury, kterou GoCardless vrací
+        transactions_dict = raw_data.get("transactions", {})
+        booked_raw = transactions_dict.get("booked", [])
+        
+        # TADY JE TA CELNICE. 
+        # Z pole surových slovníků vyrábíme pole validovaných objektů.
+        # Všechny datumy se zde samy převedou ze stringů.
+        clean_transactions = [TransactionSchema(**tx) for tx in booked_raw]
+        
+        return clean_transactions
 
 
 # Singleton instance

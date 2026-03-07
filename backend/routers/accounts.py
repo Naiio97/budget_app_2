@@ -50,8 +50,8 @@ async def connect_bank(request: ConnectBankRequest):
             request.redirect_url
         )
         return {
-            "requisition_id": requisition["id"],
-            "link": requisition["link"]
+            "requisition_id": str(requisition.id),
+            "link": str(requisition.link)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -62,44 +62,48 @@ async def bank_callback(ref: str, db: AsyncSession = Depends(get_db)):
     """Handle bank connection callback - saves account to DB"""
     try:
         requisition = await gocardless_service.get_requisition(ref)
-        accounts = requisition.get("accounts", [])
+        accounts = requisition.accounts or []
         
         for account_id in accounts:
-            details = await gocardless_service.get_account_details(account_id)
-            balances = await gocardless_service.get_account_balances(account_id)
+            account_id_str = str(account_id)
+            details = await gocardless_service.get_account_details(account_id_str)
+            balances = await gocardless_service.get_account_balances(account_id_str)
             
-            balance_list = balances.get("balances", [])
-            balance = float(balance_list[0]["balanceAmount"]["amount"]) if balance_list else 0
-            currency = balance_list[0]["balanceAmount"]["currency"] if balance_list else "CZK"
-            account_details = details.get("account", {})
+            balance_list = balances.balances or []
+            balance = float(balance_list[0].balanceAmount.amount) if balance_list else 0
+            currency = balance_list[0].balanceAmount.currency if balance_list else "CZK"
+            account_detail = details.account
+            
+            # Serializace Pydantic modelu do JSON pro uložení
+            details_dict = details.model_dump(mode="json")
             
             # Save to database
-            existing = await db.get(AccountModel, account_id)
+            existing = await db.get(AccountModel, account_id_str)
             if existing:
                 existing.balance = balance
                 existing.currency = currency
                 existing.last_synced = datetime.utcnow()
-                existing.details_json = json.dumps(details)
+                existing.details_json = json.dumps(details_dict)
             else:
                 new_account = AccountModel(
-                    id=account_id,
-                    name=account_details.get("name", "Bank Account"),
+                    id=account_id_str,
+                    name=account_detail.name or "Bank Account",
                     type="bank",
                     balance=balance,
                     currency=currency,
-                    institution=requisition.get("institution_id"),
-                    details_json=json.dumps(details),
+                    institution=requisition.institution_id,
+                    details_json=json.dumps(details_dict),
                     last_synced=datetime.utcnow()
                 )
                 db.add(new_account)
             
             # Also keep in memory for legacy compatibility
-            connected_accounts[account_id] = {
-                "id": account_id,
+            connected_accounts[account_id_str] = {
+                "id": account_id_str,
                 "type": "bank",
-                "details": details,
-                "balances": balances,
-                "institution": requisition.get("institution_id")
+                "details": details_dict,
+                "balances": balances.model_dump(mode="json"),
+                "institution": requisition.institution_id
             }
         
         await db.commit()
