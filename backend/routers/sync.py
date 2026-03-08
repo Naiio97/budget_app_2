@@ -357,9 +357,6 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
     transactions_synced = 0
     
     try:
-        # Get existing transactions to preserve their categories
-        existing_result = await db.execute(select(TransactionModel))
-        existing_txs = {tx.id: tx for tx in existing_result.scalars().all()}
         
         # Sync bank accounts from GoCardless
         try:
@@ -534,64 +531,82 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
             
             accounts_synced += 1
             
-            # Sync orders as transactions
+            # Sync orders as transactions — BULK UPSERT
             orders = await trading212_service.get_orders(limit=50)
+            order_rows = []
             for order in orders.get("items", []):
-                # Calculate amount in original currency
-                eur_amount = -float(order.get("fillPrice", 0)) * float(order.get("filledQuantity", 0))
+                order_id = order.get("id", "")
+                if not order_id:
+                    continue
                 
-                # Convert to CZK
+                eur_amount = -float(order.get("fillPrice", 0)) * float(order.get("filledQuantity", 0))
                 czk_amount = eur_amount * exchange_rate
                 
-                order_id = order.get("id", "")
-                existing_tx = existing_txs.get(order_id)
-                preserved_category = existing_tx.category if existing_tx and existing_tx.category else "Investment"
-                
-                tx = TransactionModel(
-                    id=order_id,
-                    account_id="trading212",
-                    date=order.get("dateExecuted", order.get("dateCreated", ""))[:10],
-                    description=f"{order.get('type', 'ORDER')} {order.get('ticker', '')} ({eur_amount:.2f} {base_currency})",
-                    amount=czk_amount,
-                    currency=target_currency,
-                    category=preserved_category,
-                    account_type="investment",
-                    raw_json=json.dumps(order)
-                )
-                await db.merge(tx)  # Use merge to handle duplicates
-                transactions_synced += 1
+                order_rows.append({
+                    "id": order_id,
+                    "account_id": "trading212",
+                    "date": order.get("dateExecuted", order.get("dateCreated", ""))[:10],
+                    "description": f"{order.get('type', 'ORDER')} {order.get('ticker', '')} ({eur_amount:.2f} {base_currency})",
+                    "amount": czk_amount,
+                    "currency": target_currency,
+                    "category": "Investment",
+                    "account_type": "investment",
+                    "transaction_type": "normal",
+                    "is_excluded": False,
+                    "raw_json": json.dumps(order),
+                })
             
-            # Sync dividends
+            if order_rows:
+                stmt = pg_insert(TransactionModel).values(order_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={
+                        "description": stmt.excluded.description,
+                        "raw_json": stmt.excluded.raw_json,
+                    }
+                )
+                await db.execute(stmt)
+                transactions_synced += len(order_rows)
+            
+            # Sync dividends — BULK UPSERT
             dividends = await trading212_service.get_dividends(limit=50)
+            div_rows = []
             for div in dividends.get("items", []):
                 div_amount = float(div.get("amount", 0))
                 div_currency = div.get("currency", "EUR")
                 
-                # Convert if needed (dividends might be in USD etc, but for simplicity assuming base account currency or using same rate if EUR)
-                # Ideally we should fetch rate for div_currency -> CZK if different
                 div_rate = exchange_rate
                 if div_currency != base_currency and div_currency != target_currency:
                      div_rate = await get_exchange_rate(div_currency, target_currency)
                 
                 czk_div_amount = div_amount * div_rate
-                
                 div_id = f"div_{div.get('reference', '')}"
-                existing_tx = existing_txs.get(div_id)
-                preserved_category = existing_tx.category if existing_tx and existing_tx.category else "Dividend"
                 
-                tx = TransactionModel(
-                    id=div_id,
-                    account_id="trading212",
-                    date=div.get("paidOn", "")[:10] if div.get("paidOn") else "",
-                    description=f"Dividend: {div.get('ticker', '')} ({div_amount:.2f} {div_currency})",
-                    amount=czk_div_amount,
-                    currency=target_currency,
-                    category=preserved_category,
-                    account_type="investment",
-                    raw_json=json.dumps(div)
+                div_rows.append({
+                    "id": div_id,
+                    "account_id": "trading212",
+                    "date": div.get("paidOn", "")[:10] if div.get("paidOn") else "",
+                    "description": f"Dividend: {div.get('ticker', '')} ({div_amount:.2f} {div_currency})",
+                    "amount": czk_div_amount,
+                    "currency": target_currency,
+                    "category": "Dividend",
+                    "account_type": "investment",
+                    "transaction_type": "normal",
+                    "is_excluded": False,
+                    "raw_json": json.dumps(div),
+                })
+            
+            if div_rows:
+                stmt = pg_insert(TransactionModel).values(div_rows)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["id"],
+                    set_={
+                        "description": stmt.excluded.description,
+                        "raw_json": stmt.excluded.raw_json,
+                    }
                 )
-                await db.merge(tx)  # Use merge to handle duplicates
-                transactions_synced += 1
+                await db.execute(stmt)
+                transactions_synced += len(div_rows)
                 
         except Exception as e:
             logger.error(f"Trading 212 sync error: {e}")

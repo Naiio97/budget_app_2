@@ -22,87 +22,52 @@ async def get_trading212_api_key():
 
 
 class Trading212Service:
-    async def _get_headers(self) -> dict:
+    async def _request(self, method: str, path: str, **kwargs) -> dict | list:
+        """Centrální metoda pro všechny HTTP požadavky na Trading 212 API.
+        Zajistí API klíč, vytvoří jedno spojení, provede request a vrátí surový JSON."""
         api_key = await get_trading212_api_key()
         if not api_key:
             raise Exception("Trading 212 API key not configured")
-        return {"Authorization": api_key}
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.request(
+                method,
+                f"{BASE_URL}{path}",
+                headers={"Authorization": api_key},
+                **kwargs
+            )
+            response.raise_for_status()
+            return response.json()
     
     async def get_account_info(self) -> dict:
         """Get account cash balance and info"""
-        headers = await self._get_headers()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/equity/account/cash",
-                headers=headers
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._request("GET", "/equity/account/cash")
     
     async def get_portfolio(self) -> List[dict]:
         """Get all open positions"""
-        headers = await self._get_headers()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/equity/portfolio",
-                headers=headers
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._request("GET", "/equity/portfolio")
     
     async def get_position(self, ticker: str) -> dict:
         """Get specific position by ticker"""
-        headers = await self._get_headers()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/equity/portfolio/{ticker}",
-                headers=headers
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._request("GET", f"/equity/portfolio/{ticker}")
     
     async def get_pies(self) -> List[dict]:
         """Get all pies"""
-        headers = await self._get_headers()
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/equity/pies",
-                headers=headers
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._request("GET", "/equity/pies")
     
     async def get_dividends(self, cursor: Optional[str] = None, limit: int = 50) -> dict:
         """Get dividend history"""
-        headers = await self._get_headers()
         params = {"limit": limit}
         if cursor:
             params["cursor"] = cursor
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/history/dividends",
-                params=params,
-                headers=headers
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._request("GET", "/history/dividends", params=params)
     
     async def get_orders(self, cursor: Optional[str] = None, limit: int = 50) -> dict:
         """Get order history"""
-        headers = await self._get_headers()
         params = {"limit": limit}
         if cursor:
             params["cursor"] = cursor
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BASE_URL}/equity/history/orders",
-                params=params,
-                headers=headers
-            )
-            response.raise_for_status()
-            return response.json()
+        return await self._request("GET", "/equity/history/orders", params=params)
 
 
 # Singleton instance
