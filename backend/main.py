@@ -1,11 +1,14 @@
 import logging
 import sys
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts
-from database import init_db
+from database import init_db, get_db
 
 # Centrální konfigurace logování — 12-Factor: logy jdou striktně na stdout (event stream)
 logging.basicConfig(
@@ -15,6 +18,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 
+logger = logging.getLogger(__name__)
 settings_config = get_settings()
 
 
@@ -60,5 +64,14 @@ async def root():
 
 
 @app.get("/health")
-async def health():
-    return {"status": "healthy"}
+async def health(db: AsyncSession = Depends(get_db)):
+    """Healthcheck — ověří skutečné spojení s databází přes SELECT 1."""
+    try:
+        await db.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        logger.error(f"Healthcheck failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "unhealthy", "database": "disconnected", "error": str(e)}
+        )

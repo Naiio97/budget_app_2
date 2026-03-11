@@ -5,6 +5,9 @@ RUN addgroup --system appuser && adduser --system --group appuser
 
 WORKDIR /app
 
+# Instalace curl pro healthchecky
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # 2. Instalace závislostí (optimalizace cache)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
