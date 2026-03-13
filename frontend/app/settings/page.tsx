@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
+import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
 import { useAccounts } from '@/contexts/AccountsContext';
@@ -114,14 +115,12 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
             {showAdd ? (
                 <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)' }}>
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                        <select
-                            className="input"
+                        <CustomSelect
                             value={newCategory.icon}
-                            onChange={(e) => setNewCategory({ ...newCategory, icon: e.target.value })}
-                            style={{ width: '60px' }}
-                        >
-                            {EMOJI_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                        </select>
+                            onChange={(val) => setNewCategory({ ...newCategory, icon: val })}
+                            style={{ width: '80px' }}
+                            options={EMOJI_OPTIONS.map(e => ({ value: e, label: e }))}
+                        />
                         <input
                             type="text"
                             className="input"
@@ -171,14 +170,12 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
                     }}>
                         {editingId === cat.id ? (
                             <>
-                                <select
-                                    className="input"
+                                <CustomSelect
                                     value={editData.icon}
-                                    onChange={(e) => setEditData({ ...editData, icon: e.target.value })}
-                                    style={{ width: '50px', padding: '4px' }}
-                                >
-                                    {EMOJI_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-                                </select>
+                                    onChange={(val) => setEditData({ ...editData, icon: val })}
+                                    style={{ width: '80px', padding: '4px' }}
+                                    options={EMOJI_OPTIONS.map(e => ({ value: e, label: e }))}
+                                />
                                 <input
                                     type="text"
                                     className="input"
@@ -1031,18 +1028,14 @@ export default function SettingsPage() {
                                     ) : (
                                         <>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                                                <select
-                                                    className="input"
-                                                    onChange={(e) => setConnectingBank(e.target.value)}
+                                                <CustomSelect
                                                     value={connectingBank || ''}
-                                                >
-                                                    <option value="" disabled>Vyberte banku...</option>
-                                                    {institutions.map((bank) => (
-                                                        <option key={bank.id} value={bank.id}>
-                                                            {bank.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    onChange={(val) => setConnectingBank(val)}
+                                                    options={[
+                                                        { value: '', label: 'Vyberte banku...' },
+                                                        ...institutions.map((bank) => ({ value: bank.id, label: bank.name }))
+                                                    ]}
+                                                />
                                                 <button
                                                     className="btn btn-primary"
                                                     disabled={!connectingBank}
@@ -1213,11 +1206,16 @@ export default function SettingsPage() {
                                             <div style={{ fontWeight: 500 }}>Výchozí měna</div>
                                             <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Měna pro zobrazení celkových zůstatků</div>
                                         </div>
-                                        <select className="input" style={{ width: 'auto' }}>
-                                            <option value="CZK">CZK - Koruna česká</option>
-                                            <option value="EUR">EUR - Euro</option>
-                                            <option value="USD">USD - Americký dolar</option>
-                                        </select>
+                                        <CustomSelect
+                                            value="CZK"
+                                            onChange={(val) => console.log(val)}
+                                            style={{ width: 'auto' }}
+                                            options={[
+                                                { value: 'CZK', label: 'CZK - Koruna česká' },
+                                                { value: 'EUR', label: 'EUR - Euro' },
+                                                { value: 'USD', label: 'USD - Americký dolar' },
+                                            ]}
+                                        />
                                     </div>
 
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1281,15 +1279,14 @@ export default function SettingsPage() {
                                         value={newPattern}
                                         onChange={(e) => setNewPattern(e.target.value)}
                                     />
-                                    <select
-                                        className="input"
+                                    <CustomSelect
                                         value={newCategory}
-                                        onChange={(e) => setNewCategory(e.target.value)}
-                                    >
-                                        {ruleCategories.filter(c => c.is_active).map(cat => (
-                                            <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
-                                        ))}
-                                    </select>
+                                        onChange={(val) => setNewCategory(val)}
+                                        options={ruleCategories.filter(c => c.is_active).map(cat => ({
+                                            value: cat.name,
+                                            label: <>{cat.icon} {cat.name}</>
+                                        }))}
+                                    />
                                     <button
                                         className="btn btn-primary"
                                         onClick={handleAddRule}

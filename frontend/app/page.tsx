@@ -67,9 +67,9 @@ export default function DashboardPage() {
     : '0';
 
   return (
-    <MainLayout disableScroll={true}>
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-        <header style={{ marginBottom: 'var(--spacing-xl)', flexShrink: 0 }}>
+    <MainLayout>
+      <div className="page-container">
+        <header style={{ marginBottom: 'var(--spacing-md)' }}>
           <h1>Dashboard</h1>
           {error && (
             <p className="text-tertiary" style={{ fontSize: '0.875rem', marginTop: 'var(--spacing-sm)' }}>
@@ -78,7 +78,7 @@ export default function DashboardPage() {
           )}
         </header>
 
-        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-xl)' }}>
+        <div style={{ paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
           {/* Summary Stats */}
           <div className="dashboard-grid">
             <StatCard

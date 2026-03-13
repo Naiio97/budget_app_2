@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import CustomSelect from '@/components/CustomSelect';
 import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
 import { Transaction, getTransactions, DashboardData, getDashboard } from '@/lib/api';
@@ -125,8 +126,8 @@ export default function TransactionsPage() {
     };
 
     return (
-        <MainLayout disableScroll={true}>
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <MainLayout>
+            <div className="page-container">
                 <div style={{ alignItems: 'baseline', marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transakce</h1>
@@ -138,13 +139,8 @@ export default function TransactionsPage() {
 
                 {/* Compact Filters */}
                 <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', flexShrink: 0 }}>
-                    <div style={{
-                        display: 'flex',
-                        gap: 'var(--spacing-md)',
-                        overflowX: 'auto',
-                        paddingBottom: '4px'
-                    }}>
-                        <div style={{ flex: 1, minWidth: '150px' }}>
+                    <div className="filters-grid">
+                        <div style={{ flex: '2 1 250px' }}>
                             <input
                                 type="text"
                                 className="input"
@@ -154,64 +150,60 @@ export default function TransactionsPage() {
                                 style={{ padding: '6px 12px', fontSize: '0.9rem' }}
                             />
                         </div>
-                        <div style={{ width: '160px' }}>
-                            <select
-                                className="input"
+                        <div style={{ flex: '1 1 160px' }}>
+                            <CustomSelect
                                 value={selectedMonth}
-                                onChange={(e) => setSelectedMonth(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Všechny měsíce</option>
-                                {getMonthOptions().map(m => (
-                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                ))}
-                            </select>
+                                onChange={setSelectedMonth}
+                                options={[
+                                    { value: '', label: 'Všechny měsíce' },
+                                    ...getMonthOptions()
+                                ]}
+                            />
                         </div>
-                        <div style={{ width: '140px' }}>
-                            <select
-                                className="input"
+                        <div style={{ flex: '1 1 160px' }}>
+                            <CustomSelect
                                 value={amountType}
-                                onChange={(e) => setAmountType(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Vše</option>
-                                <option value="income">💰 Příjmy</option>
-                                <option value="expense">💸 Výdaje</option>
-                            </select>
+                                onChange={setAmountType}
+                                options={[
+                                    { value: '', label: 'Vše' },
+                                    { value: 'income', label: '💰 Příjmy' },
+                                    { value: 'expense', label: '💸 Výdaje' }
+                                ]}
+                            />
                         </div>
-                        <div style={{ width: '160px' }}>
-                            <select
-                                className="input"
+                        <div style={{ flex: '1 1 190px' }}>
+                            <CustomSelect
                                 value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Všechny kategorie</option>
-                                {categories.filter(c => c.is_active).map(cat => (
-                                    <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
-                                ))}
-                            </select>
+                                onChange={setSelectedCategory}
+                                options={[
+                                    { value: '', label: 'Všechny kategorie' },
+                                    ...categories.filter(c => c.is_active).map(cat => ({
+                                        value: cat.name,
+                                        label: <>{cat.icon} {cat.name}</>
+                                    }))
+                                ]}
+                            />
                         </div>
-                        <div style={{ width: '160px' }}>
-                            <select
-                                className="input"
+                        <div style={{ flex: '1 1 160px' }}>
+                            <CustomSelect
                                 value={selectedAccount}
-                                onChange={(e) => setSelectedAccount(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Všechny účty</option>
-                                {accounts.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                ))}
-                            </select>
+                                onChange={setSelectedAccount}
+                                options={[
+                                    { value: '', label: 'Všechny účty' },
+                                    ...accounts.map(acc => ({
+                                        value: acc.id,
+                                        label: acc.name
+                                    }))
+                                ]}
+                            />
                         </div>
                     </div>
                 </GlassCard>
 
                 {/* Transaction List */}
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                    <GlassCard hover={false} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-md)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
+                    <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ paddingBottom: 'var(--spacing-md)' }}>
                             <TransactionList transactions={transactions} showAccount />
                         </div>
 

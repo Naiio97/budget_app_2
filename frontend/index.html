@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Budget App FE</title>
+</head>
+<body>
+    <h1>Budget App - Frontend live!</h1>
+    <div id="status">Načítám data z API...</div>
+
+    <script>
+        // Zkusíme zavolat náš health endpoint skrze Nginx
+        fetch('/api/health')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('status').innerText = 'API stav: ' + JSON.stringify(data);
+            })
+            .catch(err => {
+                document.getElementById('status').innerText = 'API je nedostupné přes /api/health';
+            });
+    </script>
+</body>
+</html>
