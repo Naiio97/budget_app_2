@@ -200,9 +200,8 @@ export default function TransactionsPage() {
                     </div>
                 </GlassCard>
 
-                {/* Transaction List */}
                 <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
-                    <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
                         <div style={{ paddingBottom: 'var(--spacing-md)' }}>
                             <TransactionList transactions={transactions} showAccount />
                         </div>

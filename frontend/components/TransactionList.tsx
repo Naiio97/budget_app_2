@@ -203,21 +203,12 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
                                     {/* Category Dropdown */}
                                     {editingId === tx.id && (
-                                        <div style={{
+                                        <div className="custom-select-dropdown" style={{
                                             position: 'absolute',
                                             ...(dropdownPosition === 'above'
-                                                ? { bottom: '100%', marginBottom: '4px' }
+                                                ? { bottom: '100%', marginBottom: '4px', top: 'auto' }
                                                 : { top: '100%', marginTop: '4px' }),
                                             left: 0,
-                                            background: 'rgba(30, 30, 40, 0.98)',
-                                            border: '1px solid rgba(255,255,255,0.15)',
-                                            borderRadius: '8px',
-                                            padding: '4px',
-                                            zIndex: 100,
-                                            minWidth: '180px',
-                                            maxHeight: '250px',
-                                            overflowY: 'auto',
-                                            boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
                                         }}>
                                             {[...categories.filter(c => c.is_active),
                                             { id: -1, name: 'Internal Transfer', icon: '🔄', color: '#6b7280', is_income: false, is_active: true },
@@ -225,17 +216,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             ].map((cat: Category) => (
                                                 <div
                                                     key={cat.name}
+                                                    className={`custom-select-option ${tx.category === cat.name ? 'selected' : ''}`}
                                                     onClick={() => handleCategorySelect(tx.id, cat.name)}
-                                                    style={{
-                                                        padding: '8px 12px',
-                                                        cursor: 'pointer',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.85rem',
-                                                        background: tx.category === cat.name ? 'rgba(45, 212, 191, 0.2)' : 'transparent',
-                                                        transition: 'background 0.15s'
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.background = tx.category === cat.name ? 'rgba(45, 212, 191, 0.2)' : 'transparent'}
                                                 >
                                                     {cat.icon} {cat.name}
                                                 </div>
