@@ -46,16 +46,16 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(accounts.router, prefix="/api/accounts", tags=["Accounts"])
-app.include_router(transactions.router, prefix="/api/transactions", tags=["Transactions"])
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
-app.include_router(sync.router, prefix="/api/sync", tags=["Sync"])
-app.include_router(settings.router, prefix="/api/settings", tags=["Settings"])
-app.include_router(investments.router, prefix="/api/investments", tags=["Investments"])
-app.include_router(budgets.router, prefix="/api/budgets", tags=["Budgets"])
-app.include_router(monthly_budget.router, prefix="/api", tags=["Monthly Budget"])
+app.include_router(accounts.router, prefix="/accounts", tags=["Accounts"])
+app.include_router(transactions.router, prefix="/transactions", tags=["Transactions"])
+app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router(sync.router, prefix="/sync", tags=["Sync"])
+app.include_router(settings.router, prefix="/settings", tags=["Settings"])
+app.include_router(investments.router, prefix="/investments", tags=["Investments"])
+app.include_router(budgets.router, prefix="/budgets", tags=["Budgets"])
+app.include_router(monthly_budget.router)
 app.include_router(categories.router, tags=["Categories"])
-app.include_router(manual_accounts.router, prefix="/api/manual-accounts", tags=["Manual Accounts"])
+app.include_router(manual_accounts.router, prefix="/manual-accounts", tags=["Manual Accounts"])
 
 
 @app.get("/")

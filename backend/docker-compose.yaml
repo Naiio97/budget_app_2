@@ -28,7 +28,15 @@ services:
       timeout: 5s      # Jak dlouho čekat na odpověď
       retries: 3       # Kolikrát to zkusit, než vyhlásíš poplach
       start_period: 15s # Kolik vteřin ignorovat chyby po startu (než naběhne DB)  
-      
+
+  frontend:
+    build:
+      context: ../frontend
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - api
+        
   proxy:
     image: nginx:alpine
     volumes:

@@ -125,8 +125,8 @@ export default function RozpocetPage() {
             try {
                 const [dashData, recurringRes, accountsRes] = await Promise.all([
                     getDashboard(),
-                    fetch('http://localhost:8000/api/recurring-expenses').then(r => r.json()),
-                    fetch('http://localhost:8000/api/manual-accounts').then(r => r.json())
+                    fetch('api/recurring-expenses').then(r => r.json()),
+                    fetch('api/manual-accounts').then(r => r.json())
                 ]);
                 setAccounts(dashData.accounts);
                 setRecurringExpenses(recurringRes);
@@ -151,7 +151,7 @@ export default function RozpocetPage() {
 
     const fetchMonthlyBudget = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}`);
+            const res = await fetch(`api/monthly-budget/${yearMonth}`);
             const data = await res.json();
             setBudget(data);
         } catch (err) {
@@ -161,7 +161,7 @@ export default function RozpocetPage() {
 
     const fetchAnnualData = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/annual-overview/${selectedYear}`);
+            const res = await fetch(`api/annual-overview/${selectedYear}`);
             const data = await res.json();
             setAnnualData(data);
         } catch (err) {
@@ -182,7 +182,7 @@ export default function RozpocetPage() {
 
     const updateBudget = async (field: string, value: number) => {
         try {
-            await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}`, {
+            await fetch(`api/monthly-budget/${yearMonth}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [field]: value })
@@ -195,7 +195,7 @@ export default function RozpocetPage() {
 
     const toggleExpensePaid = async (expenseId: number, isPaid: boolean) => {
         try {
-            await fetch(`http://localhost:8000/api/monthly-expenses/${expenseId}`, {
+            await fetch(`api/monthly-expenses/${expenseId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_paid: !isPaid })
@@ -208,7 +208,7 @@ export default function RozpocetPage() {
 
     const updateExpenseAmount = async (expenseId: number, amount: number) => {
         try {
-            await fetch(`http://localhost:8000/api/monthly-expenses/${expenseId}`, {
+            await fetch(`api/monthly-expenses/${expenseId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount })
@@ -221,7 +221,7 @@ export default function RozpocetPage() {
 
     const updateExpensePercentage = async (expenseId: number, my_percentage: number) => {
         try {
-            await fetch(`http://localhost:8000/api/monthly-expenses/${expenseId}`, {
+            await fetch(`api/monthly-expenses/${expenseId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ my_percentage })
@@ -236,7 +236,7 @@ export default function RozpocetPage() {
         if (!newExpense.name || !newExpense.amount) return;
         try {
             // Create recurring expense template
-            await fetch('http://localhost:8000/api/recurring-expenses', {
+            await fetch('api/recurring-expenses', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -248,7 +248,7 @@ export default function RozpocetPage() {
             });
 
             // Also add to current month
-            await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/expenses`, {
+            await fetch(`api/monthly-budget/${yearMonth}/expenses`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -262,7 +262,7 @@ export default function RozpocetPage() {
             setShowAddExpense(false);
 
             // Reload both recurring expenses and current month budget
-            const res = await fetch('http://localhost:8000/api/recurring-expenses');
+            const res = await fetch('api/recurring-expenses');
             setRecurringExpenses(await res.json());
             fetchMonthlyBudget();
         } catch (err) {
@@ -272,7 +272,7 @@ export default function RozpocetPage() {
 
     const deleteRecurringExpense = async (id: number) => {
         try {
-            await fetch(`http://localhost:8000/api/recurring-expenses/${id}`, { method: 'DELETE' });
+            await fetch(`api/recurring-expenses/${id}`, { method: 'DELETE' });
             setRecurringExpenses(recurringExpenses.filter(e => e.id !== id));
         } catch (err) {
             console.error('Failed to delete expense:', err);
@@ -284,11 +284,11 @@ export default function RozpocetPage() {
 
         try {
             // Delete from current month
-            await fetch(`http://localhost:8000/api/monthly-expenses/${expenseId}`, { method: 'DELETE' });
+            await fetch(`api/monthly-expenses/${expenseId}`, { method: 'DELETE' });
 
             // Optionally delete recurring template
             if (deleteRecurring && recurringExpenseId) {
-                await fetch(`http://localhost:8000/api/recurring-expenses/${recurringExpenseId}`, { method: 'DELETE' });
+                await fetch(`api/recurring-expenses/${recurringExpenseId}`, { method: 'DELETE' });
                 setRecurringExpenses(recurringExpenses.filter(e => e.id !== recurringExpenseId));
             }
 
@@ -300,7 +300,7 @@ export default function RozpocetPage() {
 
     const matchTransactions = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
+            const res = await fetch(`api/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
             const data = await res.json();
             const details = data.details || {};
             alert(`Spárováno ${data.matched_count} výdajů:\n\n` +
@@ -315,7 +315,7 @@ export default function RozpocetPage() {
 
     const copyFromPrevious = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
+            const res = await fetch(`api/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
                 alert(`Zkopírováno ${data.expenses_copied} výdajů z ${data.from}`);
@@ -333,7 +333,7 @@ export default function RozpocetPage() {
             return;
         }
         try {
-            await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}`, { method: 'DELETE' });
+            await fetch(`api/monthly-budget/${yearMonth}`, { method: 'DELETE' });
             setBudget(null);
             // Fetch will create a new empty one if navigated to again
         } catch (err) {
@@ -343,7 +343,7 @@ export default function RozpocetPage() {
 
     const syncIncome = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
+            const res = await fetch(`api/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
             const data = await res.json();
             alert(`Načteno z transakcí:\nVýplata: ${formatCurrency(data.salary)}`);
             fetchMonthlyBudget();
@@ -355,7 +355,7 @@ export default function RozpocetPage() {
     const createManualAccount = async () => {
         if (!newAccount.name) return;
         try {
-            await fetch('http://localhost:8000/api/manual-accounts', {
+            await fetch('api/manual-accounts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -365,7 +365,7 @@ export default function RozpocetPage() {
             });
             setNewAccount({ name: '', balance: '' });
             setShowAddAccount(false);
-            const res = await fetch('http://localhost:8000/api/manual-accounts');
+            const res = await fetch('api/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to create account:', err);
@@ -374,13 +374,13 @@ export default function RozpocetPage() {
 
     const updateManualAccountBalance = async (accountId: number) => {
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}`, {
+            await fetch(`api/manual-accounts/${accountId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ balance: parseFloat(editAccountBalance) })
             });
             setEditingAccountId(null);
-            const res = await fetch('http://localhost:8000/api/manual-accounts');
+            const res = await fetch('api/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to update account:', err);
@@ -390,7 +390,7 @@ export default function RozpocetPage() {
     const addAccountItem = async (accountId: number) => {
         if (!newItem.name || !newItem.amount) return;
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}/items`, {
+            await fetch(`api/manual-accounts/${accountId}/items`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -401,7 +401,7 @@ export default function RozpocetPage() {
             });
             setNewItem({ name: '', amount: '', note: '' });
             setShowAddItem(null);
-            const res = await fetch('http://localhost:8000/api/manual-accounts');
+            const res = await fetch('api/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to add item:', err);
@@ -410,8 +410,8 @@ export default function RozpocetPage() {
 
     const deleteAccountItem = async (accountId: number, itemId: number) => {
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}/items/${itemId}`, { method: 'DELETE' });
-            const res = await fetch('http://localhost:8000/api/manual-accounts');
+            await fetch(`api/manual-accounts/${accountId}/items/${itemId}`, { method: 'DELETE' });
+            const res = await fetch('api/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to delete item:', err);

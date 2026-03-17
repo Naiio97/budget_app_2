@@ -33,7 +33,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>(FALLBACK_COLORS);
 
     useEffect(() => {
-        fetch('http://localhost:8000/api/categories')
+        fetch('api/categories')
             .then(res => res.json())
             .then((data: Category[]) => {
                 const colors = data.reduce((acc, cat) => {

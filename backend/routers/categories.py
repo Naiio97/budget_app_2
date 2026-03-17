@@ -7,7 +7,7 @@ from typing import List, Optional
 from database import get_db
 from models import CategoryModel
 
-router = APIRouter(prefix="/api", tags=["categories"])
+router = APIRouter(prefix="", tags=["categories"])
 
 
 class CategoryCreate(BaseModel):

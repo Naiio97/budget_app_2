@@ -14,7 +14,7 @@ from models import (
     ManualAccountModel, ManualAccountItemModel, TransactionModel
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Budget & Expenses"])
 
 
 # === Pydantic Models ===

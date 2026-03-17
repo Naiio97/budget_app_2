@@ -109,7 +109,7 @@ export default function TransactionsPage() {
 
     // Load categories
     useEffect(() => {
-        fetch('http://localhost:8000/api/categories')
+        fetch('api/categories')
             .then(res => res.json())
             .then(data => setCategories(data))
             .catch(err => console.error('Failed to load categories:', err));

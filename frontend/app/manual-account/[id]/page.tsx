@@ -48,7 +48,7 @@ export default function ManualAccountDetailPage() {
 
     const loadAccount = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/manual-accounts/${accountId}`);
+            const res = await fetch(`api/manual-accounts/${accountId}`);
             if (res.ok) {
                 const data = await res.json();
                 setAccount(data);
@@ -64,7 +64,7 @@ export default function ManualAccountDetailPage() {
 
     const updateBalance = async () => {
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}`, {
+            await fetch(`api/manual-accounts/${accountId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ balance })
@@ -80,7 +80,7 @@ export default function ManualAccountDetailPage() {
     const addEnvelope = async () => {
         if (!newEnvelope.name.trim() || newEnvelope.amount <= 0) return;
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}/envelopes`, {
+            await fetch(`api/manual-accounts/${accountId}/envelopes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newEnvelope)
@@ -95,7 +95,7 @@ export default function ManualAccountDetailPage() {
 
     const updateEnvelope = async (envelopeId: number, data: Partial<Envelope>) => {
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
+            await fetch(`api/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -125,7 +125,7 @@ export default function ManualAccountDetailPage() {
     const deleteEnvelope = async (envelopeId: number) => {
         if (!confirm('Opravdu smazat tuto obálku?')) return;
         try {
-            await fetch(`http://localhost:8000/api/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
+            await fetch(`api/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
                 method: 'DELETE'
             });
             loadAccount();
@@ -195,7 +195,7 @@ export default function ManualAccountDetailPage() {
                                 style={{ fontSize: '1.5rem', fontWeight: 600, width: '300px' }}
                             />
                             <button className="btn btn-primary" onClick={async () => {
-                                await fetch(`http://localhost:8000/api/manual-accounts/${accountId}`, {
+                                await fetch(`api/manual-accounts/${accountId}`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ name: accountName })
@@ -264,7 +264,7 @@ export default function ManualAccountDetailPage() {
                                 style={{ width: '200px' }}
                             />
                             <button className="btn btn-primary" onClick={async () => {
-                                await fetch(`http://localhost:8000/api/manual-accounts/${accountId}`, {
+                                await fetch(`api/manual-accounts/${accountId}`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ account_number: accountNumber })
