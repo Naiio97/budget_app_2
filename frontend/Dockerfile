@@ -1,17 +1,27 @@
-# Použijeme Node.js obraz
-FROM node:22-alpine
-
+# 1. Build fáze
+FROM node:22-alpine AS builder
 WORKDIR /app
-
-# Nejdřív zkopírujeme soubory se závislostmi
 COPY package*.json ./
 RUN npm install
-
-# Pak zkopírujeme zbytek a sestavíme aplikaci
 COPY . .
+
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build
 
-# Next.js běží standardně na portu 3000
-EXPOSE 3000
+# 2. Runner fáze (čistý a malý obraz)
+FROM node:22-alpine AS runner
+WORKDIR /app
 
-CMD ["npm", "start"]
+ENV NODE_ENV=production
+# Případně port, pokud ho chceš změnit
+ENV PORT=3000
+
+# Kopírujeme jen to nejnutnější pro běh
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+EXPOSE 3000
+CMD ["node", "server.js"]

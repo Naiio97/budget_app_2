@@ -34,7 +34,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     // Load categories from API
     useEffect(() => {
-        fetch('api/categories')
+        fetch('/categories')
             .then(res => res.json())
             .then(data => setCategories(data))
             .catch(err => console.error('Failed to load categories:', err));

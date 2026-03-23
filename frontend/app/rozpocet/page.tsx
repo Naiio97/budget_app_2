@@ -125,8 +125,8 @@ export default function RozpocetPage() {
             try {
                 const [dashData, recurringRes, accountsRes] = await Promise.all([
                     getDashboard(),
-                    fetch('api/recurring-expenses').then(r => r.json()),
-                    fetch('api/manual-accounts').then(r => r.json())
+                    fetch('/recurring-expenses').then(r => r.json()),
+                    fetch('/manual-accounts').then(r => r.json())
                 ]);
                 setAccounts(dashData.accounts);
                 setRecurringExpenses(recurringRes);
@@ -236,7 +236,7 @@ export default function RozpocetPage() {
         if (!newExpense.name || !newExpense.amount) return;
         try {
             // Create recurring expense template
-            await fetch('api/recurring-expenses', {
+            await fetch('/recurring-expenses', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -262,7 +262,7 @@ export default function RozpocetPage() {
             setShowAddExpense(false);
 
             // Reload both recurring expenses and current month budget
-            const res = await fetch('api/recurring-expenses');
+            const res = await fetch('/recurring-expenses');
             setRecurringExpenses(await res.json());
             fetchMonthlyBudget();
         } catch (err) {
@@ -355,7 +355,7 @@ export default function RozpocetPage() {
     const createManualAccount = async () => {
         if (!newAccount.name) return;
         try {
-            await fetch('api/manual-accounts', {
+            await fetch('/manual-accounts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -365,7 +365,7 @@ export default function RozpocetPage() {
             });
             setNewAccount({ name: '', balance: '' });
             setShowAddAccount(false);
-            const res = await fetch('api/manual-accounts');
+            const res = await fetch('/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to create account:', err);
@@ -380,7 +380,7 @@ export default function RozpocetPage() {
                 body: JSON.stringify({ balance: parseFloat(editAccountBalance) })
             });
             setEditingAccountId(null);
-            const res = await fetch('api/manual-accounts');
+            const res = await fetch('/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to update account:', err);
@@ -401,7 +401,7 @@ export default function RozpocetPage() {
             });
             setNewItem({ name: '', amount: '', note: '' });
             setShowAddItem(null);
-            const res = await fetch('api/manual-accounts');
+            const res = await fetch('/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to add item:', err);
@@ -411,7 +411,7 @@ export default function RozpocetPage() {
     const deleteAccountItem = async (accountId: number, itemId: number) => {
         try {
             await fetch(`api/manual-accounts/${accountId}/items/${itemId}`, { method: 'DELETE' });
-            const res = await fetch('api/manual-accounts');
+            const res = await fetch('/manual-accounts');
             setManualAccounts(await res.json());
         } catch (err) {
             console.error('Failed to delete item:', err);

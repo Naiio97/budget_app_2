@@ -76,7 +76,7 @@ export default function ReportsPage() {
 
     // Load category colors
     useEffect(() => {
-        fetch('/api/categories')
+        fetch('/categories')
             .then(res => res.json())
             .then((data: Category[]) => {
                 const colors = data.reduce((acc, cat) => {
@@ -91,7 +91,7 @@ export default function ReportsPage() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const reportData = await fetch(`/api/dashboard/monthly-report?months=${months}`).then(r => r.json());
+                const reportData = await fetch(`/dashboard/monthly-report?months=${months}`).then(r => r.json());
                 setReport(reportData);
             } catch (err) {
                 console.error('Failed to load report:', err);

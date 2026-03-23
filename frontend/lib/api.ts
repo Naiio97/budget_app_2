@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_BASE = 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
 export interface Account {
     id: string;
