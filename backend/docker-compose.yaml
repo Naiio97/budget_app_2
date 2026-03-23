@@ -1,32 +1,27 @@
 services:
   db:
     image: postgres:15-alpine
+    restart: always
     env_file:
       - .env
-    # Port otevíráme jen proto, abys mohl ladit databázi zvenku přes DBeaver
     ports:
       - "5432:5432"
     volumes:
-      # ZDE JE ZÁCHRANA DAT: Propojujeme logický název s fyzickou cestou v DB
       - postgres_data:/var/lib/postgresql/data
 
   api:
-    # build a image se dají kombinovat. Kontejner se postaví z tečky a dostane tento název.
-    image: budget-api-local
-    build: .
-    deploy:
-      replicas: 2
-    #ports:
-    #  - "8000-8001:8000"
+    build: . - 8000:8000
     env_file:
       - .env
+    volumes:
+      - ./budget.db:/app/budget.db
     depends_on:
       - db
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s    # Jak často se ptát
-      timeout: 5s      # Jak dlouho čekat na odpověď
-      retries: 3       # Kolikrát to zkusit, než vyhlásíš poplach
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s # Jak často se ptát
+      timeout: 5s # Jak dlouho čekat na odpověď
+      retries: 3 # Kolikrát to zkusit, než vyhlásíš poplach
       start_period: 15s # Kolik vteřin ignorovat chyby po startu (než naběhne DB)  
 
   frontend:
@@ -36,7 +31,7 @@ services:
       - NODE_ENV=production
     depends_on:
       - api
-        
+
   proxy:
     image: nginx:alpine
     volumes:
@@ -44,8 +39,7 @@ services:
     ports:
       - "80:80" # Jediné dveře do tvého systému
     depends_on:
-      - api    
+      - api
 
 volumes:
-  # Zde Docker ví, že má vytvořit trvalé úložiště na tvém disku
   postgres_data:
