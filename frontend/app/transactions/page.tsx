@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
-import { Transaction, getTransactions, DashboardData, getDashboard } from '@/lib/api';
+import { Transaction, getTransactions, getDashboard } from '@/lib/api';
 
 interface Category {
     id: number;
@@ -15,7 +15,7 @@ interface Category {
 }
 
 export default function TransactionsPage() {
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
     const [accounts, setAccounts] = useState<{ id: string; name: string; type: 'bank' | 'investment'; balance: number; currency: string }[]>([]);
     const [loading, setLoading] = useState(true);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -30,9 +30,23 @@ export default function TransactionsPage() {
 
     const [monthlyStats, setMonthlyStats] = useState({ income: 0, expenses: 0 });
 
+    // Pagination state
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
+
+    // Mobile infinite scroll: how many items to show
+    const [mobileVisible, setMobileVisible] = useState(10);
+    const [isMobile, setIsMobile] = useState(false);
+    const sentinelRef = useRef<HTMLDivElement>(null);
+
+    // Detect mobile
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth <= 768);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
 
     // Generate last 12 months for dropdown
     const getMonthOptions = () => {
@@ -51,7 +65,7 @@ export default function TransactionsPage() {
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
-            setPage(1); // Reset to page 1 on search
+            setPage(1);
         }, 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
@@ -59,14 +73,16 @@ export default function TransactionsPage() {
     // Reset page on filter change
     useEffect(() => {
         setPage(1);
-    }, [selectedCategory, selectedAccount, selectedMonth, amountType]);
+        setMobileVisible(10);
+    }, [selectedCategory, selectedAccount, selectedMonth, amountType, debouncedSearch]);
 
-    // Fetch Data
+    // Fetch Data — single unified effect, always fetches with limit=20
     useEffect(() => {
+        let cancelled = false;
+
         async function fetchData() {
             setLoading(true);
             try {
-                // Calculate date range for selected month
                 let date_from: string | undefined;
                 let date_to: string | undefined;
                 if (selectedMonth) {
@@ -90,23 +106,99 @@ export default function TransactionsPage() {
                     getDashboard()
                 ]);
 
-                setTransactions(txResponse.items);
+                if (cancelled) return;
+
+                setAllTransactions(txResponse.items);
                 setTotalPages(txResponse.pages);
                 setTotalItems(txResponse.total);
-
-                if (dashData.accounts.length > 0) {
-                    setAccounts(dashData.accounts);
-                }
+                if (dashData.accounts.length > 0) setAccounts(dashData.accounts);
                 setMonthlyStats(dashData.monthly);
             } catch (err) {
                 console.log('Error fetching data:', err);
-                // API failed - just show empty state
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         }
         fetchData();
+        return () => { cancelled = true; };
     }, [page, debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
+
+    // On mobile: the displayed transactions are sliced from allTransactions
+    const displayTransactions = isMobile
+        ? allTransactions.slice(0, mobileVisible)
+        : allTransactions;
+
+    const mobileHasMore = isMobile && mobileVisible < allTransactions.length;
+
+    // When we finish the current page's items on mobile, load the next API page
+    const mobileNeedsMoreFromApi = isMobile && mobileVisible >= allTransactions.length && page < totalPages;
+
+    // Mobile: show more items or fetch next page
+    const showMoreMobile = useCallback(() => {
+        if (mobileVisible < allTransactions.length) {
+            // Show 10 more from already fetched items
+            setMobileVisible(prev => Math.min(prev + 10, allTransactions.length));
+        } else if (page < totalPages) {
+            // Need to fetch next page from API
+            setPage(prev => prev + 1);
+        }
+    }, [mobileVisible, allTransactions.length, page, totalPages]);
+
+    // When new page of transactions is loaded, append to allTransactions
+    // (We need a special handler since the effect above replaces allTransactions)
+    // Actually, let's use a different approach: accumulate on mobile
+    const [accumulatedTransactions, setAccumulatedTransactions] = useState<Transaction[]>([]);
+    const [lastFetchedPage, setLastFetchedPage] = useState(0);
+
+    // Accumulate transactions when page changes on mobile
+    useEffect(() => {
+        if (allTransactions.length === 0) return;
+        if (page === 1) {
+            setAccumulatedTransactions(allTransactions);
+            setLastFetchedPage(1);
+        } else if (page > lastFetchedPage) {
+            setAccumulatedTransactions(prev => {
+                const existingIds = new Set(prev.map(t => t.id));
+                const newItems = allTransactions.filter(t => !existingIds.has(t.id));
+                return [...prev, ...newItems];
+            });
+            setLastFetchedPage(page);
+        }
+    }, [allTransactions, page, lastFetchedPage]);
+
+    // Reset accumulated on filter changes
+    useEffect(() => {
+        setAccumulatedTransactions([]);
+        setLastFetchedPage(0);
+    }, [debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
+
+    // The actual displayed transactions
+    const finalDisplayTransactions = isMobile
+        ? accumulatedTransactions.slice(0, mobileVisible)
+        : allTransactions;
+
+    const finalMobileHasMore = isMobile && (
+        mobileVisible < accumulatedTransactions.length || page < totalPages
+    );
+
+    // Mobile: IntersectionObserver for infinite scroll
+    useEffect(() => {
+        if (!isMobile || loading || !sentinelRef.current) return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries[0].isIntersecting) {
+                    if (mobileVisible < accumulatedTransactions.length) {
+                        setMobileVisible(prev => prev + 10);
+                    } else if (page < totalPages && !loading) {
+                        setPage(prev => prev + 1);
+                    }
+                }
+            },
+            { rootMargin: '200px' }
+        );
+        observer.observe(sentinelRef.current);
+        return () => observer.disconnect();
+    }, [isMobile, loading, mobileVisible, accumulatedTransactions.length, page, totalPages]);
 
     // Load categories
     useEffect(() => {
@@ -128,13 +220,8 @@ export default function TransactionsPage() {
     return (
         <MainLayout>
             <div className="page-container">
-                <div style={{ alignItems: 'baseline', marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transakce</h1>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                            {totalItems} položek • <span style={{ color: 'var(--accent-success)' }}>+{formatCurrency(monthlyStats.income)}</span> • <span>{formatCurrency(monthlyStats.expenses)}</span>
-                        </div>
-                    </div>
+                <div style={{ marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
+                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transakce</h1>
                 </div>
 
                 {/* Compact Filters */}
@@ -200,14 +287,50 @@ export default function TransactionsPage() {
                     </div>
                 </GlassCard>
 
+                {/* Summary Stats Bar */}
+                <div className="tx-summary-bar animate-fade-in">
+                    <div className="tx-summary-item">
+                        <span className="tx-summary-label">Položek</span>
+                        <span className="tx-summary-value">{totalItems}</span>
+                    </div>
+                    <div className="tx-summary-divider" />
+                    <div className="tx-summary-item">
+                        <span className="tx-summary-label">Příjmy</span>
+                        <span className="tx-summary-value" style={{ color: 'var(--accent-success)' }}>+{formatCurrency(monthlyStats.income)}</span>
+                    </div>
+                    <div className="tx-summary-divider" />
+                    <div className="tx-summary-item">
+                        <span className="tx-summary-label">Výdaje</span>
+                        <span className="tx-summary-value" style={{ color: 'var(--accent-danger)' }}>{formatCurrency(monthlyStats.expenses)}</span>
+                    </div>
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
                     <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
                         <div style={{ paddingBottom: 'var(--spacing-md)' }}>
-                            <TransactionList transactions={transactions} showAccount />
+                            <TransactionList transactions={finalDisplayTransactions} showAccount />
                         </div>
 
-                        {/* Pagination Controls */}
-                        {totalPages > 1 && (
+                        {/* Mobile: Infinite scroll sentinel + loading */}
+                        {isMobile && !loading && (
+                            <>
+                                {finalMobileHasMore && <div ref={sentinelRef} style={{ height: '1px' }} />}
+                                {!finalMobileHasMore && accumulatedTransactions.length > 0 && (
+                                    <div className="tx-mobile-end">
+                                        Zobrazeny všechny transakce
+                                    </div>
+                                )}
+                            </>
+                        )}
+                        {isMobile && loading && page > 1 && (
+                            <div className="tx-mobile-loader">
+                                <div className="tx-mobile-spinner" />
+                                <span>Načítám další...</span>
+                            </div>
+                        )}
+
+                        {/* Desktop: Pagination Controls */}
+                        {!isMobile && totalPages > 1 && (
                             <div style={{
                                 display: 'flex',
                                 justifyContent: 'center',

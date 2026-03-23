@@ -868,499 +868,504 @@ export default function SettingsPage() {
     // ... (rest of the component)
 
     return (
-        <MainLayout disableScroll={true}>
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                <div style={{ flexShrink: 0 }}>
-                    <header style={{ marginBottom: 'var(--spacing-xl)' }}>
-                        <h1>Nastavení</h1>
-                        <p className="text-secondary" style={{ marginTop: 'var(--spacing-sm)' }}>
-                            Správa připojení a preferencí
-                        </p>
-                    </header>
+        <MainLayout>
+            <div className="page-container" style={{ paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
+                <header style={{ marginBottom: 'var(--spacing-xl)' }}>
+                    <h1>Nastavení</h1>
+                    <p className="text-secondary" style={{ marginTop: 'var(--spacing-sm)' }}>
+                        Správa připojení a preferencí
+                    </p>
+                </header>
 
-                    {/* Tabs Navigation */}
-                    <div style={{ display: 'flex', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 'var(--spacing-sm)' }}>
-                        <button
-                            className={`btn ${activeTab === 'accounts' ? 'btn-primary' : ''}`}
-                            style={{ background: activeTab === 'accounts' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'accounts' ? 1 : 0.6 }}
-                            onClick={() => setActiveTab('accounts')}
-                        >
-                            💳 Účty
-                        </button>
-                        <button
-                            className={`btn ${activeTab === 'connections' ? 'btn-primary' : ''}`}
-                            style={{ background: activeTab === 'connections' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'connections' ? 1 : 0.6 }}
-                            onClick={() => setActiveTab('connections')}
-                        >
-                            🔗 Propojení
-                        </button>
-                        <button
-                            className={`btn ${activeTab === 'preferences' ? 'btn-primary' : ''}`}
-                            style={{ background: activeTab === 'preferences' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'preferences' ? 1 : 0.6 }}
-                            onClick={() => setActiveTab('preferences')}
-                        >
-                            ⚙️ Preference
-                        </button>
-                        <button
-                            className={`btn ${activeTab === 'categories' ? 'btn-primary' : ''}`}
-                            style={{ background: activeTab === 'categories' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'categories' ? 1 : 0.6 }}
-                            onClick={() => setActiveTab('categories')}
-                        >
-                            🏷️ Kategorie
-                        </button>
-                    </div>
+                {/* Tabs Navigation */}
+                <div className="hide-scrollbar" style={{
+                    display: 'flex',
+                    gap: 'var(--spacing-md)',
+                    marginBottom: 'var(--spacing-lg)',
+                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                    paddingBottom: 'var(--spacing-sm)',
+                    overflowX: 'auto',
+                    whiteSpace: 'nowrap',
+                    WebkitOverflowScrolling: 'touch'
+                }}>
+                    <button
+                        className={`btn ${activeTab === 'accounts' ? 'btn-primary' : ''}`}
+                        style={{ background: activeTab === 'accounts' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'accounts' ? 1 : 0.6 }}
+                        onClick={() => setActiveTab('accounts')}
+                    >
+                        💳 Účty
+                    </button>
+                    <button
+                        className={`btn ${activeTab === 'connections' ? 'btn-primary' : ''}`}
+                        style={{ background: activeTab === 'connections' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'connections' ? 1 : 0.6 }}
+                        onClick={() => setActiveTab('connections')}
+                    >
+                        🔗 Propojení
+                    </button>
+                    <button
+                        className={`btn ${activeTab === 'preferences' ? 'btn-primary' : ''}`}
+                        style={{ background: activeTab === 'preferences' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'preferences' ? 1 : 0.6 }}
+                        onClick={() => setActiveTab('preferences')}
+                    >
+                        ⚙️ Preference
+                    </button>
+                    <button
+                        className={`btn ${activeTab === 'categories' ? 'btn-primary' : ''}`}
+                        style={{ background: activeTab === 'categories' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'categories' ? 1 : 0.6 }}
+                        onClick={() => setActiveTab('categories')}
+                    >
+                        🏷️ Kategorie
+                    </button>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-lg)' }}>
-                    {/* TAB: ACCOUNTS */}
-                    {activeTab === 'accounts' && (
-                        <div className="animate-fade-in" style={{ display: 'flex', gap: 'var(--spacing-lg)' }}>
-                            {/* My Accounts Management */}
-                            <div style={{ flex: 2 }}>
-                                <GlassCard style={{ height: '100%' }}>
-                                    <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💳 Moje účty</h3>
+                {/* TAB: ACCOUNTS */}
+                {activeTab === 'accounts' && (
+                    <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                        {/* My Accounts Management */}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <GlassCard style={{ flex: 1 }}>
+                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💳 Moje účty</h3>
 
-                                    {accounts.length === 0 ? (
-                                        <p className="text-secondary">Zatím nemáte připojené žádné účty.</p>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                            {accounts.map(account => (
-                                                <div key={account.id} style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'space-between',
-                                                    padding: '8px 12px',
-                                                    background: 'rgba(255,255,255,0.05)',
-                                                    borderRadius: 'var(--radius-sm)',
-                                                    opacity: processingAccount === account.id ? 0.5 : (account.is_visible !== false ? 1 : 0.6)
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flex: 1 }}>
-                                                        {(() => {
-                                                            const logoUrl = getBankLogo(account.institution, account.type);
-                                                            return logoUrl ? (
-                                                                <img src={logoUrl} alt={account.name} style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px' }} />
-                                                            ) : (
-                                                                <span style={{ fontSize: '1.25rem' }}>{account.type === 'bank' ? '🏦' : '📈'}</span>
-                                                            );
-                                                        })()}
-
-                                                        {editingAccount === account.id ? (
-                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                                <input
-                                                                    type="text"
-                                                                    className="input"
-                                                                    value={editName}
-                                                                    onChange={(e) => setEditName(e.target.value)}
-                                                                    autoFocus
-                                                                    style={{ padding: '4px 8px', fontSize: '0.9rem' }}
-                                                                />
-                                                                <button className="btn btn-sm" onClick={() => handleRename(account.id)}>OK</button>
-                                                                <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>❌</button>
-                                                            </div>
-                                                        ) : (
-                                                            <div>
-                                                                <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}>
-                                                                    {account.name}
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setEditName(account.name);
-                                                                            setEditingAccount(account.id);
-                                                                        }}
-                                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '0.8rem' }}
-                                                                        title="Přejmenovat"
-                                                                    >
-                                                                        ✏️
-                                                                    </button>
-                                                                </div>
-                                                                <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                                                    {account.institution || account.type}
-                                                                    {account.is_visible === false && ' • (Skryto)'}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                                        <button
-                                                            className="btn"
-                                                            style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                                                            onClick={() => handleToggleVisibility(account.id, account.is_visible ?? true)}
-                                                            title={account.is_visible !== false ? "Skrýt z přehledů" : "Zobrazit v přehledech"}
-                                                        >
-                                                            {account.is_visible !== false ? '👁️' : '🙈'}
-                                                        </button>
-                                                        <button
-                                                            className="btn"
-                                                            style={{ padding: '4px 8px', fontSize: '0.8rem', color: '#ff6b6b', borderColor: 'rgba(255,100,100,0.3)' }}
-                                                            onClick={() => handleDelete(account.id)}
-                                                            title="Odstranit účet"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </GlassCard>
-                            </div>
-
-                            {/* Connect Bank */}
-                            <div style={{ flex: 1 }}>
-                                <GlassCard style={{ height: '100%' }}>
-                                    <h3 style={{ marginBottom: 'var(--spacing-md)' }}>➕ Připojit banku</h3>
-
-                                    {!apiKeysLoaded?.has_gocardless ? (
-                                        <p className="text-tertiary" style={{ fontSize: '0.875rem' }}>
-                                            Pro připojení banky nejdříve zadejte a uložte API klíče v záložce <strong>Propojení</strong>.
-                                        </p>
-                                    ) : loadingBanks ? (
-                                        <p className="text-secondary">Načítám seznam bank...</p>
-                                    ) : institutions.length === 0 ? (
-                                        <div>
-                                            <p className="text-secondary" style={{ marginBottom: 'var(--spacing-md)' }}>
-                                                Žádné banky nenačteny.
-                                            </p>
-                                            <button className="btn" onClick={loadBanks}>
-                                                🔄 Načíst banky
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                                                <CustomSelect
-                                                    value={connectingBank || ''}
-                                                    onChange={(val) => setConnectingBank(val)}
-                                                    options={[
-                                                        { value: '', label: 'Vyberte banku...' },
-                                                        ...institutions.map((bank) => ({ value: bank.id, label: bank.name }))
-                                                    ]}
-                                                />
-                                                <button
-                                                    className="btn btn-primary"
-                                                    disabled={!connectingBank}
-                                                    onClick={() => connectingBank && handleConnectBank(connectingBank)}
-                                                >
-                                                    {connectingBank && institutions.find(b => b.id === connectingBank)?.name ? 'Připojit vybranou' : 'Připojit'}
-                                                </button>
-                                            </div>
-                                            <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-lg)' }}>
-                                                Budete přesměrováni na stránku banky.
-                                            </p>
-                                        </>
-                                    )}
-                                </GlassCard>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* TAB: CONNECTIONS */}
-                    {activeTab === 'connections' && (
-                        <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
-                            {/* Sync Section */}
-                            <GlassCard style={{ height: '100%' }}>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔄 Synchronizace</h3>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handleSync}
-                                        disabled={isSyncing}
-                                        style={{
-                                            width: '100%',
-                                            opacity: isSyncing ? 0.7 : 1,
-                                            cursor: isSyncing ? 'wait' : 'pointer',
-                                            padding: '12px'
-                                        }}
-                                    >
-                                        {isSyncing ? (
-                                            <>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    width: '16px',
-                                                    height: '16px',
-                                                    border: '2px solid rgba(255,255,255,0.3)',
-                                                    borderTopColor: 'white',
-                                                    borderRadius: '50%',
-                                                    animation: 'spin 1s linear infinite',
-                                                    marginRight: '8px'
-                                                }} />
-                                                Synchronizuji...
-                                            </>
-                                        ) : (
-                                            '🔄 Synchronizovat data'
-                                        )}
-                                    </button>
-
-                                    <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)' }}>
-                                        <div className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: '4px' }}>
-                                            Poslední synchronizace:
-                                        </div>
-                                        <div style={{ fontWeight: 500, fontSize: '1rem' }}>
-                                            {formatLastSync(syncStatus?.last_sync || null)}
-                                        </div>
-                                        {syncStatus && syncStatus.status === 'completed' && (
-                                            <div className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '4px' }}>
-                                                {syncStatus.accounts_synced} účtů, {syncStatus.transactions_synced} transakcí
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {syncError && (
-                                        <div style={{
-                                            padding: 'var(--spacing-sm) var(--spacing-md)',
-                                            background: 'rgba(255,100,100,0.2)',
-                                            borderRadius: 'var(--radius-sm)',
-                                            color: '#ff6b6b',
-                                            fontSize: '0.875rem'
-                                        }}>
-                                            ⚠️ {syncError}
-                                        </div>
-                                    )}
-                                </div>
-                            </GlassCard>
-
-                            {/* API Connections */}
-                            <GlassCard style={{ height: '100%' }}>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔗 API Klíče</h3>
-
-                                <div style={{ display: 'grid', gap: 'var(--spacing-lg)' }}>
-                                    <div style={{
-                                        padding: 'var(--spacing-md)',
-                                        borderRadius: 'var(--radius-sm)',
-                                        border: apiKeysLoaded?.has_gocardless ? '1px solid rgba(52, 199, 89, 0.3)' : '1px solid var(--glass-border-light)',
-                                        background: apiKeysLoaded?.has_gocardless ? 'rgba(52, 199, 89, 0.05)' : 'transparent'
-                                    }}>
-                                        <h4 style={{ marginBottom: 'var(--spacing-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span>🏦</span> GoCardless
-                                            {apiKeysLoaded?.has_gocardless && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', marginLeft: 'auto' }}>PŘIPOJENO</span>}
-                                        </h4>
-                                        <div style={{ display: 'grid', gap: '8px' }}>
-                                            <input
-                                                type="text"
-                                                className="input"
-                                                placeholder="Secret ID"
-                                                value={gocardlessId}
-                                                onChange={(e) => setGocardlessId(e.target.value)}
-                                                style={{ fontSize: '0.8rem', padding: '6px 10px' }}
-                                            />
-                                            <input
-                                                type="password"
-                                                className="input"
-                                                placeholder="Secret Key"
-                                                value={gocardlessKey}
-                                                onChange={(e) => setGocardlessKey(e.target.value)}
-                                                style={{ fontSize: '0.8rem', padding: '6px 10px' }}
-                                            />
-                                        </div>
-                                        <a href="https://bankaccountdata.gocardless.com/" target="_blank" className="text-tertiary" style={{ fontSize: '0.7rem', display: 'block', marginTop: '4px', textAlign: 'right' }}>Získat klíč →</a>
-                                    </div>
-
-                                    <div style={{
-                                        padding: 'var(--spacing-md)',
-                                        borderRadius: 'var(--radius-sm)',
-                                        border: apiKeysLoaded?.has_trading212 ? '1px solid rgba(52, 199, 89, 0.3)' : '1px solid var(--glass-border-light)',
-                                        background: apiKeysLoaded?.has_trading212 ? 'rgba(52, 199, 89, 0.05)' : 'transparent'
-                                    }}>
-                                        <h4 style={{ marginBottom: 'var(--spacing-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span>📈</span> Trading 212
-                                            {apiKeysLoaded?.has_trading212 && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', marginLeft: 'auto' }}>PŘIPOJENO</span>}
-                                        </h4>
-                                        <div>
-                                            <input
-                                                type="password"
-                                                className="input"
-                                                placeholder="API Key"
-                                                value={trading212Key}
-                                                onChange={(e) => setTrading212Key(e.target.value)}
-                                                style={{ fontSize: '0.8rem', padding: '6px 10px' }}
-                                            />
-                                        </div>
-                                        <a href="https://trading212.com" target="_blank" className="text-tertiary" style={{ fontSize: '0.7rem', display: 'block', marginTop: '4px', textAlign: 'right' }}>Získat klíč →</a>
-                                    </div>
-                                </div>
-
-                                <div style={{ marginTop: 'var(--spacing-lg)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handleSave}
-                                        disabled={saving}
-                                        style={{ opacity: saving ? 0.7 : 1, width: '100%' }}
-                                    >
-                                        {saving ? '⏳ Ukládám...' : '💾 Uložit klíče'}
-                                    </button>
-                                </div>
-                            </GlassCard>
-                        </div>
-                    )}
-
-                    {/* TAB: PREFERENCES */}
-                    {activeTab === 'preferences' && (
-                        <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
-                            <GlassCard>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Preference</h3>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 500 }}>Výchozí měna</div>
-                                            <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Měna pro zobrazení celkových zůstatků</div>
-                                        </div>
-                                        <CustomSelect
-                                            value="CZK"
-                                            onChange={(val) => console.log(val)}
-                                            style={{ width: 'auto' }}
-                                            options={[
-                                                { value: 'CZK', label: 'CZK - Koruna česká' },
-                                                { value: 'EUR', label: 'EUR - Euro' },
-                                                { value: 'USD', label: 'USD - Americký dolar' },
-                                            ]}
-                                        />
-                                    </div>
-
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 500 }}>Automatická synchronizace</div>
-                                            <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Automaticky stahovat nové transakce</div>
-                                        </div>
-                                        <label style={{
-                                            position: 'relative',
-                                            display: 'inline-block',
-                                            width: '50px',
-                                            height: '28px'
-                                        }}>
-                                            <input type="checkbox" defaultChecked style={{ opacity: 0, width: 0, height: 0 }} />
-                                            <span style={{
-                                                position: 'absolute',
-                                                cursor: 'pointer',
-                                                top: 0, left: 0, right: 0, bottom: 0,
-                                                backgroundColor: 'var(--accent-primary)',
-                                                borderRadius: 'var(--radius-full)',
-                                                transition: 'var(--transition-fast)'
-                                            }} />
-                                        </label>
-                                    </div>
-                                </div>
-                            </GlassCard>
-
-                            {/* Family Account Settings */}
-                            <FamilyAccountSettings />
-
-                            {/* My Account Patterns (Internal Transfers) */}
-                            <MyAccountPatterns />
-                        </div>
-                    )}
-
-                    {/* TAB: CATEGORIES */}
-                    {activeTab === 'categories' && (
-                        <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
-                            {/* Manage Categories */}
-                            <GlassCard>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🏷️ Správa kategorií</h3>
-                                <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
-                                    Přidejte, upravte nebo skryjte kategorie pro transakce.
-                                </p>
-
-                                <CategoryManager onCategoriesChange={() => loadCategoryRules()} />
-                            </GlassCard>
-
-                            {/* Add New Rule */}
-                            <GlassCard>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Přidat pravidlo</h3>
-                                <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
-                                    Když popis transakce obsahuje zadaný text, automaticky se přiřadí vybraná kategorie.
-                                </p>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        placeholder='Např. "sensu" nebo "neruda"'
-                                        value={newPattern}
-                                        onChange={(e) => setNewPattern(e.target.value)}
-                                    />
-                                    <CustomSelect
-                                        value={newCategory}
-                                        onChange={(val) => setNewCategory(val)}
-                                        options={ruleCategories.filter(c => c.is_active).map(cat => ({
-                                            value: cat.name,
-                                            label: <>{cat.icon} {cat.name}</>
-                                        }))}
-                                    />
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={handleAddRule}
-                                        disabled={savingRule || !newPattern.trim()}
-                                    >
-                                        {savingRule ? 'Ukládám...' : '➕ Přidat pravidlo'}
-                                    </button>
-                                </div>
-
-                                <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <button
-                                        className="btn"
-                                        onClick={handleRecategorize}
-                                        disabled={isSyncing}
-                                        style={{ width: '100%' }}
-                                    >
-                                        {isSyncing ? '⏳ Překategorizovávám...' : '🔄 Překategorizovat všechny transakce'}
-                                    </button>
-                                    <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
-                                        Aplikuje aktuální pravidla na všechny existující transakce.
-                                    </p>
-                                </div>
-                            </GlassCard>
-
-                            {/* Rules List */}
-                            <GlassCard>
-                                <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📋 Pravidla kategorií</h3>
-
-                                {categoryRules.length === 0 ? (
-                                    <p className="text-secondary">Zatím nemáte žádná vlastní pravidla. Přidejte nové pravidlo nebo změňte kategorii u transakce.</p>
+                                {accounts.length === 0 ? (
+                                    <p className="text-secondary">Zatím nemáte připojené žádné účty.</p>
                                 ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
-                                        {categoryRules.map(rule => (
-                                            <div key={rule.id} style={{
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {accounts.map(account => (
+                                            <div key={account.id} style={{
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'space-between',
-                                                padding: '10px 12px',
-                                                background: rule.is_user_defined ? 'rgba(45, 212, 191, 0.1)' : 'rgba(255,255,255,0.05)',
+                                                padding: '8px 12px',
+                                                background: 'rgba(255,255,255,0.05)',
                                                 borderRadius: 'var(--radius-sm)',
-                                                border: rule.is_user_defined ? '1px solid rgba(45, 212, 191, 0.2)' : 'none'
+                                                opacity: processingAccount === account.id ? 0.5 : (account.is_visible !== false ? 1 : 0.6)
                                             }}>
-                                                <div>
-                                                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>
-                                                        "{rule.pattern}" → {rule.category}
-                                                    </div>
-                                                    <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                                        {rule.is_user_defined ? '👤 Vlastní pravidlo' : '🤖 Naučené'} • {rule.match_count}× použito
-                                                    </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flex: 1 }}>
+                                                    {(() => {
+                                                        const logoUrl = getBankLogo(account.institution, account.type);
+                                                        return logoUrl ? (
+                                                            <img src={logoUrl} alt={account.name} style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px' }} />
+                                                        ) : (
+                                                            <span style={{ fontSize: '1.25rem' }}>{account.type === 'bank' ? '🏦' : '📈'}</span>
+                                                        );
+                                                    })()}
+
+                                                    {editingAccount === account.id ? (
+                                                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                            <input
+                                                                type="text"
+                                                                className="input"
+                                                                value={editName}
+                                                                onChange={(e) => setEditName(e.target.value)}
+                                                                autoFocus
+                                                                style={{ padding: '4px 8px', fontSize: '0.9rem' }}
+                                                            />
+                                                            <button className="btn btn-sm" onClick={() => handleRename(account.id)}>OK</button>
+                                                            <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>❌</button>
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.95rem' }}>
+                                                                {account.name}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditName(account.name);
+                                                                        setEditingAccount(account.id);
+                                                                    }}
+                                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '0.8rem' }}
+                                                                    title="Přejmenovat"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                            </div>
+                                                            <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                                                {account.institution || account.type}
+                                                                {account.is_visible === false && ' • (Skryto)'}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <button
-                                                    onClick={() => handleDeleteRule(rule.id)}
-                                                    style={{
-                                                        background: 'none',
-                                                        border: 'none',
-                                                        cursor: 'pointer',
-                                                        color: '#ff6b6b',
-                                                        fontSize: '1rem',
-                                                        padding: '4px 8px'
-                                                    }}
-                                                    title="Smazat pravidlo"
-                                                >
-                                                    🗑️
-                                                </button>
+
+                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                    <button
+                                                        className="btn"
+                                                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                                                        onClick={() => handleToggleVisibility(account.id, account.is_visible ?? true)}
+                                                        title={account.is_visible !== false ? "Skrýt z přehledů" : "Zobrazit v přehledech"}
+                                                    >
+                                                        {account.is_visible !== false ? '👁️' : '🙈'}
+                                                    </button>
+                                                    <button
+                                                        className="btn"
+                                                        style={{ padding: '4px 8px', fontSize: '0.8rem', color: '#ff6b6b', borderColor: 'rgba(255,100,100,0.3)' }}
+                                                        onClick={() => handleDelete(account.id)}
+                                                        title="Odstranit účet"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                             </GlassCard>
                         </div>
-                    )}
-                </div>
 
+                        {/* Connect Bank */}
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <GlassCard style={{ flex: 1 }}>
+                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>➕ Připojit banku</h3>
+
+                                {!apiKeysLoaded?.has_gocardless ? (
+                                    <p className="text-tertiary" style={{ fontSize: '0.875rem' }}>
+                                        Pro připojení banky nejdříve zadejte a uložte API klíče v záložce <strong>Propojení</strong>.
+                                    </p>
+                                ) : loadingBanks ? (
+                                    <p className="text-secondary">Načítám seznam bank...</p>
+                                ) : institutions.length === 0 ? (
+                                    <div>
+                                        <p className="text-secondary" style={{ marginBottom: 'var(--spacing-md)' }}>
+                                            Žádné banky nenačteny.
+                                        </p>
+                                        <button className="btn" onClick={loadBanks}>
+                                            🔄 Načíst banky
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                                            <CustomSelect
+                                                value={connectingBank || ''}
+                                                onChange={(val) => setConnectingBank(val)}
+                                                options={[
+                                                    { value: '', label: 'Vyberte banku...' },
+                                                    ...institutions.map((bank) => ({ value: bank.id, label: bank.name }))
+                                                ]}
+                                            />
+                                            <button
+                                                className="btn btn-primary"
+                                                disabled={!connectingBank}
+                                                onClick={() => connectingBank && handleConnectBank(connectingBank)}
+                                            >
+                                                {connectingBank && institutions.find(b => b.id === connectingBank)?.name ? 'Připojit vybranou' : 'Připojit'}
+                                            </button>
+                                        </div>
+                                        <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: 'var(--spacing-lg)' }}>
+                                            Budete přesměrováni na stránku banky.
+                                        </p>
+                                    </>
+                                )}
+                            </GlassCard>
+                        </div>
+                    </div>
+                )}
+
+                {/* TAB: CONNECTIONS */}
+                {activeTab === 'connections' && (
+                    <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                        {/* Sync Section */}
+                        <GlassCard style={{ height: '100%' }}>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔄 Synchronizace</h3>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSync}
+                                    disabled={isSyncing}
+                                    style={{
+                                        width: '100%',
+                                        opacity: isSyncing ? 0.7 : 1,
+                                        cursor: isSyncing ? 'wait' : 'pointer',
+                                        padding: '12px'
+                                    }}
+                                >
+                                    {isSyncing ? (
+                                        <>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                width: '16px',
+                                                height: '16px',
+                                                border: '2px solid rgba(255,255,255,0.3)',
+                                                borderTopColor: 'white',
+                                                borderRadius: '50%',
+                                                animation: 'spin 1s linear infinite',
+                                                marginRight: '8px'
+                                            }} />
+                                            Synchronizuji...
+                                        </>
+                                    ) : (
+                                        '🔄 Synchronizovat data'
+                                    )}
+                                </button>
+
+                                <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)' }}>
+                                    <div className="text-secondary" style={{ fontSize: '0.875rem', marginBottom: '4px' }}>
+                                        Poslední synchronizace:
+                                    </div>
+                                    <div style={{ fontWeight: 500, fontSize: '1rem' }}>
+                                        {formatLastSync(syncStatus?.last_sync || null)}
+                                    </div>
+                                    {syncStatus && syncStatus.status === 'completed' && (
+                                        <div className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                                            {syncStatus.accounts_synced} účtů, {syncStatus.transactions_synced} transakcí
+                                        </div>
+                                    )}
+                                </div>
+
+                                {syncError && (
+                                    <div style={{
+                                        padding: 'var(--spacing-sm) var(--spacing-md)',
+                                        background: 'rgba(255,100,100,0.2)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        color: '#ff6b6b',
+                                        fontSize: '0.875rem'
+                                    }}>
+                                        ⚠️ {syncError}
+                                    </div>
+                                )}
+                            </div>
+                        </GlassCard>
+
+                        {/* API Connections */}
+                        <GlassCard style={{ height: '100%' }}>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔗 API Klíče</h3>
+
+                            <div style={{ display: 'grid', gap: 'var(--spacing-lg)' }}>
+                                <div style={{
+                                    padding: 'var(--spacing-md)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    border: apiKeysLoaded?.has_gocardless ? '1px solid rgba(52, 199, 89, 0.3)' : '1px solid var(--glass-border-light)',
+                                    background: apiKeysLoaded?.has_gocardless ? 'rgba(52, 199, 89, 0.05)' : 'transparent'
+                                }}>
+                                    <h4 style={{ marginBottom: 'var(--spacing-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span>🏦</span> GoCardless
+                                        {apiKeysLoaded?.has_gocardless && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', marginLeft: 'auto' }}>PŘIPOJENO</span>}
+                                    </h4>
+                                    <div style={{ display: 'grid', gap: '8px' }}>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            placeholder="Secret ID"
+                                            value={gocardlessId}
+                                            onChange={(e) => setGocardlessId(e.target.value)}
+                                            style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                                        />
+                                        <input
+                                            type="password"
+                                            className="input"
+                                            placeholder="Secret Key"
+                                            value={gocardlessKey}
+                                            onChange={(e) => setGocardlessKey(e.target.value)}
+                                            style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                                        />
+                                    </div>
+                                    <a href="https://bankaccountdata.gocardless.com/" target="_blank" className="text-tertiary" style={{ fontSize: '0.7rem', display: 'block', marginTop: '4px', textAlign: 'right' }}>Získat klíč →</a>
+                                </div>
+
+                                <div style={{
+                                    padding: 'var(--spacing-md)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    border: apiKeysLoaded?.has_trading212 ? '1px solid rgba(52, 199, 89, 0.3)' : '1px solid var(--glass-border-light)',
+                                    background: apiKeysLoaded?.has_trading212 ? 'rgba(52, 199, 89, 0.05)' : 'transparent'
+                                }}>
+                                    <h4 style={{ marginBottom: 'var(--spacing-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <span>📈</span> Trading 212
+                                        {apiKeysLoaded?.has_trading212 && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', marginLeft: 'auto' }}>PŘIPOJENO</span>}
+                                    </h4>
+                                    <div>
+                                        <input
+                                            type="password"
+                                            className="input"
+                                            placeholder="API Key"
+                                            value={trading212Key}
+                                            onChange={(e) => setTrading212Key(e.target.value)}
+                                            style={{ fontSize: '0.8rem', padding: '6px 10px' }}
+                                        />
+                                    </div>
+                                    <a href="https://trading212.com" target="_blank" className="text-tertiary" style={{ fontSize: '0.7rem', display: 'block', marginTop: '4px', textAlign: 'right' }}>Získat klíč →</a>
+                                </div>
+                            </div>
+
+                            <div style={{ marginTop: 'var(--spacing-lg)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    style={{ opacity: saving ? 0.7 : 1, width: '100%' }}
+                                >
+                                    {saving ? '⏳ Ukládám...' : '💾 Uložit klíče'}
+                                </button>
+                            </div>
+                        </GlassCard>
+                    </div>
+                )}
+
+                {/* TAB: PREFERENCES */}
+                {activeTab === 'preferences' && (
+                    <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                        <GlassCard>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Preference</h3>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 500 }}>Výchozí měna</div>
+                                        <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Měna pro zobrazení celkových zůstatků</div>
+                                    </div>
+                                    <CustomSelect
+                                        value="CZK"
+                                        onChange={(val) => console.log(val)}
+                                        style={{ width: 'auto' }}
+                                        options={[
+                                            { value: 'CZK', label: 'CZK - Koruna česká' },
+                                            { value: 'EUR', label: 'EUR - Euro' },
+                                            { value: 'USD', label: 'USD - Americký dolar' },
+                                        ]}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: 500 }}>Automatická synchronizace</div>
+                                        <div className="text-tertiary" style={{ fontSize: '0.875rem' }}>Automaticky stahovat nové transakce</div>
+                                    </div>
+                                    <label style={{
+                                        position: 'relative',
+                                        display: 'inline-block',
+                                        width: '50px',
+                                        height: '28px'
+                                    }}>
+                                        <input type="checkbox" defaultChecked style={{ opacity: 0, width: 0, height: 0 }} />
+                                        <span style={{
+                                            position: 'absolute',
+                                            cursor: 'pointer',
+                                            top: 0, left: 0, right: 0, bottom: 0,
+                                            backgroundColor: 'var(--accent-primary)',
+                                            borderRadius: 'var(--radius-full)',
+                                            transition: 'var(--transition-fast)'
+                                        }} />
+                                    </label>
+                                </div>
+                            </div>
+                        </GlassCard>
+
+                        {/* Family Account Settings */}
+                        <FamilyAccountSettings />
+
+                        {/* My Account Patterns (Internal Transfers) */}
+                        <MyAccountPatterns />
+                    </div>
+                )}
+
+                {/* TAB: CATEGORIES */}
+                {activeTab === 'categories' && (
+                    <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                        {/* Manage Categories */}
+                        <GlassCard>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🏷️ Správa kategorií</h3>
+                            <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                                Přidejte, upravte nebo skryjte kategorie pro transakce.
+                            </p>
+
+                            <CategoryManager onCategoriesChange={() => loadCategoryRules()} />
+                        </GlassCard>
+
+                        {/* Add New Rule */}
+                        <GlassCard>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Přidat pravidlo</h3>
+                            <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                                Když popis transakce obsahuje zadaný text, automaticky se přiřadí vybraná kategorie.
+                            </p>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    placeholder='Např. "sensu" nebo "neruda"'
+                                    value={newPattern}
+                                    onChange={(e) => setNewPattern(e.target.value)}
+                                />
+                                <CustomSelect
+                                    value={newCategory}
+                                    onChange={(val) => setNewCategory(val)}
+                                    options={ruleCategories.filter(c => c.is_active).map(cat => ({
+                                        value: cat.name,
+                                        label: <>{cat.icon} {cat.name}</>
+                                    }))}
+                                />
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleAddRule}
+                                    disabled={savingRule || !newPattern.trim()}
+                                >
+                                    {savingRule ? 'Ukládám...' : '➕ Přidat pravidlo'}
+                                </button>
+                            </div>
+
+                            <div style={{ marginTop: 'var(--spacing-xl)', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                                <button
+                                    className="btn"
+                                    onClick={handleRecategorize}
+                                    disabled={isSyncing}
+                                    style={{ width: '100%' }}
+                                >
+                                    {isSyncing ? '⏳ Překategorizovávám...' : '🔄 Překategorizovat všechny transakce'}
+                                </button>
+                                <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
+                                    Aplikuje aktuální pravidla na všechny existující transakce.
+                                </p>
+                            </div>
+                        </GlassCard>
+
+                        {/* Rules List */}
+                        <GlassCard>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📋 Pravidla kategorií</h3>
+
+                            {categoryRules.length === 0 ? (
+                                <p className="text-secondary">Zatím nemáte žádná vlastní pravidla. Přidejte nové pravidlo nebo změňte kategorii u transakce.</p>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+                                    {categoryRules.map(rule => (
+                                        <div key={rule.id} style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '10px 12px',
+                                            background: rule.is_user_defined ? 'rgba(45, 212, 191, 0.1)' : 'rgba(255,255,255,0.05)',
+                                            borderRadius: 'var(--radius-sm)',
+                                            border: rule.is_user_defined ? '1px solid rgba(45, 212, 191, 0.2)' : 'none'
+                                        }}>
+                                            <div>
+                                                <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>
+                                                    "{rule.pattern}" → {rule.category}
+                                                </div>
+                                                <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                                    {rule.is_user_defined ? '👤 Vlastní pravidlo' : '🤖 Naučené'} • {rule.match_count}× použito
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteRule(rule.id)}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    color: '#ff6b6b',
+                                                    fontSize: '1rem',
+                                                    padding: '4px 8px'
+                                                }}
+                                                title="Smazat pravidlo"
+                                            >
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </GlassCard>
+                    </div>
+                )}
             </div>
+
             <style jsx>{`
                 @keyframes spin {
                     0% { transform: rotate(0deg); }
