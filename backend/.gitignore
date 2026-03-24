@@ -1,27 +1,54 @@
-# Python virtual environment
-**/venv/
-
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-
-# Environment variables
-.env
-
-# Node modules
-node_modules/
-
-# IDE
+# --- IDE & OS ---
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db
+*.swp
 
-#JSON
-.json
+# --- Python (Backend) ---
+**/__pycache__/
+*.py[cod]
+*$py.class
+**/.venv/
+**/venv/
+**/env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+**/logs.log
+**/budget.db
 
-#DB
-budget.db
+# --- Node / Next.js (Frontend) ---
+**/node_modules/
+**/dist/
+**/.next/
+**/out/
+**/build/
+.next-boost/
+.next-export/
+.pnp/
+.pnp.js
+
+# --- Docker & Env ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.dockerlog
+
+# --- Database & Misc ---
+*.sqlite3
+*.db
