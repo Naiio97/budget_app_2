@@ -33,8 +33,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         setIsSyncing(true);
         try {
             await syncData();
-            // Optional: force reload to show new data
-            window.location.reload();
+            // Refresh accounts in context without full page reload
+            await refreshAccounts();
         } catch (error) {
             console.error('Sync failed:', error);
             alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
@@ -149,10 +149,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                         Rychlé akce
                     </h5>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-                        <button className="btn" style={{ justifyContent: 'flex-start' }}>
+                        <Link href="/settings" className="btn" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
                             <span>➕</span>
-                            <span>Přidat transakci</span>
-                        </button>
+                            <span>Přidat účet</span>
+                        </Link>
                         <button
                             className="btn"
                             style={{ justifyContent: 'flex-start' }}

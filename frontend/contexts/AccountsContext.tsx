@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import { getDashboard } from '@/lib/api';
 
 interface Account {
@@ -23,15 +23,22 @@ const AccountsContext = createContext<AccountsContextType | undefined>(undefined
 export function AccountsProvider({ children }: { children: ReactNode }) {
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
+    const requestIdRef = useRef(0);
 
     const refreshAccounts = useCallback(async () => {
+        const currentRequestId = ++requestIdRef.current;
         try {
             const data = await getDashboard();
-            setAccounts(data.accounts || []);
+            // Only apply if this is still the most recent request
+            if (currentRequestId === requestIdRef.current) {
+                setAccounts(data.accounts || []);
+            }
         } catch (err) {
             console.error('Failed to load accounts:', err);
         } finally {
-            setLoading(false);
+            if (currentRequestId === requestIdRef.current) {
+                setLoading(false);
+            }
         }
     }, []);
 

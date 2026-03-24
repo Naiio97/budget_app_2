@@ -35,7 +35,8 @@ async def get_my_account_patterns(db: AsyncSession) -> list[str]:
 
 
 async def detect_and_mark_transfers(db: AsyncSession):
-    """Detect and mark internal transfers based on creditor/debtor account matching"""
+    """Detect and mark internal transfers based on creditor/debtor account matching.
+    Also updates manual account balances when transfers to/from manual accounts are detected."""
     from models import ManualAccountModel
     import re
     
@@ -62,6 +63,7 @@ async def detect_and_mark_transfers(db: AsyncSession):
         
         return result
     
+    # Build set of all my account identifiers (bank + manual)
     my_account_identifiers = set()
     
     result = await db.execute(select(AccountModel).where(AccountModel.type == "bank"))
@@ -78,13 +80,23 @@ async def detect_and_mark_transfers(db: AsyncSession):
             except:
                 pass
     
+    # Build mapping: account identifier -> ManualAccountModel for balance tracking
+    manual_account_map: dict[str, 'ManualAccountModel'] = {}  # identifier -> model
     result = await db.execute(select(ManualAccountModel))
     manual_accounts = result.scalars().all()
     for acc in manual_accounts:
         if acc.account_number:
-            my_account_identifiers.update(extract_account_number(acc.account_number))
+            ids = extract_account_number(acc.account_number)
+            my_account_identifiers.update(ids)
+            for identifier in ids:
+                manual_account_map[identifier] = acc
+    
+    # Load text-based patterns from settings (e.g. "spořící", "savings", etc.)
+    my_account_patterns = await get_my_account_patterns(db)
     
     logger.debug(f"My account identifiers for transfer detection: {my_account_identifiers}")
+    logger.debug(f"My account text patterns: {my_account_patterns}")
+    logger.debug(f"Manual accounts with numbers: {[(a.name, a.account_number) for a in manual_accounts if a.account_number]}")
     
     family_pattern = await get_family_account_pattern(db)
     
@@ -93,6 +105,8 @@ async def detect_and_mark_transfers(db: AsyncSession):
     
     marked_internal = 0
     marked_family = 0
+    marked_my_account = 0
+    manual_balance_updates: dict[int, float] = {}  # manual_account_id -> balance delta
     
     for tx in transactions:
         if tx.is_excluded and tx.transaction_type != "normal":
@@ -100,6 +114,7 @@ async def detect_and_mark_transfers(db: AsyncSession):
         
         desc_lower = str(tx.description or "").lower()
         
+        # Check family pattern first
         if family_pattern and family_pattern in desc_lower:
             tx.transaction_type = "family_transfer"
             tx.is_excluded = True
@@ -107,6 +122,21 @@ async def detect_and_mark_transfers(db: AsyncSession):
             marked_family += 1
             continue
         
+        # Check text-based patterns for my accounts (description matching)
+        if my_account_patterns:
+            matched_pattern = False
+            for pattern in my_account_patterns:
+                if pattern in desc_lower:
+                    tx.transaction_type = "my_account_transfer"
+                    tx.is_excluded = True
+                    tx.category = "Internal Transfer"
+                    marked_my_account += 1
+                    matched_pattern = True
+                    break
+            if matched_pattern:
+                continue
+        
+        # Check account number matching (creditor/debtor)
         try:
                 raw_data = json.loads(tx.raw_json)
                 
@@ -137,13 +167,42 @@ async def detect_and_mark_transfers(db: AsyncSession):
                     tx.is_excluded = True
                     tx.category = "Internal Transfer"
                     marked_internal += 1
+                    
+                    # Track balance changes for manual accounts
+                    tx_amount = abs(float(tx.amount))
+                    
+                    # Find if creditor is a manual account (money goes TO creditor)
+                    for cid in creditor_ids:
+                        if cid in manual_account_map:
+                            acc = manual_account_map[cid]
+                            manual_balance_updates[acc.id] = manual_balance_updates.get(acc.id, 0) + tx_amount
+                            logger.info(f"Manual account '{acc.name}' receives +{tx_amount} from internal transfer: {tx.description[:50]}")
+                            break
+                    
+                    # Find if debtor is a manual account (money goes FROM debtor)
+                    for did in debtor_ids:
+                        if did in manual_account_map:
+                            acc = manual_account_map[did]
+                            manual_balance_updates[acc.id] = manual_balance_updates.get(acc.id, 0) - tx_amount
+                            logger.info(f"Manual account '{acc.name}' sends -{tx_amount} from internal transfer: {tx.description[:50]}")
+                            break
+                    
                     logger.debug(f"Internal transfer: {tx.description[:50]} (creditor: {creditor_ids & my_account_identifiers}, debtor: {debtor_ids & my_account_identifiers})")
                     
         except Exception as e:
             logger.error(f"Error parsing raw_json for tx {tx.id}: {e}")
     
+    # Apply manual account balance updates
+    for acc_id, delta in manual_balance_updates.items():
+        for acc in manual_accounts:
+            if acc.id == acc_id:
+                old_balance = acc.balance or 0
+                acc.balance = old_balance + delta
+                logger.info(f"Updated manual account '{acc.name}' balance: {old_balance} -> {acc.balance} (delta: {delta:+.2f})")
+                break
+    
     await db.commit()
-    return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": 0}
+    return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": marked_my_account}
 
 
 def categorize_transaction(tx: dict) -> str:

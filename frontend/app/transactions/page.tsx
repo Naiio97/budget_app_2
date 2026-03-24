@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
+import CustomSelect from '@/components/CustomSelect';
 import { Transaction, getTransactions, DashboardData, getDashboard } from '@/lib/api';
 
 interface Category {
@@ -113,7 +114,7 @@ export default function TransactionsPage() {
     useEffect(() => {
         fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
-            .then(data => setCategories(data))
+            .then(data => setCategories(Array.isArray(data) ? data : []))
             .catch(err => console.error('Failed to load categories:', err));
     }, []);
 
@@ -139,11 +140,11 @@ export default function TransactionsPage() {
                 </div>
 
                 {/* Compact Filters */}
-                <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', flexShrink: 0 }}>
+                <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', flexShrink: 0, zIndex: 10, position: 'relative' }}>
                     <div style={{
                         display: 'flex',
+                        flexWrap: 'wrap',
                         gap: 'var(--spacing-md)',
-                        overflowX: 'auto',
                         paddingBottom: '4px'
                     }}>
                         <div style={{ flex: 1, minWidth: '150px' }}>
@@ -153,59 +154,55 @@ export default function TransactionsPage() {
                                 placeholder="🔍 Hledat..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                                style={{ padding: '10px 16px', fontSize: '0.9rem' }}
                             />
                         </div>
-                        <div style={{ width: '160px' }}>
-                            <select
-                                className="input"
+                        <div style={{ width: '180px' }}>
+                            <CustomSelect
+                                options={getMonthOptions().map(m => ({
+                                    value: m.value,
+                                    label: m.label,
+                                }))}
                                 value={selectedMonth}
-                                onChange={(e) => setSelectedMonth(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Všechny měsíce</option>
-                                {getMonthOptions().map(m => (
-                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                ))}
-                            </select>
+                                onChange={(val) => setSelectedMonth(val)}
+                                placeholder="Všechny měsíce"
+                            />
                         </div>
-                        <div style={{ width: '140px' }}>
-                            <select
-                                className="input"
+                        <div style={{ width: '150px' }}>
+                            <CustomSelect
+                                options={[
+                                    { value: 'income', label: 'Příjmy', icon: '💰' },
+                                    { value: 'expense', label: 'Výdaje', icon: '💸' },
+                                ]}
                                 value={amountType}
-                                onChange={(e) => setAmountType(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Vše</option>
-                                <option value="income">💰 Příjmy</option>
-                                <option value="expense">💸 Výdaje</option>
-                            </select>
+                                onChange={(val) => setAmountType(val)}
+                                placeholder="Vše"
+                            />
                         </div>
-                        <div style={{ width: '160px' }}>
-                            <select
-                                className="input"
+                        <div style={{ width: '180px' }}>
+                            <CustomSelect
+                                options={categories.filter(c => c.is_active).map(cat => ({
+                                    value: cat.name,
+                                    label: cat.name,
+                                    icon: cat.icon,
+                                }))}
                                 value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Všechny kategorie</option>
-                                {categories.filter(c => c.is_active).map(cat => (
-                                    <option key={cat.id} value={cat.name}>{cat.icon} {cat.name}</option>
-                                ))}
-                            </select>
+                                onChange={(val) => setSelectedCategory(val)}
+                                placeholder="Všechny kategorie"
+                                searchable={true}
+                                searchPlaceholder="🔍 Hledat kategorii..."
+                            />
                         </div>
-                        <div style={{ width: '160px' }}>
-                            <select
-                                className="input"
+                        <div style={{ width: '180px' }}>
+                            <CustomSelect
+                                options={accounts.map(acc => ({
+                                    value: acc.id,
+                                    label: acc.name,
+                                }))}
                                 value={selectedAccount}
-                                onChange={(e) => setSelectedAccount(e.target.value)}
-                                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
-                            >
-                                <option value="">Všechny účty</option>
-                                {accounts.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                ))}
-                            </select>
+                                onChange={(val) => setSelectedAccount(val)}
+                                placeholder="Všechny účty"
+                            />
                         </div>
                     </div>
                 </GlassCard>

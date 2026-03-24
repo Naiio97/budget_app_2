@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
+import CustomSelect from '@/components/CustomSelect';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
 import { useAccounts } from '@/contexts/AccountsContext';
 
@@ -54,7 +55,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
         try {
             const res = await fetch(`${API_BASE}/categories/`);
             const data = await res.json();
-            setCategories(data);
+            setCategories(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Failed to load categories:', err);
         } finally {
@@ -546,6 +547,13 @@ export default function SettingsPage() {
     const [savingRule, setSavingRule] = useState(false);
     const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
+    // Manual Account Creation
+    const [showAddManual, setShowAddManual] = useState(false);
+    const [newManualName, setNewManualName] = useState('');
+    const [newManualBalance, setNewManualBalance] = useState('');
+    const [newManualAccountNumber, setNewManualAccountNumber] = useState('');
+    const [savingManual, setSavingManual] = useState(false);
+
     // ... (existing useEffect and handlers)
 
 
@@ -612,6 +620,7 @@ export default function SettingsPage() {
                 await deleteAccount(id);
             }
             setAccounts(accounts.filter(acc => acc.id !== id));
+            refreshAccounts(); // Refresh sidebar Context immediately
         } catch (err) {
             console.error('Failed to delete account:', err);
             alert('Nepodařilo se smazat účet.');
@@ -670,26 +679,58 @@ export default function SettingsPage() {
         }
     };
 
-    const handleBankCallback = async (requisitionId: string) => {
+    const handleCreateManualAccount = async () => {
+        if (!newManualName.trim()) return;
+        setSavingManual(true);
         try {
-            // Call backend to finalize connection
-            const response = await fetch(`${API_BASE}/accounts/connect/bank/callback?ref=${requisitionId}`);
+            const response = await fetch(`${API_BASE}/manual-accounts/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: newManualName.trim(),
+                    balance: parseFloat(newManualBalance) || 0,
+                    account_number: newManualAccountNumber.trim() || null
+                })
+            });
             if (response.ok) {
-                // Refresh data
+                setNewManualName('');
+                setNewManualBalance('');
+                setNewManualAccountNumber('');
+                setShowAddManual(false);
+                // Refresh accounts list and sidebar
                 const dashData = await getDashboard();
-                if (dashData.accounts.length > 0) {
-                    setAccounts(dashData.accounts);
-                }
-                // Clear URL params
-                window.history.replaceState({}, '', '/settings');
+                setAccounts(dashData.accounts || []);
+                await refreshAccounts();
             }
         } catch (err) {
-            console.error('Bank callback failed:', err);
+            console.error('Failed to create manual account:', err);
+        } finally {
+            setSavingManual(false);
         }
     };
 
     useEffect(() => {
-        async function fetchData() {
+        async function init() {
+            // Check for callback from bank OAuth FIRST
+            const urlParams = new URLSearchParams(window.location.search);
+            const ref = urlParams.get('ref');
+
+            if (ref) {
+                console.log('[Settings] Bank callback detected, ref:', ref);
+                try {
+                    // Process callback FIRST - wait for backend to save accounts to DB
+                    const callbackResponse = await fetch(`${API_BASE}/accounts/connect/bank/callback?ref=${ref}`);
+                    const callbackData = await callbackResponse.json();
+                    console.log('[Settings] Bank callback result:', callbackData);
+
+                    // Clear URL params
+                    window.history.replaceState({}, '', '/settings');
+                } catch (err) {
+                    console.error('[Settings] Bank callback failed:', err);
+                }
+            }
+
+            // Now fetch all data (will include newly connected account if callback was processed)
             try {
                 const [status, dashData, keys] = await Promise.all([
                     getSyncStatus(),
@@ -703,6 +744,7 @@ export default function SettingsPage() {
                 if (keys.gocardless_secret_key) setGocardlessKey(keys.gocardless_secret_key);
                 if (keys.trading212_api_key) setTrading212Key(keys.trading212_api_key);
 
+                console.log('[Settings] Dashboard accounts loaded:', dashData.accounts?.length);
                 setAccounts(dashData.accounts || []);
                 setLoadingAccounts(false);
 
@@ -711,19 +753,17 @@ export default function SettingsPage() {
                     loadBanks();
                 }
             } catch (err) {
-                console.log('Failed to load settings data');
+                console.log('[Settings] Failed to load settings data');
                 setLoadingAccounts(false);
             }
-        }
-        fetchData();
-        loadCategoryRules();
 
-        // Check for callback from bank OAuth
-        const urlParams = new URLSearchParams(window.location.search);
-        const ref = urlParams.get('ref');
-        if (ref) {
-            handleBankCallback(ref);
+            // Refresh sidebar context to reflect new accounts everywhere
+            await refreshAccounts();
+            console.log('[Settings] Sidebar context refreshed');
         }
+
+        init();
+        loadCategoryRules();
     }, []);
 
     const handleSave = async () => {
@@ -779,6 +819,8 @@ export default function SettingsPage() {
                 if (dashData.accounts.length > 0) {
                     setAccounts(dashData.accounts);
                 }
+                // Update sidebar context
+                await refreshAccounts();
             } catch { }
         } catch (err) {
             setSyncError('Synchronizace selhala. Zkontrolujte API klíče.');
@@ -807,7 +849,7 @@ export default function SettingsPage() {
         try {
             const res = await fetch(`${API_BASE}/categories/`);
             const data = await res.json();
-            setRuleCategories(data);
+            setRuleCategories(Array.isArray(data) ? data : []);
         } catch (err) {
             console.error('Failed to load categories:', err);
         }
@@ -1032,18 +1074,18 @@ export default function SettingsPage() {
                                     ) : (
                                         <>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                                                <select
-                                                    className="input"
-                                                    onChange={(e) => setConnectingBank(e.target.value)}
+                                                <CustomSelect
+                                                    options={institutions.map((bank) => ({
+                                                        value: bank.id,
+                                                        label: bank.name,
+                                                        icon: '🏦',
+                                                    }))}
                                                     value={connectingBank || ''}
-                                                >
-                                                    <option value="" disabled>Vyberte banku...</option>
-                                                    {institutions.map((bank) => (
-                                                        <option key={bank.id} value={bank.id}>
-                                                            {bank.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    onChange={(val) => setConnectingBank(val)}
+                                                    placeholder="Vyberte banku..."
+                                                    searchable={true}
+                                                    searchPlaceholder="🔍 Hledat banku..."
+                                                />
                                                 <button
                                                     className="btn btn-primary"
                                                     disabled={!connectingBank}
@@ -1056,6 +1098,73 @@ export default function SettingsPage() {
                                                 Budete přesměrováni na stránku banky.
                                             </p>
                                         </>
+                                    )}
+                                </GlassCard>
+
+                                {/* Add Manual Account */}
+                                <GlassCard style={{ marginTop: 'var(--spacing-lg)' }}>
+                                    <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💼 Přidat manuální účet</h3>
+                                    <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
+                                        Pro účty bez API (spořící účet, hotovost, atd.). Zadáním čísla účtu se automaticky detekují interní převody.
+                                    </p>
+
+                                    {showAddManual ? (
+                                        <div style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: 'var(--spacing-sm)'
+                                        }}>
+                                            <input
+                                                className="input"
+                                                placeholder="Název účtu (např. Spořící účet)"
+                                                value={newManualName}
+                                                onChange={(e) => setNewManualName(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleCreateManualAccount()}
+                                                autoFocus
+                                            />
+                                            <input
+                                                className="input"
+                                                placeholder="Číslo účtu / IBAN (např. 2049290001/6000)"
+                                                value={newManualAccountNumber}
+                                                onChange={(e) => setNewManualAccountNumber(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleCreateManualAccount()}
+                                            />
+                                            <p className="text-tertiary" style={{ fontSize: '0.75rem', margin: '-4px 0 0 0' }}>
+                                                🔄 Převody na/z tohoto čísla se automaticky označí jako interní.
+                                            </p>
+                                            <input
+                                                type="number"
+                                                className="input"
+                                                placeholder="Počáteční zůstatek (Kč)"
+                                                value={newManualBalance}
+                                                onChange={(e) => setNewManualBalance(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleCreateManualAccount()}
+                                            />
+                                            <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+                                                <button
+                                                    className="btn btn-primary"
+                                                    onClick={handleCreateManualAccount}
+                                                    disabled={savingManual || !newManualName.trim()}
+                                                    style={{ flex: 1 }}
+                                                >
+                                                    {savingManual ? '⏳ Vytvářím...' : '✅ Vytvořit účet'}
+                                                </button>
+                                                <button
+                                                    className="btn"
+                                                    onClick={() => { setShowAddManual(false); setNewManualName(''); setNewManualBalance(''); setNewManualAccountNumber(''); }}
+                                                >
+                                                    Zrušit
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            className="btn"
+                                            onClick={() => setShowAddManual(true)}
+                                            style={{ width: '100%' }}
+                                        >
+                                            ➕ Nový manuální účet
+                                        </button>
                                     )}
                                 </GlassCard>
                             </div>

@@ -81,7 +81,8 @@ export default function ReportsPage() {
         fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
             .then((data: Category[]) => {
-                const colors = data.reduce((acc, cat) => {
+                const safeData = Array.isArray(data) ? data : [];
+                const colors = safeData.reduce((acc, cat) => {
                     acc[cat.name] = cat.color;
                     return acc;
                 }, { ...FALLBACK_COLORS } as Record<string, string>);
