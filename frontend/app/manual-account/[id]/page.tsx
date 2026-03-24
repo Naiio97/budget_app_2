@@ -178,23 +178,17 @@ export default function ManualAccountDetailPage() {
 
     return (
         <MainLayout>
+            <div className="page-container">
             <header style={{ marginBottom: 'var(--spacing-xl)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-                    <button
-                        className="btn"
-                        onClick={() => router.push('/')}
-                        style={{ padding: '6px 12px' }}
-                    >
-                        ← Zpět
-                    </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--spacing-md)' }}>
                     {editingName ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                             <input
                                 type="text"
                                 className="input"
                                 value={accountName}
                                 onChange={(e) => setAccountName(e.target.value)}
-                                style={{ fontSize: '1.5rem', fontWeight: 600, width: '300px' }}
+                                style={{ fontSize: '1.25rem', fontWeight: 600, width: '100%', maxWidth: '300px' }}
                             />
                             <button className="btn btn-primary" onClick={async () => {
                                 await fetch(`${API_BASE}/manual-accounts/${accountId}`, {
@@ -204,115 +198,127 @@ export default function ManualAccountDetailPage() {
                                 });
                                 setEditingName(false);
                                 loadAccount();
-                                refreshAccounts(); // Update sidebar instantly
+                                refreshAccounts();
                             }} style={{ padding: '4px 12px' }}>✓</button>
                             <button className="btn" onClick={() => setEditingName(false)} style={{ padding: '4px 12px' }}>✕</button>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <h1>💼 {account.name}</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                💼 {account.name}
+                            </h1>
                             <button
                                 onClick={() => { setAccountName(account.name); setEditingName(true); }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.2rem' }}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.2rem', padding: '0 4px' }}
+                                title="Přejmenovat"
                             >✏️</button>
                         </div>
                     )}
+                    <button
+                        className="btn"
+                        onClick={() => router.push('/')}
+                        style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+                    >
+                        Zpět
+                    </button>
                 </div>
             </header>
 
             {/* Balance Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-xl)' }}>
-                <GlassCard>
-                    <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                        Celkem na účtu
+            <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-xl)' }}>
+                {/* 1. Celkem na účtu */}
+                <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '1.25rem' }}>💰</span>
+                        <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Celkem na účtu</div>
                     </div>
                     {editingBalance ? (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: '4px', alignItems: 'center', marginTop: 'auto' }}>
                             <input
                                 type="number"
                                 className="input"
                                 value={balance}
                                 onChange={(e) => setBalance(Number(e.target.value))}
-                                style={{ width: '120px' }}
+                                style={{ width: '100%' }}
                             />
                             <button className="btn btn-primary" onClick={updateBalance} style={{ padding: '4px 8px' }}>✓</button>
                             <button className="btn" onClick={() => setEditingBalance(false)} style={{ padding: '4px 8px' }}>✕</button>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto' }}>
+                            <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                                 {formatCurrency(account.balance)}
                             </div>
-                            <button
-                                onClick={() => setEditingBalance(true)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}
-                            >✏️</button>
+                            <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>✏️</button>
                         </div>
                     )}
-                </GlassCard>
+                </div>
 
-                <GlassCard>
-                    <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                        🏦 Číslo účtu (pro detekci převodů)
+                {/* 2. Číslo účtu */}
+                <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '1.25rem' }}>🏦</span>
+                        <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Číslo účtu (pro detekci)</div>
                     </div>
                     {editingAccountNumber ? (
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: '4px', alignItems: 'center', marginTop: 'auto' }}>
                             <input
                                 type="text"
                                 className="input"
                                 value={accountNumber}
                                 onChange={(e) => setAccountNumber(e.target.value)}
-                                placeholder="např. 2049290001/6000"
-                                style={{ width: '200px' }}
+                                placeholder="např. 2049/6000"
+                                style={{ width: '100%' }}
                             />
                             <button className="btn btn-primary" onClick={async () => {
-                                await fetch(`${API_BASE}/manual-accounts/${accountId}`, {
-                                    method: 'PUT',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ account_number: accountNumber })
-                                });
+                                await fetch(`${API_BASE}/manual-accounts/${accountId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_number: accountNumber }) });
                                 setEditingAccountNumber(false);
                                 loadAccount();
                             }} style={{ padding: '4px 8px' }}>✓</button>
                             <button className="btn" onClick={() => setEditingAccountNumber(false)} style={{ padding: '4px 8px' }}>✕</button>
                         </div>
                     ) : (
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <div style={{ fontSize: '1rem', fontWeight: 500, color: accountNumber ? 'inherit' : 'var(--text-tertiary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto' }}>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 500, color: accountNumber ? 'inherit' : 'var(--text-tertiary)', wordBreak: 'break-all' }}>
                                 {accountNumber || 'Nenastaveno'}
                             </div>
-                            <button
-                                onClick={() => setEditingAccountNumber(true)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}
-                            >✏️</button>
+                            <button onClick={() => setEditingAccountNumber(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>✏️</button>
                         </div>
                     )}
-                </GlassCard>                <GlassCard>
-                    <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                        💚 Volné k utracení
+                </div>
+
+                {/* 3. Volné k utracení */}
+                <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '1.25rem' }}>💚</span>
+                        <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Volné k utracení</div>
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent-success)' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent-success)', marginTop: 'auto' }}>
                         {formatCurrency(account.my_balance)}
                     </div>
-                </GlassCard>
+                </div>
 
-                <GlassCard>
-                    <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                        📌 Rezervované
+                {/* 4. Rezervované */}
+                <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '1.25rem' }}>📌</span>
+                        <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Rezervované</div>
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent-warning)' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent-warning)', marginTop: 'auto' }}>
                         {formatCurrency(borrowedTotal)}
                     </div>
-                </GlassCard>
+                </div>
 
-                <GlassCard>
-                    <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                        📦 Nerozděleno
+                {/* 5. Nerozděleno */}
+                <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontSize: '1.25rem' }}>📦</span>
+                        <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Nerozděleno</div>
                     </div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-tertiary)' }}>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 600, color: unallocated !== 0 ? 'var(--accent-primary)' : 'var(--text-tertiary)', marginTop: 'auto' }}>
                         {formatCurrency(unallocated)}
                     </div>
-                </GlassCard>
+                </div>
             </div>
 
             {/* Envelopes */}
@@ -476,6 +482,7 @@ export default function ManualAccountDetailPage() {
                     </div>
                 )}
             </GlassCard>
+            </div>
         </MainLayout>
     );
 }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import TransactionList from '@/components/TransactionList';
+import StatCard from '@/components/StatCard';
 import { getAccountDetail, AccountDetail, getDashboard } from '@/lib/api';
 
 export default function AccountDetailPage() {
@@ -109,69 +110,70 @@ export default function AccountDetailPage() {
 
     return (
         <MainLayout disableScroll={true}>
-            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+            <div className="page-container" style={{ minHeight: 0 }}>
                 {/* Header */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
                     gap: 'var(--spacing-md)',
-                    marginBottom: 'var(--spacing-md)',
+                    marginBottom: 'var(--spacing-lg)',
                     flexShrink: 0
                 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                        <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {account.name}
+                        </h1>
+                        {!account.is_visible && (
+                            <span style={{
+                                fontSize: '0.75rem',
+                                background: 'rgba(255,255,255,0.1)',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontWeight: 500,
+                                flexShrink: 0
+                            }}>
+                                Skrytý
+                            </span>
+                        )}
+                    </div>
                     <button
                         onClick={() => router.back()}
                         className="btn"
-                        style={{ padding: '8px 12px' }}
+                        style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}
                     >
-                        ← Zpět
+                        Zpět
                     </button>
-                    <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{account.name}</h1>
-                    {!account.is_visible && (
-                        <span style={{
-                            fontSize: '0.75rem',
-                            background: 'rgba(255,255,255,0.1)',
-                            padding: '4px 8px',
-                            borderRadius: '4px'
-                        }}>
-                            Skrytý
-                        </span>
-                    )}
                 </div>
 
-                {/* Account Info */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: 'var(--spacing-md)',
-                    marginBottom: 'var(--spacing-md)',
-                    flexShrink: 0
-                }}>
-                    <GlassCard>
-                        <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                            Zůstatek
-                        </div>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>
-                            {formatCurrency(account.balance, account.currency)}
-                        </div>
-                    </GlassCard>
+                {/* Account Info - Dashboard match */}
+                <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-xl)', flexShrink: 0 }}>
+                    <StatCard
+                        label="ZŮSTATEK"
+                        value={account.balance}
+                        currency={account.currency}
+                        icon="💰"
+                    />
 
-                    <GlassCard>
-                        <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                            Instituce
+                    <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontSize: '1.25rem' }}>🏦</span>
+                            <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Instituce</div>
                         </div>
-                        <div style={{ fontSize: '1.1rem' }}>
-                            {account.institution || 'Neznámá'}
+                        <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-word', marginTop: 'auto' }}>
+                            {account.institution ? account.institution.replace(/_/g, ' ') : 'Neznámá'}
                         </div>
-                    </GlassCard>
+                    </div>
 
-                    <GlassCard>
-                        <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                            Poslední synchronizace
+                    <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontSize: '1.25rem' }}>🔄</span>
+                            <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Poslední synchronizace</div>
                         </div>
-                        <div style={{ fontSize: '1.1rem' }}>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: 'auto' }}>
                             {account.last_synced ? formatDate(account.last_synced) : 'Nikdy'}
                         </div>
-                    </GlassCard>
+                    </div>
                 </div>
 
                 {/* Transactions with Pagination */}
@@ -182,20 +184,26 @@ export default function AccountDetailPage() {
                             justifyContent: 'space-between',
                             alignItems: 'center',
                             marginBottom: 'var(--spacing-md)',
-                            flexShrink: 0
+                            flexShrink: 0,
+                            flexWrap: 'wrap',
+                            gap: 'var(--spacing-sm)'
                         }}>
-                            <h3 style={{ margin: 0 }}>📋 Transakce ({totalItems})</h3>
+                            <h3 style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+                                📋 Transakce <span style={{ opacity: 0.5, fontSize: '0.9rem', fontWeight: 500 }}>({totalItems})</span>
+                            </h3>
                             <Link
                                 href={`/transactions?account_id=${accountId}`}
                                 className="btn"
-                                style={{ fontSize: '0.85rem', padding: '6px 12px' }}
+                                style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}
                             >
                                 Filtrovat transakce →
                             </Link>
                         </div>
 
                         {transactions.length === 0 ? (
-                            <p className="text-secondary">Žádné transakce</p>
+                            <div style={{ padding: 'var(--spacing-xl) 0', textAlign: 'center' }}>
+                                <p className="text-secondary">Zatím žádné transakce.</p>
+                            </div>
                         ) : (
                             <>
                                 <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-md)' }}>
@@ -206,30 +214,30 @@ export default function AccountDetailPage() {
                                 {totalPages > 1 && (
                                     <div style={{
                                         display: 'flex',
-                                        justifyContent: 'center',
+                                        justifyContent: 'space-between',
                                         alignItems: 'center',
-                                        gap: 'var(--spacing-lg)',
                                         paddingTop: 'var(--spacing-md)',
                                         marginTop: 'auto',
-                                        borderTop: '1px solid rgba(255,255,255,0.1)',
-                                        flexShrink: 0
+                                        borderTop: '1px solid rgba(255,255,255,0.05)',
+                                        flexShrink: 0,
+                                        gap: '8px'
                                     }}>
                                         <button
                                             className="btn"
                                             disabled={page <= 1}
                                             onClick={() => setPage(p => Math.max(1, p - 1))}
-                                            style={{ opacity: page <= 1 ? 0.5 : 1 }}
+                                            style={{ opacity: page <= 1 ? 0.3 : 1, padding: '8px 16px', fontSize: '0.9rem' }}
                                         >
                                             ← Předchozí
                                         </button>
-                                        <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                            Stránka {page} z {totalPages}
+                                        <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.9rem', fontWeight: 500 }}>
+                                            {page} / {totalPages}
                                         </span>
                                         <button
                                             className="btn"
                                             disabled={page >= totalPages}
                                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                            style={{ opacity: page >= totalPages ? 0.5 : 1 }}
+                                            style={{ opacity: page >= totalPages ? 0.3 : 1, padding: '8px 16px', fontSize: '0.9rem' }}
                                         >
                                             Další →
                                         </button>

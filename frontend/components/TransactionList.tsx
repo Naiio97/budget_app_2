@@ -234,7 +234,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             {[...categories.filter(c => c.is_active),
                                             { id: -1, name: 'Internal Transfer', icon: '🔄', color: '#6b7280', is_income: false, is_active: true },
                                             { id: -2, name: 'Family Transfer', icon: '👨‍👩‍👧', color: '#6b7280', is_income: false, is_active: true }
-                                            ].map((cat: Category) => (
+                                            ].filter((cat, index, self) => index === self.findIndex(c => c.name === cat.name)).map((cat: Category) => (
                                                 <div
                                                     key={cat.name}
                                                     className={`custom-select-option ${tx.category === cat.name ? 'selected' : ''}`}

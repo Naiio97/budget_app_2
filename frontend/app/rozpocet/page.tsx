@@ -750,7 +750,7 @@ export default function RozpocetPage() {
                     </div>
 
                     {/* Items */}
-                    {account.items.length > 0 && (
+                    {Array.isArray(account.items) && account.items.length > 0 && (
                         <div style={{ paddingLeft: '16px', borderLeft: '2px solid rgba(255,255,255,0.1)', marginBottom: '8px' }}>
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Položky (není moje):</div>
                             {account.items.map(item => (
