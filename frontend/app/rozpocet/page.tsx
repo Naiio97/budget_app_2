@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
 import { getDashboard } from '@/lib/api';
 
@@ -422,65 +423,19 @@ export default function RozpocetPage() {
 
     // === Render Functions ===
 
-    const renderMonthTabs = () => (
-        <div style={{
-            display: 'flex',
-            gap: '4px',
-            overflowX: 'auto',
-            padding: '4px',
-            background: 'rgba(0,0,0,0.2)',
-            borderRadius: '12px',
-            marginBottom: 'var(--spacing-lg)'
-        }}>
-            {MONTH_NAMES.map((name, idx) => {
-                const month = idx + 1;
-                const isSelected = viewMode === 'month' && selectedMonth === month;
-                return (
-                    <button
-                        key={month}
-                        onClick={() => { setSelectedMonth(month); setViewMode('month'); }}
-                        style={{
-                            padding: '8px 12px',
-                            border: 'none',
-                            borderRadius: '8px',
-                            background: isSelected ? 'var(--accent-primary)' : 'transparent',
-                            color: isSelected ? '#000' : 'var(--text-primary)',
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.2s'
-                        }}
-                    >
-                        {name}
-                    </button>
-                );
-            })}
-            <button
-                onClick={() => setViewMode('year')}
-                style={{
-                    padding: '8px 16px',
-                    border: 'none',
-                    borderRadius: '8px',
-                    background: viewMode === 'year' ? 'var(--accent-warning)' : 'transparent',
-                    color: viewMode === 'year' ? '#000' : 'var(--text-primary)',
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    whiteSpace: 'nowrap',
-                    fontWeight: 600
-                }}
-            >
-                📊 Roční přehled
-            </button>
-        </div>
-    );
+    // Removed renderMonthTabs() as it is replaced by native selects in the header below.
+
+
 
     const renderIncomeSection = () => (
         <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+            <div className="section-header-wrap">
                 <h3 style={{ margin: 0, color: 'var(--accent-success)' }}>💰 Příjmy</h3>
-                <button className="btn" onClick={syncIncome} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-                    🔄 Načíst z transakcí
-                </button>
+                <div className="section-actions">
+                    <button className="btn" onClick={syncIncome} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
+                        🔄 Načíst z transakcí
+                    </button>
+                </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {[
@@ -517,16 +472,16 @@ export default function RozpocetPage() {
 
     const renderExpensesSection = () => (
         <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+            <div className="section-header-wrap">
                 <h3 style={{ margin: 0, color: 'var(--accent-error)' }}>📋 Pravidelné výdaje</h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="btn" onClick={copyFromPrevious} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-                        📋 Z minulého měsíce
+                <div className="section-actions">
+                    <button className="btn" onClick={copyFromPrevious} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
+                        📋 Z minula
                     </button>
-                    <button className="btn" onClick={matchTransactions} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+                    <button className="btn" onClick={matchTransactions} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
                         🔄 Spárovat
                     </button>
-                    <button className="btn btn-primary" onClick={() => setShowAddExpense(true)} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
+                    <button className="btn btn-primary" onClick={() => setShowAddExpense(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
                         + Přidat
                     </button>
                 </div>
@@ -584,6 +539,7 @@ export default function RozpocetPage() {
                 {budget?.expenses.map(expense => (
                     <div
                         key={expense.id}
+                        className="expense-row"
                         style={{
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -594,7 +550,7 @@ export default function RozpocetPage() {
                             marginBottom: '4px'
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, width: '100%' }}>
                             <input
                                 type="checkbox"
                                 checked={expense.is_paid}
@@ -610,25 +566,22 @@ export default function RozpocetPage() {
                                 {expense.matched_transaction_id && <span style={{ marginLeft: '4px', fontSize: '0.7rem' }}>✓</span>}
                             </span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                             {/* Percentage selector */}
-                            <select
-                                className="input"
-                                value={expense.my_percentage}
-                                onChange={(e) => updateExpensePercentage(expense.id, parseInt(e.target.value))}
+                            <CustomSelect
+                                value={expense.my_percentage.toString()}
+                                onChange={(val) => updateExpensePercentage(expense.id, parseInt(val))}
                                 style={{
-                                    width: '60px',
-                                    padding: '4px',
+                                    width: '80px',
                                     fontSize: '0.75rem',
-                                    background: expense.my_percentage < 100 ? 'rgba(168, 85, 247, 0.2)' : undefined
                                 }}
-                                title="Můj podíl v %"
-                            >
-                                <option value={100}>100%</option>
-                                <option value={50}>50%</option>
-                                <option value={33}>33%</option>
-                                <option value={25}>25%</option>
-                            </select>
+                                options={[
+                                    { value: '100', label: '100%' },
+                                    { value: '50', label: '50%' },
+                                    { value: '33', label: '33%' },
+                                    { value: '25', label: '25%' },
+                                ]}
+                            />
                             {/* Amount input */}
                             <input
                                 type="number"
@@ -727,11 +680,13 @@ export default function RozpocetPage() {
 
     const renderManualAccounts = () => (
         <GlassCard>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+            <div className="section-header-wrap">
                 <h3 style={{ margin: 0, color: 'var(--accent-primary)' }}>🏦 Spořící účty</h3>
-                <button className="btn btn-primary" onClick={() => setShowAddAccount(true)} style={{ fontSize: '0.75rem', padding: '4px 8px' }}>
-                    + Přidat účet
-                </button>
+                <div className="section-actions">
+                    <button className="btn btn-primary" onClick={() => setShowAddAccount(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
+                        + Přidat účet
+                    </button>
+                </div>
             </div>
 
             {showAddAccount && (
@@ -856,7 +811,7 @@ export default function RozpocetPage() {
         return (
             <>
                 {/* Summary Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
+                <div className="dashboard-grid" style={{ gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
                     <GlassCard>
                         <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Příjmy celkem</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(annualData.totals.income)}</div>
@@ -942,59 +897,78 @@ export default function RozpocetPage() {
 
     return (
         <MainLayout>
-            <div style={{ padding: 'var(--spacing-lg)' }}>
-                {/* Header with Year Selector */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+            <div className="page-container">
+                {/* Header Toolbar */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: 'var(--spacing-lg)' }}>
+                    {/* Title */}
                     <h1 style={{ fontSize: '1.5rem', margin: 0 }}>
-                        📅 Měsíční rozpočet
+                        📅 Rozpočet
                     </h1>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         <button
+                            onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')}
                             className="btn"
-                            onClick={() => {
-                                if (selectedMonth === 1) {
-                                    // From January, go to December of previous year
-                                    setSelectedMonth(12);
-                                }
-                                setSelectedYear(selectedYear - 1);
+                            style={{
+                                background: viewMode === 'year' ? 'var(--accent-warning)' : 'rgba(255,255,255,0.05)',
+                                color: viewMode === 'year' ? '#000' : 'var(--text-primary)',
+                                padding: '6px 12px',
+                                fontSize: '0.85rem',
+                                fontWeight: viewMode === 'year' ? 600 : 400
                             }}
-                            style={{ padding: '4px 12px' }}
                         >
-                            ←
-                        </button>
-                        <span style={{ fontWeight: 600, minWidth: '60px', textAlign: 'center' }}>{selectedYear}</span>
-                        <button
-                            className="btn"
-                            onClick={() => {
-                                if (selectedMonth === 12) {
-                                    // From December, go to January of next year
-                                    setSelectedMonth(1);
-                                }
-                                setSelectedYear(selectedYear + 1);
-                            }}
-                            style={{ padding: '4px 12px' }}
-                        >
-                            →
+                            {viewMode === 'year' ? 'Zpět na měsíc' : '📊 Roční přehled'}
                         </button>
                         {viewMode === 'month' && (
                             <button
                                 className="btn"
                                 onClick={deleteBudget}
-                                style={{ marginLeft: '16px', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: 'var(--accent-error)' }}
+                                style={{
+                                    fontSize: '0.85rem',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    color: 'var(--accent-error)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    padding: '6px 12px',
+                                }}
                                 title="Smazat tento měsíc"
                             >
-                                🗑️ Smazat měsíc
+                                🗑️ Smazat
                             </button>
                         )}
                     </div>
-                </div>
 
-                {/* Month Tabs */}
-                {renderMonthTabs()}
+                    {/* Filters Row: Native Selects for Month & Year */}
+                    {viewMode === 'month' && (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <CustomSelect
+                                value={selectedMonth.toString()}
+                                onChange={(val) => setSelectedMonth(Number(val))}
+                                style={{ width: '150px' }}
+                                options={MONTH_NAMES.map((name, idx) => ({
+                                    value: (idx + 1).toString(),
+                                    label: name
+                                }))}
+                            />
+
+                            <CustomSelect
+                                value={selectedYear.toString()}
+                                onChange={(val) => setSelectedYear(Number(val))}
+                                style={{ width: '120px' }}
+                                options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i)
+                                    .sort((a, b) => b - a)
+                                    .map(y => ({
+                                        value: y.toString(),
+                                        label: y.toString()
+                                    }))}
+                            />
+                        </div>
+                    )}
+                </div>
 
                 {/* Content */}
                 {viewMode === 'month' ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: 'var(--spacing-md)' }}>
+                    <div className="rozpocet-grid">
                         {/* Left Column - Income & Savings */}
                         <div>
                             {renderIncomeSection()}

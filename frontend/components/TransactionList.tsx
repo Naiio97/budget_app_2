@@ -34,7 +34,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [dropdownPosition, setDropdownPosition] = useState<'below' | 'above'>('below');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Load categories from API
+    // Build icon map from categories
     useEffect(() => {
         fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
@@ -112,7 +112,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                 body: JSON.stringify({ category: newCategory, learn: true })
             });
 
-            if (response.ok) {
+            if (success) {
                 // Update local state immediately
                 setTransactions(prev => prev.map(tx =>
                     tx.id === txId ? { ...tx, category: newCategory } : tx
@@ -146,7 +146,11 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     <div
                         key={tx.id}
                         className="transaction-item animate-fade-in"
-                        style={{ opacity: isExcluded ? 0.6 : 1 }}
+                        style={{
+                            opacity: (isExcluded && editingId !== tx.id) ? 0.6 : 1,
+                            position: 'relative',
+                            zIndex: editingId === tx.id ? 50 : 1
+                        }}
                     >
                         <div className="transaction-icon" style={{ position: 'relative' }}>
                             {categoryIcons[tx.category || 'Other'] || '📋'}
@@ -184,42 +188,48 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     </span>
                                 )}
                                 {/* Category Badge - Clickable */}
-                                <span ref={editingId === tx.id ? dropdownRef : null} style={{ position: 'relative', display: 'inline-block' }}>
+                                <span ref={editingId === tx.id ? dropdownRef : null} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                                     <span
                                         onClick={(e) => handleCategoryClick(tx.id, e)}
                                         style={{
                                             marginLeft: '8px',
-                                            padding: '2px 8px',
+                                            padding: '4px 10px',
                                             background: updatingId === tx.id
-                                                ? 'rgba(255,255,255,0.2)'
-                                                : 'rgba(255,255,255,0.1)',
-                                            borderRadius: '4px',
+                                                ? 'rgba(255,255,255,0.1)'
+                                                : '#1e293b', // Solid dark badge instead of glass
+                                            border: '1px solid #334155',
+                                            borderRadius: 'var(--radius-sm)',
                                             cursor: 'pointer',
                                             fontSize: '0.75rem',
-                                            transition: 'background 0.2s'
+                                            fontWeight: 500,
+                                            color: '#e2e8f0', // Crisp light color
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                                         }}
+                                        onMouseOver={(e) => e.currentTarget.style.background = '#334155'}
+                                        onMouseOut={(e) => e.currentTarget.style.background = updatingId === tx.id ? 'rgba(255,255,255,0.1)' : '#1e293b'}
                                     >
-                                        {updatingId === tx.id ? '...' : (tx.category || 'Other')}
-                                        <span style={{ marginLeft: '4px', fontSize: '0.6rem', opacity: 0.7 }}>✏️</span>
+                                        {updatingId === tx.id ? 'Ukládám...' : (tx.category || 'Other')}
+                                        <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>✏️</span>
                                     </span>
 
                                     {/* Category Dropdown */}
                                     {editingId === tx.id && (
-                                        <div style={{
+                                        <div className="custom-select-dropdown animate-fade-in" style={{
                                             position: 'absolute',
+                                            background: '#1e293b',
+                                            border: '1px solid #334155',
+                                            borderRadius: 'var(--radius-md)',
+                                            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(0, 0, 0, 0.8)',
+                                            zIndex: 99999,
+                                            padding: '6px',
                                             ...(dropdownPosition === 'above'
-                                                ? { bottom: '100%', marginBottom: '4px' }
+                                                ? { bottom: '100%', marginBottom: '4px', top: 'auto' }
                                                 : { top: '100%', marginTop: '4px' }),
                                             left: 0,
-                                            background: 'rgba(30, 30, 40, 0.98)',
-                                            border: '1px solid rgba(255,255,255,0.15)',
-                                            borderRadius: '8px',
-                                            padding: '4px',
-                                            zIndex: 100,
-                                            minWidth: '180px',
-                                            maxHeight: '250px',
-                                            overflowY: 'auto',
-                                            boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
                                         }}>
                                             {[...categories.filter(c => c.is_active),
                                             { id: -1, name: 'Internal Transfer', icon: '🔄', color: '#6b7280', is_income: false, is_active: true },
@@ -227,17 +237,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             ].map((cat: Category) => (
                                                 <div
                                                     key={cat.name}
+                                                    className={`custom-select-option ${tx.category === cat.name ? 'selected' : ''}`}
                                                     onClick={() => handleCategorySelect(tx.id, cat.name)}
-                                                    style={{
-                                                        padding: '8px 12px',
-                                                        cursor: 'pointer',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.85rem',
-                                                        background: tx.category === cat.name ? 'rgba(45, 212, 191, 0.2)' : 'transparent',
-                                                        transition: 'background 0.15s'
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.background = tx.category === cat.name ? 'rgba(45, 212, 191, 0.2)' : 'transparent'}
                                                 >
                                                     {cat.icon} {cat.name}
                                                 </div>

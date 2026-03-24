@@ -1,3 +1,6 @@
+import * as Mocks from './mock-data';
+
+const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true' || true; // ⚠️ Změň na 'false' pro produkci
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
 export interface Account {
@@ -63,6 +66,33 @@ export interface Portfolio {
 }
 
 async function fetchApi<T>(endpoint: string): Promise<T> {
+    if (USE_MOCKS) {
+        console.log('[MOCK API] GET', endpoint);
+        await new Promise(r => setTimeout(r, 400)); // Simulace zpoždění sítě
+
+        if (endpoint.startsWith('/dashboard/balance-history')) return Mocks.MOCK_BALANCE_HISTORY as any;
+        if (endpoint.startsWith('/dashboard/net-worth-history')) return Mocks.MOCK_NET_WORTH as any;
+        if (endpoint.startsWith('/dashboard/portfolio')) return Mocks.MOCK_PORTFOLIO as any;
+        if (endpoint.startsWith('/dashboard/')) return Mocks.MOCK_DASHBOARD as any;
+        if (endpoint.startsWith('/accounts/institutions')) return { institutions: [] } as any;
+        if (endpoint.startsWith('/accounts/') && endpoint.includes('/detail')) return {
+            account: Mocks.MOCK_ACCOUNTS[0], transactions: Mocks.MOCK_TRANSACTIONS.items, total: 20, pages: 1, current_page: 1
+        } as any;
+        if (endpoint.startsWith('/accounts/')) return Mocks.MOCK_ACCOUNTS as any;
+        if (endpoint.startsWith('/transactions/')) return Mocks.MOCK_TRANSACTIONS as any;
+        if (endpoint.startsWith('/investments/portfolio')) return Mocks.MOCK_INVESTMENT_PORTFOLIO as any;
+        if (endpoint.startsWith('/investments/history')) return { history: [], currency: 'CZK' } as any;
+        if (endpoint.startsWith('/investments/dividends')) return { dividends: [] } as any;
+        if (endpoint.startsWith('/budgets/overview')) return Mocks.MOCK_BUDGET_OVERVIEW as any;
+        if (endpoint.startsWith('/budgets/goals')) return Mocks.MOCK_GOALS as any;
+        if (endpoint.startsWith('/budgets/')) return Mocks.MOCK_BUDGETS as any;
+        if (endpoint.startsWith('/sync/status')) return Mocks.MOCK_SYNC_STATUS as any;
+        if (endpoint.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 } as any;
+        if (endpoint.startsWith('/settings/api-keys')) return Mocks.MOCK_API_KEYS as any;
+
+        console.warn('[MOCK API] Unknown generic endpoint', endpoint);
+    }
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
         cache: 'no-store',
     });
@@ -182,6 +212,10 @@ export interface SyncResult {
 }
 
 export async function syncData(): Promise<SyncResult> {
+    if (USE_MOCKS) {
+        await new Promise(r => setTimeout(r, 1000));
+        return { status: 'completed', accounts_synced: 3, transactions_synced: 42 };
+    }
     const response = await fetch(`${API_BASE}/sync/`, {
         method: 'POST',
     });

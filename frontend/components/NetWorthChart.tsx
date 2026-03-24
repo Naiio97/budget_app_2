@@ -27,6 +27,14 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
     const [data, setData] = useState<NetWorthHistory | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState(30);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     useEffect(() => {
         async function fetchData() {
@@ -87,20 +95,16 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
     }
 
     // Calculate change from start to end
+    const lastEntry = data.history[data.history.length - 1];
     const startValue = data.history[0]?.total || 0;
-    const endValue = data.history[data.history.length - 1]?.total || 0;
+    const endValue = lastEntry?.total || 0;
     const change = endValue - startValue;
     const changePercent = startValue > 0 ? ((change / startValue) * 100).toFixed(1) : '0';
 
     return (
         <div>
             {/* Header with period selector */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 'var(--spacing-md)'
-            }}>
+            <div className="chart-header-wrap">
                 <div>
                     <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>
                         {formatCurrency(endValue)}
@@ -116,7 +120,7 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                         </span>
                     </div>
                 </div>
-                <div style={{ display: 'flex', gap: '4px' }}>
+                <div className="period-buttons-desktop" style={{ display: 'flex', gap: '4px' }}>
                     {PERIODS.map(p => (
                         <button
                             key={p.days}
@@ -133,7 +137,7 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
             {/* Chart */}
             <div style={{ height: '280px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.history}>
+                    <AreaChart data={data.history} margin={isMobile ? { top: 10, right: 0, left: 0, bottom: 0 } : { top: 5, right: 5, left: 0, bottom: 5 }}>
                         <defs>
                             <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
@@ -160,7 +164,10 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                             stroke="rgba(255,255,255,0.5)"
                             fontSize={11}
                             tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
-                            width={50}
+                            width={40}
+                            tick={{ dx: -4 }}
+                            axisLine={false}
+                            tickLine={false}
                         />
                         <Tooltip
                             contentStyle={{
@@ -204,25 +211,52 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                 </ResponsiveContainer>
             </div>
 
-            {/* Legend */}
+            {/* Legend / Current Values */}
             <div style={{
                 display: 'flex',
-                justifyContent: 'center',
-                gap: 'var(--spacing-lg)',
-                marginTop: 'var(--spacing-md)'
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 'var(--spacing-sm)',
+                marginTop: 'var(--spacing-md)',
+                padding: 'var(--spacing-sm) var(--spacing-md)',
+                background: 'rgba(0,0,0,0.1)',
+                borderRadius: 'var(--radius-md)'
             }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '3px', background: '#2dd4bf', borderRadius: '2px' }} />
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Celkem</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ width: '12px', height: '3px', background: '#2dd4bf', borderRadius: '2px' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Celkem</span>
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{formatCurrency(lastEntry?.total || 0)}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '3px', background: '#007AFF', borderRadius: '2px' }} />
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Banka</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ width: '12px', height: '3px', background: '#007AFF', borderRadius: '2px' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Banka</span>
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{formatCurrency(lastEntry?.bank || 0)}</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '12px', height: '3px', background: '#9C27B0', borderRadius: '2px' }} />
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Investice</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ width: '12px', height: '3px', background: '#9C27B0', borderRadius: '2px' }} />
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Investice</span>
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{formatCurrency(lastEntry?.investment || 0)}</span>
                 </div>
+            </div>
+
+            {/* Period Buttons (Mobile only) */}
+            <div className="period-buttons-mobile" style={{ gap: '8px', width: '100%', marginTop: '16px' }}>
+                {PERIODS.map(p => (
+                    <button
+                        key={p.days}
+                        onClick={() => setSelectedPeriod(p.days)}
+                        className={`btn ${selectedPeriod === p.days ? 'btn-primary' : ''}`}
+                        style={{ flex: 1, padding: '8px 0', fontSize: '0.85rem' }}
+                    >
+                        {p.label}
+                    </button>
+                ))}
             </div>
         </div>
     );

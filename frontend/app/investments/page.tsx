@@ -114,26 +114,18 @@ export default function InvestmentsPage() {
 
     return (
         <MainLayout>
-            <div style={{ padding: 'var(--spacing-lg)' }}>
+            <div className="page-container">
                 {/* Header */}
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: 'var(--spacing-lg)'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-                        <Link href="/" className="btn" style={{ padding: '8px 12px' }}>
-                            ← Zpět
-                        </Link>
-                        <h1 style={{ margin: 0 }}>📈 Investice</h1>
+                <header className="section-header-wrap" style={{ marginBottom: 'var(--spacing-xl)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
+                        <h1 style={{ margin: 0, fontSize: '1.75rem' }}>📈 Investice</h1>
                     </div>
                     {portfolio?.last_synced && (
-                        <span className="text-tertiary" style={{ fontSize: '0.8rem' }}>
-                            Poslední sync: {formatDate(portfolio.last_synced)}
-                        </span>
+                        <div className="text-tertiary" style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                            Poslední sync: <strong>{formatDate(portfolio.last_synced)}</strong>
+                        </div>
                     )}
-                </div>
+                </header>
 
                 {/* Summary Card */}
                 {portfolio && (
@@ -150,20 +142,15 @@ export default function InvestmentsPage() {
                 {/* Chart */}
                 {history && history.history.length > 0 && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: 'var(--spacing-md)'
-                        }}>
+                        <div className="chart-header-wrap">
                             <h3 style={{ margin: 0 }}>📊 Vývoj hodnoty</h3>
-                            <div style={{ display: 'flex', gap: '4px' }}>
+                            <div className="period-buttons" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                 {['1W', '1M', '3M', '6M', '1Y'].map(p => (
                                     <button
                                         key={p}
                                         onClick={() => setPeriod(p)}
                                         className={`btn ${period === p ? 'btn-primary' : ''}`}
-                                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
+                                        style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1, minWidth: '40px' }}
                                     >
                                         {p}
                                     </button>
@@ -191,10 +178,11 @@ export default function InvestmentsPage() {
                                         stroke="rgba(255,255,255,0.5)"
                                         fontSize={12}
                                         tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                                        width={45}
                                     />
                                     <Tooltip
                                         contentStyle={{
-                                            background: 'rgba(0,0,0,0.8)',
+                                            background: 'rgba(30,30,40,0.9)',
                                             border: '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: '8px'
                                         }}
@@ -217,7 +205,7 @@ export default function InvestmentsPage() {
                 {/* Transactions and Dividends */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
                     gap: 'var(--spacing-lg)'
                 }}>
                     {/* Transactions */}

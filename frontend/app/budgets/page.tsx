@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
+import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
 import {
     Budget, SavingsGoal,
@@ -205,17 +206,18 @@ export default function BudgetsPage() {
                             borderRadius: '8px',
                             marginBottom: 'var(--spacing-md)'
                         }}>
-                            <select
-                                className="input"
+                            <CustomSelect
                                 value={newBudget.category}
-                                onChange={(e) => setNewBudget({ ...newBudget, category: e.target.value })}
+                                onChange={(val) => setNewBudget({ ...newBudget, category: val })}
                                 style={{ flex: 1 }}
-                            >
-                                <option value="">Vyberte kategorii...</option>
-                                {CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => (
-                                    <option key={cat.value} value={cat.value}>{cat.label}</option>
-                                ))}
-                            </select>
+                                options={[
+                                    { value: '', label: 'Vyberte kategorii...' },
+                                    ...CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => ({
+                                        value: cat.value,
+                                        label: cat.label
+                                    }))
+                                ]}
+                            />
                             <input
                                 type="number"
                                 className="input"
