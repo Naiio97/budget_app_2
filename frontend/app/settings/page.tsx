@@ -1403,7 +1403,8 @@ export default function SettingsPage() {
                                     onChange={(val) => setNewCategory(val)}
                                     options={ruleCategories.filter(c => c.is_active).map(cat => ({
                                         value: cat.name,
-                                        label: <>{cat.icon} {cat.name}</>
+                                        label: cat.name,
+                                        icon: cat.icon
                                     }))}
                                 />
                                 <button

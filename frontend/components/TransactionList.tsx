@@ -112,7 +112,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                 body: JSON.stringify({ category: newCategory, learn: true })
             });
 
-            if (success) {
+            if (response.ok) {
                 // Update local state immediately
                 setTransactions(prev => prev.map(tx =>
                     tx.id === txId ? { ...tx, category: newCategory } : tx
