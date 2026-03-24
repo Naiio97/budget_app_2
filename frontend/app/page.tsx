@@ -40,7 +40,6 @@ export default function DashboardPage() {
   if (loading || !data) {
     return (
       <MainLayout>
-      <h1>HALO NICOLE, TADY JE V3</h1>
         <div style={{
           display: 'flex',
           justifyContent: 'center',
