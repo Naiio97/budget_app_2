@@ -60,7 +60,7 @@ app.include_router(settings.router, prefix="/settings", tags=["Settings"])
 app.include_router(investments.router, prefix="/investments", tags=["Investments"])
 app.include_router(budgets.router, prefix="/budgets", tags=["Budgets"])
 app.include_router(monthly_budget.router)
-app.include_router(categories.router, tags=["Categories"])
+app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(manual_accounts.router, prefix="/manual-accounts", tags=["Manual Accounts"])
 
 @app.get("/")

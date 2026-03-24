@@ -685,7 +685,7 @@ async def delete_monthly_expense(expense_id: int, db: AsyncSession = Depends(get
 
 # === Manual Account Endpoints ===
 
-@router.get("/manual-accounts", response_model=List[ManualAccountResponse])
+@router.get("/", response_model=List[ManualAccountResponse])
 async def get_manual_accounts(db: AsyncSession = Depends(get_db)):
     """Seznam manuálních účtů"""
     result = await db.execute(select(ManualAccountModel))
@@ -717,7 +717,7 @@ async def get_manual_accounts(db: AsyncSession = Depends(get_db)):
     return responses
 
 
-@router.post("/manual-accounts", response_model=ManualAccountResponse)
+@router.post("/", response_model=ManualAccountResponse)
 async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = Depends(get_db)):
     """Vytvořit manuální účet"""
     account = ManualAccountModel(
@@ -740,7 +740,7 @@ async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = De
     )
 
 
-@router.put("/manual-accounts/{account_id}")
+@router.put("/{account_id}")
 async def update_manual_account_budget(account_id: int, data: ManualAccountUpdate, db: AsyncSession = Depends(get_db)):
     """Aktualizovat manuální účet"""
     result = await db.execute(
@@ -760,7 +760,7 @@ async def update_manual_account_budget(account_id: int, data: ManualAccountUpdat
     return {"status": "updated"}
 
 
-@router.delete("/manual-accounts/{account_id}")
+@router.delete("/{account_id}")
 async def delete_manual_account(account_id: int, db: AsyncSession = Depends(get_db)):
     """Smazat manuální účet"""
     result = await db.execute(
@@ -776,7 +776,7 @@ async def delete_manual_account(account_id: int, db: AsyncSession = Depends(get_
     return {"status": "deleted"}
 
 
-@router.post("/manual-accounts/{account_id}/items")
+@router.post("/{account_id}/items")
 async def add_manual_account_item(account_id: int, data: ManualAccountItemCreate, db: AsyncSession = Depends(get_db)):
     """Přidat položku na manuální účet"""
     result = await db.execute(
@@ -800,7 +800,7 @@ async def add_manual_account_item(account_id: int, data: ManualAccountItemCreate
     return {"status": "created", "id": item.id}
 
 
-@router.put("/manual-accounts/{account_id}/items/{item_id}")
+@router.put("/{account_id}/items/{item_id}")
 async def update_manual_account_item(account_id: int, item_id: int, data: ManualAccountItemCreate, db: AsyncSession = Depends(get_db)):
     """Upravit položku na manuálním účtu"""
     result = await db.execute(
@@ -822,7 +822,7 @@ async def update_manual_account_item(account_id: int, item_id: int, data: Manual
     return {"status": "updated"}
 
 
-@router.delete("/manual-accounts/{account_id}/items/{item_id}")
+@router.delete("/{account_id}/items/{item_id}")
 async def delete_manual_account_item(account_id: int, item_id: int, db: AsyncSession = Depends(get_db)):
     """Smazat položku z manuálního účtu"""
     result = await db.execute(

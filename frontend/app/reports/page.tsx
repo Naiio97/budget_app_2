@@ -34,6 +34,8 @@ interface Category {
     color: string;
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+
 // Fallback colors
 const FALLBACK_COLORS: Record<string, string> = {
     'Food': '#ef4444',
@@ -76,7 +78,7 @@ export default function ReportsPage() {
 
     // Load category colors
     useEffect(() => {
-        fetch('/categories')
+        fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
             .then((data: Category[]) => {
                 const colors = data.reduce((acc, cat) => {
@@ -91,7 +93,7 @@ export default function ReportsPage() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const reportData = await fetch(`/dashboard/monthly-report?months=${months}`).then(r => r.json());
+                const reportData = await fetch(`${API_BASE}/dashboard/monthly-report?months=${months}`).then(r => r.json());
                 setReport(reportData);
             } catch (err) {
                 console.error('Failed to load report:', err);

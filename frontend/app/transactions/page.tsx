@@ -33,6 +33,8 @@ export default function TransactionsPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
 
+    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+
     // Generate last 12 months for dropdown
     const getMonthOptions = () => {
         const months = [];
@@ -109,7 +111,7 @@ export default function TransactionsPage() {
 
     // Load categories
     useEffect(() => {
-        fetch('/categories')
+        fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
             .then(data => setCategories(data))
             .catch(err => console.error('Failed to load categories:', err));

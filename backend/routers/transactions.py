@@ -147,7 +147,7 @@ def categorize_transaction(tx: dict) -> str:
     return "Other"
 
 
-@router.get("/categories")
+@router.get("/")
 async def get_category_summary(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),

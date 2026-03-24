@@ -18,6 +18,8 @@ interface Category {
     is_active: boolean;
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+
 // Fallback icons for special categories
 const FALLBACK_ICONS: Record<string, string> = {
     'Internal Transfer': '🔄',
@@ -34,7 +36,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     // Load categories from API
     useEffect(() => {
-        fetch('/categories')
+        fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
             .then(data => setCategories(data))
             .catch(err => console.error('Failed to load categories:', err));
@@ -104,7 +106,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
         setEditingId(null);
 
         try {
-            const response = await fetch(`api/transactions/${txId}/category`, {
+            const response = await fetch(`/transactions/${txId}/category`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ category: newCategory, learn: true })

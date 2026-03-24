@@ -51,7 +51,7 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-@router.get("/categories", response_model=List[CategoryResponse])
+@router.get("/", response_model=List[CategoryResponse])
 async def get_categories(db: AsyncSession = Depends(get_db)):
     """Get all categories, seeding defaults if none exist"""
     result = await db.execute(
@@ -81,7 +81,7 @@ async def get_categories(db: AsyncSession = Depends(get_db)):
     return categories
 
 
-@router.post("/categories", response_model=CategoryResponse)
+@router.post("/", response_model=CategoryResponse)
 async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_db)):
     """Create a new category"""
     # Check if name already exists
@@ -109,7 +109,7 @@ async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_d
     return category
 
 
-@router.put("/categories/{category_id}", response_model=CategoryResponse)
+@router.put("/{category_id}", response_model=CategoryResponse)
 async def update_category(category_id: int, data: CategoryUpdate, db: AsyncSession = Depends(get_db)):
     """Update a category"""
     result = await db.execute(
@@ -146,7 +146,7 @@ async def update_category(category_id: int, data: CategoryUpdate, db: AsyncSessi
     return category
 
 
-@router.delete("/categories/{category_id}")
+@router.delete("/{category_id}")
 async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
     """Delete a category (or deactivate if in use)"""
     result = await db.execute(
@@ -164,7 +164,7 @@ async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
     return {"status": "deleted", "id": category_id}
 
 
-@router.post("/categories/reorder")
+@router.post("/reorder")
 async def reorder_categories(order: List[int], db: AsyncSession = Depends(get_db)):
     """Reorder categories by providing list of category IDs in desired order"""
     for idx, cat_id in enumerate(order):

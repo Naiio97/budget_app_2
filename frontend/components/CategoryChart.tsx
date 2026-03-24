@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+
 interface CategoryChartProps {
     categories: Record<string, number>;
     currency?: string;
@@ -33,7 +35,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
     const [categoryColors, setCategoryColors] = useState<Record<string, string>>(FALLBACK_COLORS);
 
     useEffect(() => {
-        fetch('/categories')
+        fetch(`${API_BASE}/categories/`)
             .then(res => res.json())
             .then((data: Category[]) => {
                 const colors = data.reduce((acc, cat) => {
