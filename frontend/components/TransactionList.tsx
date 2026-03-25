@@ -106,7 +106,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
         setEditingId(null);
 
         try {
-            const response = await fetch(`/transactions/${txId}/category`, {
+            const response = await fetch(`${API_BASE}/transactions/${txId}/category`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ category: newCategory, learn: true })
