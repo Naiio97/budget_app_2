@@ -1,6 +1,6 @@
 import * as Mocks from './mock-data';
 
-const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'false' || false; // ⚠️ Změň na 'false' pro produkci
+const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true' || true; // ⚠️ Změň na 'false' pro produkci
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
 export interface Account {

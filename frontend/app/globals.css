@@ -80,6 +80,8 @@ body {
   line-height: 1.5;
   overflow-x: hidden;
   overscroll-behavior: none;
+  /* Safe area for notch/dynamic island */
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Animated background */
@@ -755,7 +757,7 @@ select.input {
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
   border-top: 1px solid var(--glass-border-light);
-  padding: var(--spacing-xs) 0;
+  padding: var(--spacing-xs) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   padding-bottom: max(var(--spacing-xs), env(safe-area-inset-bottom));
   z-index: 300;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
