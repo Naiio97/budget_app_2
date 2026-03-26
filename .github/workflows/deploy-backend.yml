@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - main   # Spustí se jen při pushi do main
-    paths:
-      - 'backend/**' # Spustí se jen když změníš něco v backendu
+#   paths:
+#      - 'backend/**' # Spustí se jen když změníš něco v backendu
 
 jobs:
   build-and-deploy:
