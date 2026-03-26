@@ -2,8 +2,10 @@ name: Deploy Backend to Azure
 
 on:
   push:
-    branches: [ main ]  # Spustí se jen při pushi do main
-    paths: [ 'backend/**' ] # Spustí se jen když změníš něco v backendu
+    branches:
+      - main   # Spustí se jen při pushi do main
+    paths:
+      - 'backend/**' # Spustí se jen když změníš něco v backendu
 
 jobs:
   build-and-deploy:
@@ -11,6 +13,25 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # --- TADY JE TEN TEST ---
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8  # Tenhle nástroj zkontroluje chyby v kódu
+
+      - name: Run Linting (Simple Test)
+        run: |
+          cd backend
+          # Zkontroluje jen syntaktické chyby, ignoruje "estetiku"
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics  
 
       - name: Log in to Azure
         uses: azure/login@v2
