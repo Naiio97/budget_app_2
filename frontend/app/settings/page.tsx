@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
@@ -515,10 +516,10 @@ export default function SettingsPage() {
     const [gocardlessId, setGocardlessId] = useState('');
     const [gocardlessKey, setGocardlessKey] = useState('');
     const [trading212Key, setTrading212Key] = useState('');
-    const [saved, setSaved] = useState(false);
+    const [, setSaved] = useState(false);
     const [saving, setSaving] = useState(false);
     const [accounts, setAccounts] = useState<Account[]>([]);
-    const [loadingAccounts, setLoadingAccounts] = useState(true);
+    const [, setLoadingAccounts] = useState(true);
     const [apiKeysLoaded, setApiKeysLoaded] = useState<ApiKeysResponse | null>(null);
 
     // Account Management State
@@ -627,7 +628,7 @@ export default function SettingsPage() {
 
     // ... (rest of the component)
 
-    const getBankLogo = (institution: string | undefined, type: string) => {
+    const getBankLogo = (institution: string | undefined) => {
         if (!institution) return null;
 
         const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -748,7 +749,7 @@ export default function SettingsPage() {
                 if (keys.has_gocardless) {
                     loadBanks();
                 }
-            } catch (err) {
+            } catch {
                 console.log('[Settings] Failed to load settings data');
                 setLoadingAccounts(false);
             }
@@ -760,7 +761,7 @@ export default function SettingsPage() {
 
         init();
         loadCategoryRules();
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleSave = async () => {
         setSaving(true);
@@ -984,9 +985,9 @@ export default function SettingsPage() {
                                             }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flex: 1 }}>
                                                     {(() => {
-                                                        const logoUrl = getBankLogo(account.institution, account.type);
+                                                        const logoUrl = getBankLogo(account.institution);
                                                         return logoUrl ? (
-                                                            <img src={logoUrl} alt={account.name} style={{ width: '32px', height: '32px', objectFit: 'contain', borderRadius: '4px' }} />
+                                                            <Image src={logoUrl} alt={account.name} width={32} height={32} style={{ objectFit: 'contain', borderRadius: '4px' }} />
                                                         ) : (
                                                             <span style={{ fontSize: '1.25rem' }}>{account.type === 'bank' ? '🏦' : '📈'}</span>
                                                         );

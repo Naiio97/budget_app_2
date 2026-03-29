@@ -5,7 +5,7 @@ import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
-import { Transaction, getTransactions, DashboardData, getDashboard } from '@/lib/api';
+import { Transaction, getTransactions, getDashboard } from '@/lib/api';
 
 interface Category {
     id: number;
@@ -124,13 +124,6 @@ export default function TransactionsPage() {
         fetchData();
         return () => { cancelled = true; };
     }, [page, debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
-
-    // On mobile: the displayed transactions are sliced from allTransactions
-    const displayTransactions = isMobile
-        ? allTransactions.slice(0, mobileVisible)
-        : allTransactions;
-
-    const mobileHasMore = isMobile && mobileVisible < allTransactions.length;
 
     // When we finish the current page's items on mobile, load the next API page
     const mobileNeedsMoreFromApi = isMobile && mobileVisible >= allTransactions.length && page < totalPages;

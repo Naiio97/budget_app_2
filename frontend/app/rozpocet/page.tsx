@@ -264,15 +264,6 @@ export default function RozpocetPage() {
         }
     };
 
-    const deleteRecurringExpense = async (id: number) => {
-        try {
-            await fetch(`${API_BASE}/recurring-expenses/${id}`, { method: 'DELETE' });
-            setRecurringExpenses(recurringExpenses.filter(e => e.id !== id));
-        } catch (err) {
-            console.error('Failed to delete expense:', err);
-        }
-    };
-
     const deleteMonthlyExpense = async (expenseId: number, recurringExpenseId: number | null) => {
         const deleteRecurring = recurringExpenseId && confirm('Smazat také šablonu pravidelného výdaje?\n\nANO = smazat ze všech budoucích měsíců\nNE = smazat jen z tohoto měsíce');
 
