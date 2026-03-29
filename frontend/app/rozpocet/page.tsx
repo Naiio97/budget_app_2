@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
-import { getDashboard } from '@/lib/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -92,8 +91,6 @@ interface AnnualData {
 const MONTH_NAMES = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'];
 
 export default function RozpocetPage() {
-    const [accounts, setAccounts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
 
     // Current view
     const now = new Date();
@@ -121,23 +118,17 @@ export default function RozpocetPage() {
 
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
-    // Fetch data
     useEffect(() => {
         async function fetchData() {
-            setLoading(true);
             try {
-                const [dashData, recurringRes, accountsRes] = await Promise.all([
-                    getDashboard(),
+                const [recurringRes, accountsRes] = await Promise.all([
                     fetch(`${API_BASE}/recurring-expenses/`).then(r => r.json()),
                     fetch(`${API_BASE}/manual-accounts/`).then(r => r.json())
                 ]);
-                setAccounts(dashData.accounts);
                 setRecurringExpenses(recurringRes);
                 setManualAccounts(accountsRes);
             } catch (err) {
                 console.error('Failed to load data:', err);
-            } finally {
-                setLoading(false);
             }
         }
         fetchData();
@@ -150,7 +141,7 @@ export default function RozpocetPage() {
         } else {
             fetchAnnualData();
         }
-    }, [yearMonth, viewMode, selectedYear]);
+    }, [yearMonth, viewMode, selectedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const fetchMonthlyBudget = async () => {
         try {

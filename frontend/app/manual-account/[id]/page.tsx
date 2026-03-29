@@ -171,9 +171,6 @@ export default function ManualAccountDetailPage() {
     const borrowedTotal = account.envelopes
         .filter(e => !e.is_mine)
         .reduce((sum, e) => sum + e.amount, 0);
-    const _mineTotal = account.envelopes
-        .filter(e => e.is_mine)
-        .reduce((sum, e) => sum + e.amount, 0);
     const unallocated = account.balance - account.envelopes.reduce((sum, e) => sum + e.amount, 0);
 
     return (

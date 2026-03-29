@@ -8,11 +8,9 @@ import {
     getInvestmentPortfolio,
     getPortfolioHistory,
     getDividends,
-    getDashboard,
     InvestmentPortfolio,
     PortfolioHistory,
-    Dividend,
-    Account
+    Dividend
 } from '@/lib/api';
 import {
     XAxis,
@@ -28,7 +26,6 @@ export default function InvestmentsPage() {
     const [portfolio, setPortfolio] = useState<InvestmentPortfolio | null>(null);
     const [history, setHistory] = useState<PortfolioHistory | null>(null);
     const [dividends, setDividends] = useState<Dividend[]>([]);
-    const [_accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [period, setPeriod] = useState('1M');
@@ -38,16 +35,14 @@ export default function InvestmentsPage() {
             setLoading(true);
             setError(null);
             try {
-                const [portfolioData, historyData, dividendsData, dashboard] = await Promise.all([
+                const [portfolioData, historyData, dividendsData] = await Promise.all([
                     getInvestmentPortfolio(),
                     getPortfolioHistory(period),
-                    getDividends(20),
-                    getDashboard()
+                    getDividends(20)
                 ]);
                 setPortfolio(portfolioData);
                 setHistory(historyData);
                 setDividends(dividendsData.dividends);
-                setAccounts(dashboard.accounts);
             } catch (err) {
                 console.error('Failed to load investments:', err);
                 setError('Nepodařilo se načíst investice');

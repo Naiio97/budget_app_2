@@ -7,7 +7,7 @@ import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import TransactionList from '@/components/TransactionList';
 import StatCard from '@/components/StatCard';
-import { getAccountDetail, AccountDetail, getDashboard, Account } from '@/lib/api';
+import { getAccountDetail, AccountDetail } from '@/lib/api';
 
 export default function AccountDetailPage() {
     const params = useParams();
@@ -15,7 +15,6 @@ export default function AccountDetailPage() {
     const accountId = params.id as string;
 
     const [data, setData] = useState<AccountDetail | null>(null);
-    const [_accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -27,14 +26,10 @@ export default function AccountDetailPage() {
         async function fetchData() {
             setLoading(true);
             try {
-                const [detail, dashboard] = await Promise.all([
-                    getAccountDetail(accountId, page),
-                    getDashboard()
-                ]);
+                const detail = await getAccountDetail(accountId, page);
                 setData(detail);
                 setTotalPages(detail.pages);
                 setTotalItems(detail.total);
-                setAccounts(dashboard.accounts);
             } catch (err) {
                 console.error('Failed to load account:', err);
                 setError('Nepodařilo se načíst účet');
@@ -49,15 +44,6 @@ export default function AccountDetailPage() {
     }, [accountId, page]);
 
     // ... (formatCurrency and formatDate functions remain same) ...
-
-    const formatCurrency = (amount: number, currency: string = 'CZK') => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency,
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
-    };
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('cs-CZ');

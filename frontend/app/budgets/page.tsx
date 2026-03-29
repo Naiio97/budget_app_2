@@ -5,10 +5,9 @@ import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
 import {
-    Budget, SavingsGoal, Account,
-    getBudgets, createBudget, updateBudget, deleteBudget,
-    getGoals, createGoal, updateGoal, deleteGoal,
-    getDashboard
+    Budget, SavingsGoal,
+    getBudgets, createBudget, deleteBudget,
+    getGoals, createGoal, updateGoal, deleteGoal
 } from '@/lib/api';
 
 const CATEGORIES = [
@@ -33,8 +32,6 @@ function getProgressColor(percentage: number): string {
 export default function BudgetsPage() {
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [goals, setGoals] = useState<SavingsGoal[]>([]);
-    const [_accounts, setAccounts] = useState<Account[]>([]);
-    const [_loading, setLoading] = useState(true);
 
     // Forms
     const [showBudgetForm, setShowBudgetForm] = useState(false);
@@ -47,18 +44,14 @@ export default function BudgetsPage() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const [budgetsData, goalsData, dashData] = await Promise.all([
+                const [budgetsData, goalsData] = await Promise.all([
                     getBudgets(),
-                    getGoals(),
-                    getDashboard()
+                    getGoals()
                 ]);
                 setBudgets(budgetsData);
                 setGoals(goalsData);
-                setAccounts(dashData.accounts);
             } catch (err) {
                 console.error('Failed to load data:', err);
-            } finally {
-                setLoading(false);
             }
         }
         fetchData();
