@@ -49,7 +49,7 @@ jobs:
         run: |
           # DŮLEŽITÉ: Tady předáváme adresu backendu do frontendu při buildu
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL=https://budget-api.azurecontainerapps.io \
+            --build-arg NEXT_PUBLIC_API_URL=https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io \
             -t ${{ secrets.AZURE_REGISTRY_SERVER }}/budget-frontend:${{ github.sha }} \
             ./frontend
           
