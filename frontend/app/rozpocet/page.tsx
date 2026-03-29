@@ -122,7 +122,7 @@ export default function RozpocetPage() {
         async function fetchData() {
             try {
                 const [recurringRes, accountsRes] = await Promise.all([
-                    fetch(`${API_BASE}/recurring-expenses/`).then(r => r.json()),
+                    fetch(`${API_BASE}/recurring-expenses`).then(r => r.json()),
                     fetch(`${API_BASE}/manual-accounts/`).then(r => r.json())
                 ]);
                 setRecurringExpenses(recurringRes);
