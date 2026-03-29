@@ -1,7 +1,7 @@
 import {
     Account, Transaction, DashboardData, BalanceHistory, Portfolio,
-    NetWorthHistory, SyncStatus, ApiKeysResponse, AccountDetail,
-    InvestmentPortfolio, PortfolioHistory, Dividend, Budget, BudgetOverview,
+    NetWorthHistory, SyncStatus, ApiKeysResponse,
+    InvestmentPortfolio, Budget, BudgetOverview,
     SavingsGoal, PaginatedResponse
 } from './api';
 

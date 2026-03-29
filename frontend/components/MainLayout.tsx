@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect } from 'react';
 import { syncData } from '@/lib/api';
@@ -18,7 +19,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const { accounts, loading, refreshAccounts } = useAccounts();
+    const { accounts, refreshAccounts } = useAccounts();
 
     // All navigation items
     const navItems = [
@@ -125,7 +126,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                         >
                             {logoUrl ? (
                                 <div className="account-icon" style={{ background: 'white', overflow: 'hidden', padding: '4px' }}>
-                                    <img src={logoUrl} alt={account.institution || account.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <Image src={logoUrl} alt={account.institution || account.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                 </div>
                             ) : (
                                 <div className={`account-icon ${account.type}`}>

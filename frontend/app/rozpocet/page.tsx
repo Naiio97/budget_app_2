@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
@@ -134,24 +134,16 @@ export default function RozpocetPage() {
         fetchData();
     }, []);
 
-    // Fetch monthly budget
-    useEffect(() => {
-        if (viewMode === 'month') {
-            fetchMonthlyBudget();
-        } else {
-            fetchAnnualData();
-        }
-    }, [yearMonth, viewMode, selectedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const fetchMonthlyBudget = async () => {
+    const fetchMonthlyBudget = useCallback(async () => {
         try {
             const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}`);
             const data = await res.json();
-            setBudget(data);
+            setBudget(data); // Toto setState už je asynchronní (po await), to je v pořádku.
         } catch (err) {
-            console.error('Failed to load budget:', err);
+            console.error(err);
         }
-    };
+    }, [yearMonth]);
 
     const fetchAnnualData = async () => {
         try {
@@ -162,6 +154,23 @@ export default function RozpocetPage() {
             console.error('Failed to load annual data:', err);
         }
     };
+
+    // Fetch monthly budget
+    useEffect(() => {
+        let isMounted = true; // Prevence race conditions
+
+        const loadData = async () => {
+            if (viewMode === 'month') {
+                await fetchMonthlyBudget();
+            } else {
+                await fetchAnnualData();
+            }
+        };
+
+        loadData();
+
+        return () => { isMounted = false; };
+    }, [viewMode, yearMonth, selectedYear, fetchMonthlyBudget]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {

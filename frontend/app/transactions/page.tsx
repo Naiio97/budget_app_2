@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
@@ -125,20 +125,6 @@ export default function TransactionsPage() {
         return () => { cancelled = true; };
     }, [page, debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
 
-    // When we finish the current page's items on mobile, load the next API page
-    const mobileNeedsMoreFromApi = isMobile && mobileVisible >= allTransactions.length && page < totalPages;
-
-    // Mobile: show more items or fetch next page
-    const showMoreMobile = useCallback(() => {
-        if (mobileVisible < allTransactions.length) {
-            // Show 10 more from already fetched items
-            setMobileVisible(prev => Math.min(prev + 10, allTransactions.length));
-        } else if (page < totalPages) {
-            // Need to fetch next page from API
-            setPage(prev => prev + 1);
-        }
-    }, [mobileVisible, allTransactions.length, page, totalPages]);
-
     // When new page of transactions is loaded, append to allTransactions
     // (We need a special handler since the effect above replaces allTransactions)
     // Actually, let's use a different approach: accumulate on mobile
@@ -201,7 +187,7 @@ export default function TransactionsPage() {
             .then(res => res.json())
             .then(data => setCategories(Array.isArray(data) ? data : []))
             .catch(err => console.error('Failed to load categories:', err));
-    }, []);
+    }, [API_BASE]);
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
