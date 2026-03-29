@@ -5,7 +5,8 @@ on:
     branches:
       - main   # Spustí se jen při pushi do main
 #   paths:
-      - 'backend/**' # Spustí se jen když změníš něco v backendu
+      - 'backend/**'  # Spustí se jen pokud se změní něco v backendu
+  workflow_dispatch: # Přidá tlačítko pro manuální spuštění v GitHubu
 
 jobs:
   build-and-deploy:
