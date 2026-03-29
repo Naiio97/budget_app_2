@@ -11,7 +11,8 @@ import {
     getDashboard,
     InvestmentPortfolio,
     PortfolioHistory,
-    Dividend
+    Dividend,
+    Account
 } from '@/lib/api';
 import {
     XAxis,
@@ -27,7 +28,7 @@ export default function InvestmentsPage() {
     const [portfolio, setPortfolio] = useState<InvestmentPortfolio | null>(null);
     const [history, setHistory] = useState<PortfolioHistory | null>(null);
     const [dividends, setDividends] = useState<Dividend[]>([]);
-    const [accounts, setAccounts] = useState<any[]>([]);
+    const [_accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [period, setPeriod] = useState('1M');

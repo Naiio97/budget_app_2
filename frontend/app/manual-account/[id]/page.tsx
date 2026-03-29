@@ -46,7 +46,7 @@ export default function ManualAccountDetailPage() {
     const [accountNumber, setAccountNumber] = useState('');
     useEffect(() => {
         loadAccount();
-    }, [accountId]);
+    }, [accountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const loadAccount = async () => {
         try {
@@ -171,7 +171,7 @@ export default function ManualAccountDetailPage() {
     const borrowedTotal = account.envelopes
         .filter(e => !e.is_mine)
         .reduce((sum, e) => sum + e.amount, 0);
-    const mineTotal = account.envelopes
+    const _mineTotal = account.envelopes
         .filter(e => e.is_mine)
         .reduce((sum, e) => sum + e.amount, 0);
     const unallocated = account.balance - account.envelopes.reduce((sum, e) => sum + e.amount, 0);

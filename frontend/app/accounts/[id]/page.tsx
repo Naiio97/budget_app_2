@@ -7,7 +7,7 @@ import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import TransactionList from '@/components/TransactionList';
 import StatCard from '@/components/StatCard';
-import { getAccountDetail, AccountDetail, getDashboard } from '@/lib/api';
+import { getAccountDetail, AccountDetail, getDashboard, Account } from '@/lib/api';
 
 export default function AccountDetailPage() {
     const params = useParams();
@@ -15,7 +15,7 @@ export default function AccountDetailPage() {
     const accountId = params.id as string;
 
     const [data, setData] = useState<AccountDetail | null>(null);
-    const [accounts, setAccounts] = useState<any[]>([]);
+    const [_accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 

@@ -70,25 +70,25 @@ async function fetchApi<T>(endpoint: string): Promise<T> {
         console.log('[MOCK API] GET', endpoint);
         await new Promise(r => setTimeout(r, 400)); // Simulace zpoždění sítě
 
-        if (endpoint.startsWith('/dashboard/balance-history')) return Mocks.MOCK_BALANCE_HISTORY as any;
-        if (endpoint.startsWith('/dashboard/net-worth-history')) return Mocks.MOCK_NET_WORTH as any;
-        if (endpoint.startsWith('/dashboard/portfolio')) return Mocks.MOCK_PORTFOLIO as any;
-        if (endpoint.startsWith('/dashboard/')) return Mocks.MOCK_DASHBOARD as any;
-        if (endpoint.startsWith('/accounts/institutions')) return { institutions: [] } as any;
+        if (endpoint.startsWith('/dashboard/balance-history')) return Mocks.MOCK_BALANCE_HISTORY as unknown as T;
+        if (endpoint.startsWith('/dashboard/net-worth-history')) return Mocks.MOCK_NET_WORTH as unknown as T;
+        if (endpoint.startsWith('/dashboard/portfolio')) return Mocks.MOCK_PORTFOLIO as unknown as T;
+        if (endpoint.startsWith('/dashboard/')) return Mocks.MOCK_DASHBOARD as unknown as T;
+        if (endpoint.startsWith('/accounts/institutions')) return { institutions: [] } as unknown as T;
         if (endpoint.startsWith('/accounts/') && endpoint.includes('/detail')) return {
             account: Mocks.MOCK_ACCOUNTS[0], transactions: Mocks.MOCK_TRANSACTIONS.items, total: 20, pages: 1, current_page: 1
-        } as any;
-        if (endpoint.startsWith('/accounts/')) return Mocks.MOCK_ACCOUNTS as any;
-        if (endpoint.startsWith('/transactions/')) return Mocks.MOCK_TRANSACTIONS as any;
-        if (endpoint.startsWith('/investments/portfolio')) return Mocks.MOCK_INVESTMENT_PORTFOLIO as any;
-        if (endpoint.startsWith('/investments/history')) return { history: [], currency: 'CZK' } as any;
-        if (endpoint.startsWith('/investments/dividends')) return { dividends: [] } as any;
-        if (endpoint.startsWith('/budgets/overview')) return Mocks.MOCK_BUDGET_OVERVIEW as any;
-        if (endpoint.startsWith('/budgets/goals')) return Mocks.MOCK_GOALS as any;
-        if (endpoint.startsWith('/budgets/')) return Mocks.MOCK_BUDGETS as any;
-        if (endpoint.startsWith('/sync/status')) return Mocks.MOCK_SYNC_STATUS as any;
-        if (endpoint.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 } as any;
-        if (endpoint.startsWith('/settings/api-keys')) return Mocks.MOCK_API_KEYS as any;
+        } as unknown as T;
+        if (endpoint.startsWith('/accounts/')) return Mocks.MOCK_ACCOUNTS as unknown as T;
+        if (endpoint.startsWith('/transactions/')) return Mocks.MOCK_TRANSACTIONS as unknown as T;
+        if (endpoint.startsWith('/investments/portfolio')) return Mocks.MOCK_INVESTMENT_PORTFOLIO as unknown as T;
+        if (endpoint.startsWith('/investments/history')) return { history: [], currency: 'CZK' } as unknown as T;
+        if (endpoint.startsWith('/investments/dividends')) return { dividends: [] } as unknown as T;
+        if (endpoint.startsWith('/budgets/overview')) return Mocks.MOCK_BUDGET_OVERVIEW as unknown as T;
+        if (endpoint.startsWith('/budgets/goals')) return Mocks.MOCK_GOALS as unknown as T;
+        if (endpoint.startsWith('/budgets/')) return Mocks.MOCK_BUDGETS as unknown as T;
+        if (endpoint.startsWith('/sync/status')) return Mocks.MOCK_SYNC_STATUS as unknown as T;
+        if (endpoint.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 } as unknown as T;
+        if (endpoint.startsWith('/settings/api-keys')) return Mocks.MOCK_API_KEYS as unknown as T;
 
         console.warn('[MOCK API] Unknown generic endpoint', endpoint);
     }
@@ -162,8 +162,14 @@ export async function getNetWorthHistory(days: number = 30): Promise<NetWorthHis
     return fetchApi<NetWorthHistory>(`/dashboard/net-worth-history?days=${days}`);
 }
 
-export async function getInstitutions(country: string = 'CZ'): Promise<{ institutions: any[] }> {
-    return fetchApi<{ institutions: any[] }>(`/accounts/institutions?country=${country}`);
+export interface Institution {
+    id: string;
+    name: string;
+    logo?: string;
+}
+
+export async function getInstitutions(country: string = 'CZ'): Promise<{ institutions: Institution[] }> {
+    return fetchApi<{ institutions: Institution[] }>(`/accounts/institutions?country=${country}`);
 }
 
 export async function connectBank(institutionId: string, redirectUrl: string): Promise<{ link: string; requisition_id: string }> {

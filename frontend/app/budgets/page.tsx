@@ -5,7 +5,7 @@ import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
 import {
-    Budget, SavingsGoal,
+    Budget, SavingsGoal, Account,
     getBudgets, createBudget, updateBudget, deleteBudget,
     getGoals, createGoal, updateGoal, deleteGoal,
     getDashboard
@@ -33,8 +33,8 @@ function getProgressColor(percentage: number): string {
 export default function BudgetsPage() {
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [goals, setGoals] = useState<SavingsGoal[]>([]);
-    const [accounts, setAccounts] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [_accounts, setAccounts] = useState<Account[]>([]);
+    const [_loading, setLoading] = useState(true);
 
     // Forms
     const [showBudgetForm, setShowBudgetForm] = useState(false);

@@ -7,7 +7,7 @@ import TransactionList from '@/components/TransactionList';
 import CategoryChart from '@/components/CategoryChart';
 import NetWorthChart from '@/components/NetWorthChart';
 import GlassCard from '@/components/GlassCard';
-import { DashboardData, getDashboard, Transaction, BudgetOverview, getBudgetOverview } from '@/lib/api';
+import { DashboardData, getDashboard, BudgetOverview, getBudgetOverview } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 
 export default function DashboardPage() {
