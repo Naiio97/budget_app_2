@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main   # Spustí se jen při pushi do main
-#   paths:
+    paths:
       - 'backend/**'  # Spustí se jen pokud se změní něco v backendu
   workflow_dispatch: # Přidá tlačítko pro manuální spuštění v GitHubu
 
@@ -57,3 +57,5 @@ jobs:
           containerAppName: budget-api
           resourceGroup: budget-app-rg
           imageToDeploy: ${{ secrets.AZURE_REGISTRY_SERVER }}/budget-backend:${{ github.sha }}
+          targetPort: 8000
+          ingress: external
