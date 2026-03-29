@@ -31,7 +31,7 @@ jobs:
         run: |
           cd frontend
           # Tohle ověří, že v JS/TS nemáš boty, než začneš buildovat
-          npm run lint || echo "Linting failed, but continuing..." 
+          npm run lint
 
       - name: Log in to Azure
         uses: azure/login@v2

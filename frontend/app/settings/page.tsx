@@ -1451,7 +1451,7 @@ export default function SettingsPage() {
                                         }}>
                                             <div>
                                                 <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>
-                                                    "{rule.pattern}" → {rule.category}
+                                                    '{rule.pattern}' → {rule.category}
                                                 </div>
                                                 <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
                                                     {rule.is_user_defined ? '👤 Vlastní pravidlo' : '🤖 Naučené'} • {rule.match_count}× použito
