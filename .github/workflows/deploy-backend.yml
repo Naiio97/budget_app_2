@@ -1,4 +1,4 @@
-name: Deploy Backend to Azure
+name: Deploy Backend to Azure #Jméno workflow. Zobrazí se v záložce Actions na GitHubu. Jen kosmetika
 
 on:
   push:
@@ -9,53 +9,35 @@ on:
   workflow_dispatch: # Přidá tlačítko pro manuální spuštění v GitHubu
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  build-and-deploy: #Říká, na jakém stroji pipeline poběží.
+    runs-on: ubuntu-latest #= virtuální Ubuntu mašina na serverech GitHubu. Standard. Nic řešit.
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 #Stáhne kód z repozitáře na ten virtuální stroj.
 
-      # --- TADY JE TEN TEST ---
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Log in to Azure #Přihlášení k Azure
+        uses: azure/login@v2 #Používá akci "login" verze 2 od Azure
         with:
-          python-version: '3.12'
+          creds: ${{ secrets.AZURE_CREDENTIALS }} #Přihlašovací údaje k Azure, užene do v Github secrets, šifrované!
 
-      - name: Install dependencies
-        run: |
-          cd backend
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install flake8  # Tenhle nástroj zkontroluje chyby v kódu
-
-      - name: Run Linting (Simple Test)
-        run: |
-          cd backend
-          # Zkontroluje jen syntaktické chyby, ignoruje "estetiku"
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics  
-
-      - name: Log in to Azure
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Log in to ACR
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ secrets.AZURE_REGISTRY_SERVER }}
+      - name: Log in to ACR #Přihlásí se do Azure Container Registry (ACR) — to je soukromý Docker Hub na Azure, kde budeš ukládat Docker image.
+        uses: azure/docker-login@v1 #Používá akci "docker-login" verze 1 od Azure
+        with: #Přihlašovací údaje k Azure Container Registry, užene do v Github secrets, šifrované!
+          login-server: ${{ secrets.AZURE_REGISTRY_SERVER }} 
           username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
           password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image #Sestaví Docker image z tvého backendu a nahraje ho do ACR. 
+        #Všimni si tagu ${{ github.sha }} — každý build dostane unikátní tag podle hash commitu. Takže vždy víš, jaký kód je kde deployovaný. Tohle je správná praxe.
         run: |
           docker build -t ${{ secrets.AZURE_REGISTRY_SERVER }}/budget-backend:${{ github.sha }} ./backend
           docker push ${{ secrets.AZURE_REGISTRY_SERVER }}/budget-backend:${{ github.sha }}
 
-      - name: Deploy to Azure Container App
-        uses: azure/container-apps-deploy-action@v1
-        with:
-          containerAppName: budget-api
-          resourceGroup: budget-app-rg
-          imageToDeploy: ${{ secrets.AZURE_REGISTRY_SERVER }}/budget-backend:${{ github.sha }}
-          targetPort: 8000
-          ingress: external
+      - name: Deploy to Azure Container App #Nasadí novou verzi do Azure Container App. 
+        uses: azure/container-apps-deploy-action@v1 #Používá akci "container-apps-deploy-action" verze 1 od Azure
+        with: 
+          containerAppName: budget-api #Jméno tvé Container App v Azure.
+          resourceGroup: budget-app-rg #Jméno resource groupu v Azure.
+          imageToDeploy: ${{ secrets.AZURE_REGISTRY_SERVER }}/budget-backend:${{ github.sha }} #Image, který se má nasadit.
+          targetPort: 8000 #Port, na kterém běží aplikace uvnitř kontejneru.
+          ingress: external #Povolí externí přístup k aplikaci.

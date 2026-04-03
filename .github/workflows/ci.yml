@@ -1,0 +1,35 @@
+name: Test Backend to Azure 
+
+on:
+  pull_request:
+    branches:
+      - main   # Spustí se jen při pushi do main
+    paths:
+      - 'backend/**'  # Spustí se jen pokud se změní něco v backendu
+
+jobs:
+  build-and-deploy: #Říká, na jakém stroji pipeline poběží.
+    runs-on: ubuntu-latest #= virtuální Ubuntu mašina na serverech GitHubu. Standard. Nic řešit.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 #Stáhne kód z repozitáře na ten virtuální stroj.
+
+      # --- TADY JE TEN TEST ---
+      - name: Set up Python #Nastaví verzi Pythonu.
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies #Nastaví Python 3.12 a nainstaluje závislosti z requirements.txt. Pak ještě nainstaluje flake8
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8
+
+      - name: Run Linting (Simple Test) #Spustí kontrolu kódu.
+        #Tohle je ten "test". Flake8 je linter — kontroluje kód na chyby. Ale pozor: tenhle příkaz kontroluje jen syntaktické chyby a nedefinované proměnné (kódy E9, F63, F7, F82).
+        #Nekontroluje logiku, netestuje funkčnost. Je to minimum, ale lepší než nic — zachytí situace, kdy bys deployoval kód, který se ani nespustí.
+        run: |
+          cd backend
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics  
