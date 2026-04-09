@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import {
@@ -51,15 +52,23 @@ const FALLBACK_COLORS: Record<string, string> = {
 };
 
 export default function ReportsPage() {
-    const [report, setReport] = useState<MonthlyReport | null>(null);
-    const [loading, setLoading] = useState(true);
     const [months, setMonths] = useState(6);
-    const [categoryColors, setCategoryColors] = useState<Record<string, string>>(FALLBACK_COLORS);
-    const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
+    const { data: report, isLoading: loading } = useQuery<MonthlyReport>({
+        queryKey: ['monthly-report', months],
+        queryFn: () =>
+            fetch(`${API_BASE}/dashboard/monthly-report?months=${months}`).then(r => r.json()),
+    });
+
+    const { data: categoriesData } = useQuery<Category[]>({
+        queryKey: ['categories'],
+        queryFn: () => fetch(`${API_BASE}/categories/`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const categoryColors: Record<string, string> = categoriesData
+        ? categoriesData.reduce((acc, cat) => { acc[cat.name] = cat.color; return acc; }, { ...FALLBACK_COLORS } as Record<string, string>)
+        : FALLBACK_COLORS;
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -75,35 +84,6 @@ export default function ReportsPage() {
         const date = new Date(parseInt(year), parseInt(month) - 1);
         return date.toLocaleDateString('cs-CZ', { month: 'short', year: '2-digit' });
     };
-
-    // Load category colors
-    useEffect(() => {
-        fetch(`${API_BASE}/categories/`)
-            .then(res => res.json())
-            .then((data: Category[]) => {
-                const safeData = Array.isArray(data) ? data : [];
-                const colors = safeData.reduce((acc, cat) => {
-                    acc[cat.name] = cat.color;
-                    return acc;
-                }, { ...FALLBACK_COLORS } as Record<string, string>);
-                setCategoryColors(colors);
-            })
-            .catch(err => console.error('Failed to load categories:', err));
-    }, []);
-
-    useEffect(() => {
-        async function fetchData() {
-            try {
-                const reportData = await fetch(`${API_BASE}/dashboard/monthly-report?months=${months}`).then(r => r.json());
-                setReport(reportData);
-            } catch (err) {
-                console.error('Failed to load report:', err);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchData();
-    }, [months]);
 
     // Prepare category data per month for stacked chart
     const prepareCategoryData = () => {
@@ -124,7 +104,7 @@ export default function ReportsPage() {
         }));
     };
 
-    if (!mounted || loading) {
+    if (loading) {
         return (
             <MainLayout>
                 <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)' }}>

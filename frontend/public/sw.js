@@ -1,4 +1,4 @@
-const CACHE_NAME = 'budget-tracker-v1';
+const CACHE_NAME = 'budget-tracker-v2';
 const OFFLINE_URL = '/offline.html';
 
 // Static assets to pre-cache on install
@@ -41,6 +41,9 @@ self.addEventListener('fetch', (event) => {
 
     // Skip non-GET requests
     if (request.method !== 'GET') return;
+
+    // Skip cross-origin requests (external API) - let browser handle them directly
+    if (url.origin !== self.location.origin) return;
 
     // API requests: network-first
     if (url.pathname.startsWith('/api')) {

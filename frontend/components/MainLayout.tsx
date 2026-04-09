@@ -4,9 +4,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { syncData } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -19,7 +21,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const { accounts, refreshAccounts } = useAccounts();
+    const { accounts } = useAccounts();
+    const queryClient = useQueryClient();
 
     // All navigation items
     const navItems = [
@@ -59,8 +62,13 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         setIsSyncing(true);
         try {
             await syncData();
-            // Refresh accounts in context without full page reload
-            await refreshAccounts();
+            // Invalidate všechna relevantní data najednou
+            await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+            queryClient.invalidateQueries({ queryKey: queryKeys.budgetOverview });
+            queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
+            queryClient.invalidateQueries({ queryKey: queryKeys.investmentPortfolio });
+            queryClient.invalidateQueries({ queryKey: queryKeys.dividends });
+            queryClient.invalidateQueries({ queryKey: ['transactions'] });
         } catch (error) {
             console.error('Sync failed:', error);
             alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
@@ -126,7 +134,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                         >
                             {logoUrl ? (
                                 <div className="account-icon" style={{ background: 'white', overflow: 'hidden', padding: '4px' }}>
-                                    <Image src={logoUrl} alt={account.institution || account.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <Image src={logoUrl} alt={account.institution || account.name} width={40} height={40} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                                 </div>
                             ) : (
                                 <div className={`account-icon ${account.type}`}>

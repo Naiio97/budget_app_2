@@ -1,47 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import TransactionList from '@/components/TransactionList';
 import StatCard from '@/components/StatCard';
 import { getAccountDetail, AccountDetail } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 
 export default function AccountDetailPage() {
     const params = useParams();
     const router = useRouter();
     const accountId = params.id as string;
-
-    const [data, setData] = useState<AccountDetail | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalItems, setTotalItems] = useState(0);
 
-    useEffect(() => {
-        async function fetchData() {
-            setLoading(true);
-            try {
-                const detail = await getAccountDetail(accountId, page);
-                setData(detail);
-                setTotalPages(detail.pages);
-                setTotalItems(detail.total);
-            } catch (err) {
-                console.error('Failed to load account:', err);
-                setError('Nepodařilo se načíst účet');
-            } finally {
-                setLoading(false);
-            }
-        }
+    const { data, isLoading: loading, isError } = useQuery<AccountDetail>({
+        queryKey: queryKeys.accountDetail(accountId, page),
+        queryFn: () => getAccountDetail(accountId, page),
+        enabled: !!accountId,
+    });
 
-        if (accountId) {
-            fetchData();
-        }
-    }, [accountId, page]);
+    const error = isError ? 'Nepodařilo se načíst účet' : null;
+    const totalPages = data?.pages || 1;
+    const totalItems = data?.total || 0;
 
     // ... (formatCurrency and formatDate functions remain same) ...
 

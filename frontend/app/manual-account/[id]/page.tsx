@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
-import { useAccounts } from '@/contexts/AccountsContext';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface Envelope {
     id: number;
@@ -30,10 +31,8 @@ export default function ManualAccountDetailPage() {
     const params = useParams();
     const router = useRouter();
     const accountId = params.id as string;
-    const { refreshAccounts } = useAccounts();
+    const queryClient = useQueryClient();
 
-    const [account, setAccount] = useState<ManualAccount | null>(null);
-    const [loading, setLoading] = useState(true);
     const [editingBalance, setEditingBalance] = useState(false);
     const [balance, setBalance] = useState(0);
     const [editingName, setEditingName] = useState(false);
@@ -44,25 +43,25 @@ export default function ManualAccountDetailPage() {
     const [editEnvelopeData, setEditEnvelopeData] = useState<{ name: string; amount: number; is_mine: boolean; note: string }>({ name: '', amount: 0, is_mine: false, note: '' });
     const [editingAccountNumber, setEditingAccountNumber] = useState(false);
     const [accountNumber, setAccountNumber] = useState('');
-    useEffect(() => {
-        loadAccount();
-    }, [accountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const loadAccount = async () => {
-        try {
-            const res = await fetch(`${API_BASE}/manual-accounts/${accountId}`);
-            if (res.ok) {
-                const data = await res.json();
-                setAccount(data);
-                setBalance(data.balance);
-                setAccountNumber(data.account_number || '');
-            }
-        } catch (err) {
-            console.error('Failed to load account:', err);
-        } finally {
-            setLoading(false);
-        }
+    const invalidate = () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.manualAccount(accountId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard }); // sidebar
     };
+
+    const { data: account, isLoading: loading } = useQuery<ManualAccount>({
+        queryKey: queryKeys.manualAccount(accountId),
+        queryFn: async () => {
+            const res = await fetch(`${API_BASE}/manual-accounts/${accountId}`);
+            if (!res.ok) throw new Error('Failed to load account');
+            const data = await res.json();
+            // sync local input states on first load
+            setBalance(data.balance);
+            setAccountNumber(data.account_number || '');
+            return data;
+        },
+        enabled: !!accountId,
+    });
 
     const updateBalance = async () => {
         try {
@@ -72,8 +71,7 @@ export default function ManualAccountDetailPage() {
                 body: JSON.stringify({ balance })
             });
             setEditingBalance(false);
-            loadAccount();
-            refreshAccounts(); // Update sidebar instantly
+            invalidate();
         } catch (err) {
             console.error('Failed to update balance:', err);
         }
@@ -89,7 +87,7 @@ export default function ManualAccountDetailPage() {
             });
             setNewEnvelope({ name: '', amount: 0, is_mine: false, note: '' });
             setShowAddEnvelope(false);
-            loadAccount();
+            invalidate();
         } catch (err) {
             console.error('Failed to add envelope:', err);
         }
@@ -103,7 +101,7 @@ export default function ManualAccountDetailPage() {
                 body: JSON.stringify(data)
             });
             setEditingEnvelope(null);
-            loadAccount();
+            invalidate();
         } catch (err) {
             console.error('Failed to update envelope:', err);
         }
@@ -130,7 +128,7 @@ export default function ManualAccountDetailPage() {
             await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
                 method: 'DELETE'
             });
-            loadAccount();
+            invalidate();
         } catch (err) {
             console.error('Failed to delete envelope:', err);
         }
@@ -194,8 +192,7 @@ export default function ManualAccountDetailPage() {
                                     body: JSON.stringify({ name: accountName })
                                 });
                                 setEditingName(false);
-                                loadAccount();
-                                refreshAccounts();
+                                invalidate();
                             }} style={{ padding: '4px 12px' }}>✓</button>
                             <button className="btn" onClick={() => setEditingName(false)} style={{ padding: '4px 12px' }}>✕</button>
                         </div>
@@ -270,7 +267,7 @@ export default function ManualAccountDetailPage() {
                             <button className="btn btn-primary" onClick={async () => {
                                 await fetch(`${API_BASE}/manual-accounts/${accountId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_number: accountNumber }) });
                                 setEditingAccountNumber(false);
-                                loadAccount();
+                                invalidate();
                             }} style={{ padding: '4px 8px' }}>✓</button>
                             <button className="btn" onClick={() => setEditingAccountNumber(false)} style={{ padding: '4px 8px' }}>✕</button>
                         </div>

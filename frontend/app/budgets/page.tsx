@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
@@ -9,6 +10,7 @@ import {
     getBudgets, createBudget, deleteBudget,
     getGoals, createGoal, updateGoal, deleteGoal
 } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 
 const CATEGORIES = [
     { value: 'Food', label: '🍕 Jídlo', icon: '🍕' },
@@ -30,8 +32,7 @@ function getProgressColor(percentage: number): string {
 }
 
 export default function BudgetsPage() {
-    const [budgets, setBudgets] = useState<Budget[]>([]);
-    const [goals, setGoals] = useState<SavingsGoal[]>([]);
+    const queryClient = useQueryClient();
 
     // Forms
     const [showBudgetForm, setShowBudgetForm] = useState(false);
@@ -41,21 +42,81 @@ export default function BudgetsPage() {
     const [addAmountGoalId, setAddAmountGoalId] = useState<number | null>(null);
     const [addAmount, setAddAmount] = useState('');
 
-    useEffect(() => {
-        async function fetchData() {
-            try {
-                const [budgetsData, goalsData] = await Promise.all([
-                    getBudgets(),
-                    getGoals()
-                ]);
-                setBudgets(budgetsData);
-                setGoals(goalsData);
-            } catch (err) {
-                console.error('Failed to load data:', err);
-            }
-        }
-        fetchData();
-    }, []);
+    // Queries
+    const { data: budgets = [] } = useQuery<Budget[]>({
+        queryKey: queryKeys.budgets,
+        queryFn: getBudgets,
+    });
+
+    const { data: goals = [] } = useQuery<SavingsGoal[]>({
+        queryKey: queryKeys.goals,
+        queryFn: getGoals,
+    });
+
+    const invalidateBudgets = () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
+        queryClient.invalidateQueries({ queryKey: queryKeys.budgetOverview });
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+    };
+
+    // Mutations
+    const createBudgetMutation = useMutation({
+        mutationFn: (data: { category: string; amount: number }) => createBudget(data),
+        onSuccess: () => {
+            invalidateBudgets();
+            setNewBudget({ category: '', amount: '' });
+            setShowBudgetForm(false);
+        },
+    });
+
+    const deleteBudgetMutation = useMutation({
+        mutationFn: (id: number) => deleteBudget(id),
+        onSuccess: invalidateBudgets,
+    });
+
+    const createGoalMutation = useMutation({
+        mutationFn: (data: { name: string; target_amount: number; deadline?: string }) => createGoal(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.goals });
+            setNewGoal({ name: '', target_amount: '', deadline: '' });
+            setShowGoalForm(false);
+        },
+    });
+
+    const addToGoalMutation = useMutation({
+        mutationFn: ({ goalId, amount }: { goalId: number; amount: number }) =>
+            updateGoal(goalId, { add_amount: amount }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.goals });
+            setAddAmountGoalId(null);
+            setAddAmount('');
+        },
+    });
+
+    const deleteGoalMutation = useMutation({
+        mutationFn: (id: number) => deleteGoal(id),
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.goals }),
+    });
+
+    // Handlers
+    const handleCreateBudget = () => {
+        if (!newBudget.category || !newBudget.amount) return;
+        createBudgetMutation.mutate({ category: newBudget.category, amount: parseFloat(newBudget.amount) });
+    };
+
+    const handleCreateGoal = () => {
+        if (!newGoal.name || !newGoal.target_amount) return;
+        createGoalMutation.mutate({
+            name: newGoal.name,
+            target_amount: parseFloat(newGoal.target_amount),
+            deadline: newGoal.deadline || undefined,
+        });
+    };
+
+    const handleAddToGoal = (goalId: number) => {
+        if (!addAmount) return;
+        addToGoalMutation.mutate({ goalId, amount: parseFloat(addAmount) });
+    };
 
     const formatCurrency = (amount: number, currency: string = 'CZK') => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -69,70 +130,6 @@ export default function BudgetsPage() {
     const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
     const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
     const totalPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
-
-    // Handlers
-    const handleCreateBudget = async () => {
-        if (!newBudget.category || !newBudget.amount) return;
-        try {
-            const created = await createBudget({
-                category: newBudget.category,
-                amount: parseFloat(newBudget.amount)
-            });
-            setBudgets([...budgets, created]);
-            setNewBudget({ category: '', amount: '' });
-            setShowBudgetForm(false);
-        } catch (err) {
-            console.error('Failed to create budget:', err);
-        }
-    };
-
-    const handleDeleteBudget = async (id: number) => {
-        try {
-            await deleteBudget(id);
-            setBudgets(budgets.filter(b => b.id !== id));
-        } catch (err) {
-            console.error('Failed to delete budget:', err);
-        }
-    };
-
-    const handleCreateGoal = async () => {
-        if (!newGoal.name || !newGoal.target_amount) return;
-        try {
-            const created = await createGoal({
-                name: newGoal.name,
-                target_amount: parseFloat(newGoal.target_amount),
-                deadline: newGoal.deadline || undefined
-            });
-            setGoals([...goals, created]);
-            setNewGoal({ name: '', target_amount: '', deadline: '' });
-            setShowGoalForm(false);
-        } catch (err) {
-            console.error('Failed to create goal:', err);
-        }
-    };
-
-    const handleAddToGoal = async (goalId: number) => {
-        if (!addAmount) return;
-        try {
-            const updated = await updateGoal(goalId, {
-                add_amount: parseFloat(addAmount)
-            });
-            setGoals(goals.map(g => g.id === goalId ? updated : g));
-            setAddAmountGoalId(null);
-            setAddAmount('');
-        } catch (err) {
-            console.error('Failed to add to goal:', err);
-        }
-    };
-
-    const handleDeleteGoal = async (id: number) => {
-        try {
-            await deleteGoal(id);
-            setGoals(goals.filter(g => g.id !== id));
-        } catch (err) {
-            console.error('Failed to delete goal:', err);
-        }
-    };
 
     const now = new Date();
     const monthName = now.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
@@ -219,7 +216,7 @@ export default function BudgetsPage() {
                                 onChange={(e) => setNewBudget({ ...newBudget, amount: e.target.value })}
                                 style={{ width: '150px' }}
                             />
-                            <button className="btn btn-primary" onClick={handleCreateBudget}>
+                            <button className="btn btn-primary" onClick={handleCreateBudget} disabled={createBudgetMutation.isPending}>
                                 Uložit
                             </button>
                             <button className="btn" onClick={() => setShowBudgetForm(false)}>
@@ -248,7 +245,7 @@ export default function BudgetsPage() {
                                                 {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
                                             </span>
                                             <button
-                                                onClick={() => handleDeleteBudget(budget.id)}
+                                                onClick={() => deleteBudgetMutation.mutate(budget.id)}
                                                 style={{
                                                     background: 'transparent',
                                                     border: 'none',
@@ -342,7 +339,7 @@ export default function BudgetsPage() {
                                 onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
                                 style={{ width: '160px' }}
                             />
-                            <button className="btn btn-primary" onClick={handleCreateGoal}>
+                            <button className="btn btn-primary" onClick={handleCreateGoal} disabled={createGoalMutation.isPending}>
                                 Uložit
                             </button>
                             <button className="btn" onClick={() => setShowGoalForm(false)}>
@@ -386,7 +383,7 @@ export default function BudgetsPage() {
                                                 </button>
                                             )}
                                             <button
-                                                onClick={() => handleDeleteGoal(goal.id)}
+                                                onClick={() => deleteGoalMutation.mutate(goal.id)}
                                                 style={{
                                                     background: 'transparent',
                                                     border: 'none',
@@ -422,6 +419,7 @@ export default function BudgetsPage() {
                                             <button
                                                 className="btn btn-primary"
                                                 onClick={() => handleAddToGoal(goal.id)}
+                                                disabled={addToGoalMutation.isPending}
                                                 style={{ padding: '6px 12px' }}
                                             >
                                                 Přidat
