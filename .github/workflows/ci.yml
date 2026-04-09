@@ -1,14 +1,15 @@
-name: Test Backend to Azure 
+name: Test budget app 
 
 on:
   pull_request:
     branches:
-      - main   # Spustí se jen při pushi do main
+      - main   # Spustí se jen při pull request do main
     paths:
       - 'backend/**'  # Spustí se jen pokud se změní něco v backendu
+      - 'frontend/**'  # Spustí se jen pokud se změní něco ve frontendu
 
 jobs:
-  build-and-deploy: #Říká, na jakém stroji pipeline poběží.
+  test-be: #Říká, na jakém stroji pipeline poběží.
     runs-on: ubuntu-latest #= virtuální Ubuntu mašina na serverech GitHubu. Standard. Nic řešit.
     steps:
       - name: Checkout code
@@ -20,11 +21,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies #Nastaví Python 3.12 a nainstaluje závislosti z requirements.txt. Pak ještě nainstaluje flake8
+      - name: Install flake8 #Nastaví Python 3.12, nainstaluje flake8.
         run: |
           cd backend
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install flake8
 
       - name: Run Linting (Simple Test) #Spustí kontrolu kódu.
@@ -33,3 +33,26 @@ jobs:
         run: |
           cd backend
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics  
+  test-fe: #Říká, na jakém stroji pipeline poběží.
+    runs-on: ubuntu-latest #= virtuální Ubuntu mašina na serverech GitHubu. Standard. Nic řešit.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 #Stáhne kód z repozitáře na ten virtuální stroj.
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: './frontend/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run Linting (ESLint)
+        run: |
+          cd frontend
+          # Tohle ověří, že v JS/TS nemáš boty, než začneš buildovat
+          npm run lint       

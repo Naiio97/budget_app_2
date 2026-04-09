@@ -15,24 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: './frontend/package-lock.json'
-
-      - name: Install dependencies
-        run: |
-          cd frontend
-          npm ci
-
-      - name: Run Linting (ESLint)
-        run: |
-          cd frontend
-          # Tohle ověří, že v JS/TS nemáš boty, než začneš buildovat
-          npm run lint
-
       - name: Log in to Azure
         uses: azure/login@v2
         with:
