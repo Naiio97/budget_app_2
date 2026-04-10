@@ -1,7 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useCallback, ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getDashboard } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface Account {
     id: string;
@@ -21,34 +23,23 @@ interface AccountsContextType {
 const AccountsContext = createContext<AccountsContextType | undefined>(undefined);
 
 export function AccountsProvider({ children }: { children: ReactNode }) {
-    const [accounts, setAccounts] = useState<Account[]>([]);
-    const [loading, setLoading] = useState(true);
-    const requestIdRef = useRef(0);
+    const queryClient = useQueryClient();
+
+    const { data, isLoading } = useQuery({
+        queryKey: queryKeys.dashboard,
+        queryFn: getDashboard,
+    });
 
     const refreshAccounts = useCallback(async () => {
-        const currentRequestId = ++requestIdRef.current;
-        try {
-            const data = await getDashboard();
-            // Only apply if this is still the most recent request
-            if (currentRequestId === requestIdRef.current) {
-                setAccounts(data.accounts || []);
-            }
-        } catch (err) {
-            console.error('Failed to load accounts:', err);
-        } finally {
-            if (currentRequestId === requestIdRef.current) {
-                setLoading(false);
-            }
-        }
-    }, []);
-
-    // Initial load
-    React.useEffect(() => {
-        refreshAccounts();
-    }, [refreshAccounts]);
+        await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
+    }, [queryClient]);
 
     return (
-        <AccountsContext.Provider value={{ accounts, loading, refreshAccounts }}>
+        <AccountsContext.Provider value={{
+            accounts: data?.accounts || [],
+            loading: isLoading,
+            refreshAccounts,
+        }}>
             {children}
         </AccountsContext.Provider>
     );

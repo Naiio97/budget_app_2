@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
-import { useAccounts } from '@/contexts/AccountsContext';
+import { queryKeys } from '@/lib/queryKeys';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -41,6 +42,7 @@ interface Category {
 }
 
 function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => void }) {
+    const queryClient = useQueryClient();
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
@@ -64,6 +66,11 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
         }
     };
 
+    const invalidateCategories = () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+        onCategoriesChange?.();
+    };
+
     const handleAdd = async () => {
         if (!newCategory.name.trim()) return;
         try {
@@ -75,7 +82,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
             setNewCategory({ name: '', icon: '📦', color: '#6366f1', is_income: false });
             setShowAdd(false);
             loadCategories();
-            onCategoriesChange?.();
+            invalidateCategories();
         } catch (err) {
             console.error('Failed to add category:', err);
         }
@@ -90,7 +97,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
             });
             setEditingId(null);
             loadCategories();
-            onCategoriesChange?.();
+            invalidateCategories();
         } catch (err) {
             console.error('Failed to update category:', err);
         }
@@ -100,7 +107,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
         try {
             await fetch(`${API_BASE}/categories/${id}`, { method: 'DELETE' });
             loadCategories();
-            onCategoriesChange?.();
+            invalidateCategories();
         } catch (err) {
             console.error('Failed to delete category:', err);
         }
@@ -512,7 +519,8 @@ function MyAccountPatterns() {
 }
 
 export default function SettingsPage() {
-    const { refreshAccounts } = useAccounts();
+    const queryClient = useQueryClient();
+    const refreshAccounts = () => queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     const [gocardlessId, setGocardlessId] = useState('');
     const [gocardlessKey, setGocardlessKey] = useState('');
     const [trading212Key, setTrading212Key] = useState('');

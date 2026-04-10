@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
+import { queryKeys } from '@/lib/queryKeys';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -91,6 +93,7 @@ interface AnnualData {
 const MONTH_NAMES = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'];
 
 export default function RozpocetPage() {
+    const queryClient = useQueryClient();
 
     // Current view
     const now = new Date();
@@ -99,12 +102,6 @@ export default function RozpocetPage() {
     const [selectedYear, setSelectedYear] = useState(currentYear);
     const [selectedMonth, setSelectedMonth] = useState(currentMonth);
     const [viewMode, setViewMode] = useState<'month' | 'year'>('month');
-
-    // Data
-    const [budget, setBudget] = useState<MonthlyBudget | null>(null);
-    const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
-    const [manualAccounts, setManualAccounts] = useState<ManualAccount[]>([]);
-    const [annualData, setAnnualData] = useState<AnnualData | null>(null);
 
     // Forms
     const [showAddExpense, setShowAddExpense] = useState(false);
@@ -118,59 +115,34 @@ export default function RozpocetPage() {
 
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
-    useEffect(() => {
-        async function fetchData() {
-            try {
-                const [recurringRes, accountsRes] = await Promise.all([
-                    fetch(`${API_BASE}/recurring-expenses`).then(r => r.json()),
-                    fetch(`${API_BASE}/manual-accounts/`).then(r => r.json())
-                ]);
-                setRecurringExpenses(recurringRes);
-                setManualAccounts(accountsRes);
-            } catch (err) {
-                console.error('Failed to load data:', err);
-            }
-        }
-        fetchData();
-    }, []);
+    useQuery<RecurringExpense[]>({
+        queryKey: queryKeys.recurringExpenses,
+        queryFn: () => fetch(`${API_BASE}/recurring-expenses`).then(r => r.json()),
+        staleTime: 5 * 60 * 1000,
+    });
 
+    const { data: manualAccounts = [] } = useQuery<ManualAccount[]>({
+        queryKey: queryKeys.manualAccounts,
+        queryFn: () => fetch(`${API_BASE}/manual-accounts/`).then(r => r.json()),
+    });
 
-    const fetchMonthlyBudget = useCallback(async () => {
-        try {
-            const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}`);
-            const data = await res.json();
-            setBudget(data); // Toto setState už je asynchronní (po await), to je v pořádku.
-        } catch (err) {
-            console.error(err);
-        }
-    }, [yearMonth]);
+    const { data: budget } = useQuery<MonthlyBudget>({
+        queryKey: queryKeys.monthlyBudget(yearMonth),
+        queryFn: () => fetch(`${API_BASE}/monthly-budget/${yearMonth}`).then(r => r.json()),
+        enabled: viewMode === 'month',
+    });
 
-    const fetchAnnualData = async () => {
-        try {
-            const res = await fetch(`${API_BASE}/annual-overview/${selectedYear}`);
-            const data = await res.json();
-            setAnnualData(data);
-        } catch (err) {
-            console.error('Failed to load annual data:', err);
-        }
-    };
+    const { data: annualData } = useQuery<AnnualData>({
+        queryKey: queryKeys.annualOverview(selectedYear),
+        queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear}`).then(r => r.json()),
+        enabled: viewMode === 'year',
+    });
 
-    // Fetch monthly budget
-    useEffect(() => {
-        let isMounted = true; // Prevence race conditions
+    const refreshBudget = () =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlyBudget(yearMonth) });
 
-        const loadData = async () => {
-            if (viewMode === 'month') {
-                await fetchMonthlyBudget();
-            } else {
-                await fetchAnnualData();
-            }
-        };
-
-        loadData();
-
-        return () => { isMounted = false; };
-    }, [viewMode, yearMonth, selectedYear, fetchMonthlyBudget]);
+    const refreshManualAccounts = () =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.manualAccounts });
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -190,7 +162,7 @@ export default function RozpocetPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ [field]: value })
             });
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to update budget:', err);
         }
@@ -203,7 +175,7 @@ export default function RozpocetPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ is_paid: !isPaid })
             });
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to update expense:', err);
         }
@@ -216,7 +188,7 @@ export default function RozpocetPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ amount })
             });
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to update expense:', err);
         }
@@ -229,7 +201,7 @@ export default function RozpocetPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ my_percentage })
             });
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to update expense percentage:', err);
         }
@@ -238,7 +210,6 @@ export default function RozpocetPage() {
     const createRecurringExpense = async () => {
         if (!newExpense.name || !newExpense.amount) return;
         try {
-            // Create recurring expense template
             await fetch(`${API_BASE}/recurring-expenses`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -249,8 +220,6 @@ export default function RozpocetPage() {
                     match_pattern: newExpense.match_pattern || null
                 })
             });
-
-            // Also add to current month
             await fetch(`${API_BASE}/monthly-budget/${yearMonth}/expenses`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -260,14 +229,10 @@ export default function RozpocetPage() {
                     is_auto_paid: newExpense.is_auto_paid
                 })
             });
-
             setNewExpense({ name: '', amount: '', is_auto_paid: false, match_pattern: '' });
             setShowAddExpense(false);
-
-            // Reload both recurring expenses and current month budget
-            const res = await fetch('/recurring-expenses');
-            setRecurringExpenses(await res.json());
-            fetchMonthlyBudget();
+            queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses });
+            refreshBudget();
         } catch (err) {
             console.error('Failed to create expense:', err);
         }
@@ -275,18 +240,13 @@ export default function RozpocetPage() {
 
     const deleteMonthlyExpense = async (expenseId: number, recurringExpenseId: number | null) => {
         const deleteRecurring = recurringExpenseId && confirm('Smazat také šablonu pravidelného výdaje?\n\nANO = smazat ze všech budoucích měsíců\nNE = smazat jen z tohoto měsíce');
-
         try {
-            // Delete from current month
             await fetch(`${API_BASE}/monthly-expenses/${expenseId}`, { method: 'DELETE' });
-
-            // Optionally delete recurring template
             if (deleteRecurring && recurringExpenseId) {
                 await fetch(`${API_BASE}/recurring-expenses/${recurringExpenseId}`, { method: 'DELETE' });
-                setRecurringExpenses(recurringExpenses.filter(e => e.id !== recurringExpenseId));
+                queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses });
             }
-
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to delete expense:', err);
         }
@@ -301,7 +261,7 @@ export default function RozpocetPage() {
                 `📝 Podle patternu: ${details.by_pattern || 0}\n` +
                 `💰 Podle částky: ${details.by_amount || 0}\n` +
                 `📂 Podle kategorie: ${details.by_category || 0}`);
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to match transactions:', err);
         }
@@ -316,20 +276,17 @@ export default function RozpocetPage() {
             } else {
                 alert(data.detail || 'Chyba při kopírování');
             }
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to copy from previous:', err);
         }
     };
 
     const deleteBudget = async () => {
-        if (!confirm(`Opravdu chcete smazat rozpočet pro ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}?`)) {
-            return;
-        }
+        if (!confirm(`Opravdu chcete smazat rozpočet pro ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}?`)) return;
         try {
             await fetch(`${API_BASE}/monthly-budget/${yearMonth}`, { method: 'DELETE' });
-            setBudget(null);
-            // Fetch will create a new empty one if navigated to again
+            refreshBudget();
         } catch (err) {
             console.error('Failed to delete budget:', err);
         }
@@ -340,7 +297,7 @@ export default function RozpocetPage() {
             const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
             const data = await res.json();
             alert(`Načteno z transakcí:\nVýplata: ${formatCurrency(data.salary)}`);
-            fetchMonthlyBudget();
+            refreshBudget();
         } catch (err) {
             console.error('Failed to sync income:', err);
         }
@@ -352,15 +309,11 @@ export default function RozpocetPage() {
             await fetch(`${API_BASE}/manual-accounts/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: newAccount.name,
-                    balance: parseFloat(newAccount.balance) || 0
-                })
+                body: JSON.stringify({ name: newAccount.name, balance: parseFloat(newAccount.balance) || 0 })
             });
             setNewAccount({ name: '', balance: '' });
             setShowAddAccount(false);
-            const res = await fetch(`${API_BASE}/manual-accounts/`);
-            setManualAccounts(await res.json());
+            refreshManualAccounts();
         } catch (err) {
             console.error('Failed to create account:', err);
         }
@@ -374,8 +327,7 @@ export default function RozpocetPage() {
                 body: JSON.stringify({ balance: parseFloat(editAccountBalance) })
             });
             setEditingAccountId(null);
-            const res = await fetch(`${API_BASE}/manual-accounts/`);
-            setManualAccounts(await res.json());
+            refreshManualAccounts();
         } catch (err) {
             console.error('Failed to update account:', err);
         }
@@ -387,16 +339,11 @@ export default function RozpocetPage() {
             await fetch(`${API_BASE}/manual-accounts/${accountId}/items`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: newItem.name,
-                    amount: parseFloat(newItem.amount),
-                    note: newItem.note || null
-                })
+                body: JSON.stringify({ name: newItem.name, amount: parseFloat(newItem.amount), note: newItem.note || null })
             });
             setNewItem({ name: '', amount: '', note: '' });
             setShowAddItem(null);
-            const res = await fetch(`${API_BASE}/manual-accounts/`);
-            setManualAccounts(await res.json());
+            refreshManualAccounts();
         } catch (err) {
             console.error('Failed to add item:', err);
         }
@@ -405,8 +352,7 @@ export default function RozpocetPage() {
     const deleteAccountItem = async (accountId: number, itemId: number) => {
         try {
             await fetch(`${API_BASE}/manual-accounts/${accountId}/items/${itemId}`, { method: 'DELETE' });
-            const res = await fetch(`${API_BASE}/manual-accounts/`);
-            setManualAccounts(await res.json());
+            refreshManualAccounts();
         } catch (err) {
             console.error('Failed to delete item:', err);
         }

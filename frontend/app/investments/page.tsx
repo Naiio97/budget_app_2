@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
@@ -12,6 +13,7 @@ import {
     PortfolioHistory,
     Dividend
 } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import {
     XAxis,
     YAxis,
@@ -23,35 +25,26 @@ import {
 } from 'recharts';
 
 export default function InvestmentsPage() {
-    const [portfolio, setPortfolio] = useState<InvestmentPortfolio | null>(null);
-    const [history, setHistory] = useState<PortfolioHistory | null>(null);
-    const [dividends, setDividends] = useState<Dividend[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [period, setPeriod] = useState('1M');
 
-    useEffect(() => {
-        async function fetchData() {
-            setLoading(true);
-            setError(null);
-            try {
-                const [portfolioData, historyData, dividendsData] = await Promise.all([
-                    getInvestmentPortfolio(),
-                    getPortfolioHistory(period),
-                    getDividends(20)
-                ]);
-                setPortfolio(portfolioData);
-                setHistory(historyData);
-                setDividends(dividendsData.dividends);
-            } catch (err) {
-                console.error('Failed to load investments:', err);
-                setError('Nepodařilo se načíst investice');
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchData();
-    }, [period]);
+    const { data: portfolio, isLoading: loadingPortfolio, isError } = useQuery<InvestmentPortfolio>({
+        queryKey: queryKeys.investmentPortfolio,
+        queryFn: getInvestmentPortfolio,
+    });
+
+    const { data: history, isLoading: loadingHistory } = useQuery<PortfolioHistory>({
+        queryKey: queryKeys.portfolioHistory(period),
+        queryFn: () => getPortfolioHistory(period),
+    });
+
+    const { data: dividendsData } = useQuery({
+        queryKey: queryKeys.dividends,
+        queryFn: () => getDividends(20),
+    });
+
+    const dividends: Dividend[] = dividendsData?.dividends || [];
+    const loading = loadingPortfolio || loadingHistory;
+    const error = isError ? 'Nepodařilo se načíst investice' : null;
 
     const formatCurrency = (amount: number, currency: string = 'CZK') => {
         return new Intl.NumberFormat('cs-CZ', {

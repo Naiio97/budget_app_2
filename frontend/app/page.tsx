@@ -1,43 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import StatCard from '@/components/StatCard';
 import TransactionList from '@/components/TransactionList';
 import CategoryChart from '@/components/CategoryChart';
 import NetWorthChart from '@/components/NetWorthChart';
 import GlassCard from '@/components/GlassCard';
-import { DashboardData, getDashboard, BudgetOverview, getBudgetOverview } from '@/lib/api';
+import { getDashboard, getBudgetOverview } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
+import { queryKeys } from '@/lib/queryKeys';
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [budgetOverview, setBudgetOverview] = useState<BudgetOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: queryKeys.dashboard,
+    queryFn: getDashboard,
+  });
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const [dashboardData, budgetData] = await Promise.all([
-          getDashboard(),
-          getBudgetOverview().catch(() => null)
-        ]);
-        setData(dashboardData);
-        setBudgetOverview(budgetData);
-        setError(null);
-      } catch (err) {
-        console.log('API error:', err);
-        setError('Nepodařilo se načíst data. Zkontrolujte připojení k serveru.');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, []);
+  const { data: budgetOverview } = useQuery({
+    queryKey: queryKeys.budgetOverview,
+    queryFn: () => getBudgetOverview().catch(() => null),
+  });
+
+  const error = isError ? 'Nepodařilo se načíst data. Zkontrolujte připojení k serveru.' : null;
 
   // Show loading spinner while fetching data
-  if (loading || !data) {
+  if (isLoading || !data) {
     return (
       <MainLayout>
         <div style={{

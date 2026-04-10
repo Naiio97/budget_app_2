@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
 import { Transaction, getTransactions, getDashboard } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface Category {
     id: number;
@@ -15,11 +17,6 @@ interface Category {
 }
 
 export default function TransactionsPage() {
-    const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
-    const [accounts, setAccounts] = useState<{ id: string; name: string; type: 'bank' | 'investment'; balance: number; currency: string }[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [categories, setCategories] = useState<Category[]>([]);
-
     // Filters & Pagination
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -27,17 +24,9 @@ export default function TransactionsPage() {
     const [selectedAccount, setSelectedAccount] = useState<string>('');
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [amountType, setAmountType] = useState<string>('');
-
-    const [monthlyStats, setMonthlyStats] = useState({ income: 0, expenses: 0 });
-
-    // Pagination state
     const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalItems, setTotalItems] = useState(0);
 
-    const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
-
-    // Mobile infinite scroll: how many items to show
+    // Mobile infinite scroll
     const [mobileVisible, setMobileVisible] = useState(10);
     const [isMobile, setIsMobile] = useState(false);
     const sentinelRef = useRef<HTMLDivElement>(null);
@@ -50,91 +39,71 @@ export default function TransactionsPage() {
         return () => window.removeEventListener('resize', check);
     }, []);
 
-    // Generate last 12 months for dropdown
-    const getMonthOptions = () => {
-        const months = [];
-        const now = new Date();
-        for (let i = 0; i < 12; i++) {
-            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-            const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-            const label = d.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
-            months.push({ value, label });
-        }
-        return months;
-    };
-
     // Debounce search
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
             setPage(1);
+            setMobileVisible(10);
         }, 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // Reset page on filter change
-    useEffect(() => {
-        setPage(1);
-        setMobileVisible(10);
-    }, [selectedCategory, selectedAccount, selectedMonth, amountType, debouncedSearch]);
+    // Compute date range from selected month
+    const getDateRange = () => {
+        if (!selectedMonth) return { date_from: undefined, date_to: undefined };
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const date_from = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const date_to = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+        return { date_from, date_to };
+    };
 
-    // Fetch Data — single unified effect, always fetches with limit=20
-    useEffect(() => {
-        let cancelled = false;
+    const { date_from, date_to } = getDateRange();
 
-        async function fetchData() {
-            setLoading(true);
-            try {
-                let date_from: string | undefined;
-                let date_to: string | undefined;
-                if (selectedMonth) {
-                    const [year, month] = selectedMonth.split('-').map(Number);
-                    date_from = `${year}-${String(month).padStart(2, '0')}-01`;
-                    const lastDay = new Date(year, month, 0).getDate();
-                    date_to = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-                }
+    const txFilters = {
+        page,
+        search: debouncedSearch || undefined,
+        category: selectedCategory || undefined,
+        account_id: selectedAccount || undefined,
+        date_from,
+        date_to,
+        amount_type: amountType || undefined,
+    };
 
-                const [txResponse, dashData] = await Promise.all([
-                    getTransactions({
-                        page,
-                        limit: 20,
-                        search: debouncedSearch || undefined,
-                        category: selectedCategory || undefined,
-                        account_id: selectedAccount || undefined,
-                        date_from,
-                        date_to,
-                        amount_type: amountType || undefined
-                    }),
-                    getDashboard()
-                ]);
+    const { data: txData, isLoading: loading } = useQuery({
+        queryKey: queryKeys.transactions(txFilters),
+        queryFn: () => getTransactions({ ...txFilters, limit: 20 }),
+    });
 
-                if (cancelled) return;
+    const { data: dashData } = useQuery({
+        queryKey: queryKeys.dashboard,
+        queryFn: getDashboard,
+    });
 
-                setAllTransactions(txResponse.items);
-                setTotalPages(txResponse.pages);
-                setTotalItems(txResponse.total);
-                if (dashData.accounts.length > 0) setAccounts(dashData.accounts);
-                setMonthlyStats(dashData.monthly);
-            } catch (err) {
-                console.log('Error fetching data:', err);
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        }
-        fetchData();
-        return () => { cancelled = true; };
-    }, [page, debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
+    const { data: categoriesData = [] } = useQuery<Category[]>({
+        queryKey: queryKeys.categories,
+        queryFn: () =>
+            fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io'}/categories/`)
+                .then(r => r.json())
+                .then(d => Array.isArray(d) ? d : []),
+        staleTime: 5 * 60 * 1000, // kategorie se mění zřídka
+    });
 
-    // When new page of transactions is loaded, append to allTransactions
-    // (We need a special handler since the effect above replaces allTransactions)
-    // Actually, let's use a different approach: accumulate on mobile
+    const allTransactions = useMemo(() => txData?.items ?? [], [txData]);
+    const totalPages = txData?.pages || 1;
+    const totalItems = txData?.total || 0;
+    const accounts = dashData?.accounts || [];
+    const monthlyStats = dashData?.monthly || { income: 0, expenses: 0 };
+
     const [accumulatedTransactions, setAccumulatedTransactions] = useState<Transaction[]>([]);
     const [lastFetchedPage, setLastFetchedPage] = useState(0);
 
-    // Accumulate transactions when page changes on mobile
+    // Accumulate transactions as pages load on mobile.
     useEffect(() => {
         if (allTransactions.length === 0) return;
         if (page === 1) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setAccumulatedTransactions(allTransactions);
             setLastFetchedPage(1);
         } else if (page > lastFetchedPage) {
@@ -146,12 +115,6 @@ export default function TransactionsPage() {
             setLastFetchedPage(page);
         }
     }, [allTransactions, page, lastFetchedPage]);
-
-    // Reset accumulated on filter changes
-    useEffect(() => {
-        setAccumulatedTransactions([]);
-        setLastFetchedPage(0);
-    }, [debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
 
     // The actual displayed transactions
     const finalDisplayTransactions = isMobile
@@ -181,13 +144,17 @@ export default function TransactionsPage() {
         return () => observer.disconnect();
     }, [isMobile, loading, mobileVisible, accumulatedTransactions.length, page, totalPages]);
 
-    // Load categories
-    useEffect(() => {
-        fetch(`${API_BASE}/categories/`)
-            .then(res => res.json())
-            .then(data => setCategories(Array.isArray(data) ? data : []))
-            .catch(err => console.error('Failed to load categories:', err));
-    }, [API_BASE]);
+    const getMonthOptions = () => {
+        const months = [];
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const label = d.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
+            months.push({ value, label });
+        }
+        return months;
+    };
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -230,7 +197,7 @@ export default function TransactionsPage() {
                                     label: m.label,
                                 }))}
                                 value={selectedMonth}
-                                onChange={(val) => setSelectedMonth(val)}
+                                onChange={(val) => { setSelectedMonth(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny měsíce"
                             />
                         </div>
@@ -241,19 +208,19 @@ export default function TransactionsPage() {
                                     { value: 'expense', label: 'Výdaje', icon: '💸' },
                                 ]}
                                 value={amountType}
-                                onChange={(val) => setAmountType(val)}
+                                onChange={(val) => { setAmountType(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Vše"
                             />
                         </div>
                         <div style={{ width: '180px' }}>
                             <CustomSelect
-                                options={categories.filter(c => c.is_active).map(cat => ({
+                                options={categoriesData.filter((c: Category) => c.is_active).map((cat: Category) => ({
                                     value: cat.name,
                                     label: cat.name,
                                     icon: cat.icon,
                                 }))}
                                 value={selectedCategory}
-                                onChange={(val) => setSelectedCategory(val)}
+                                onChange={(val) => { setSelectedCategory(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny kategorie"
                                 searchable={true}
                                 searchPlaceholder="🔍 Hledat kategorii..."
@@ -266,7 +233,7 @@ export default function TransactionsPage() {
                                     label: acc.name,
                                 }))}
                                 value={selectedAccount}
-                                onChange={(val) => setSelectedAccount(val)}
+                                onChange={(val) => { setSelectedAccount(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny účty"
                             />
                         </div>

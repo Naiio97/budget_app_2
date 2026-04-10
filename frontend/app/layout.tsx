@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AccountsProvider } from "@/contexts/AccountsContext";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import Providers from "./providers";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -36,9 +37,11 @@ export default function RootLayout({
     <html lang="cs">
       <body>
         <ServiceWorkerRegister />
-        <AccountsProvider>
-          {children}
-        </AccountsProvider>
+        <Providers>
+          <AccountsProvider>
+            {children}
+          </AccountsProvider>
+        </Providers>
       </body>
     </html>
   );
