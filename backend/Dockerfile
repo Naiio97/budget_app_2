@@ -23,4 +23,4 @@ RUN chown -R appuser:appuser /app
 # 5. PŘEPNUTÍ: Od tohoto řádku dál (včetně CMD) už neběžíme jako root
 USER appuser
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]

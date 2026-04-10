@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
 from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts
-from database import init_db, get_db
+from database import get_db
 
 # Centrální konfigurace logování — 12-Factor: logy jdou striktně na stdout (event stream)
 logging.basicConfig(
@@ -24,8 +24,6 @@ settings_config = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup"""
-    await init_db()
     yield
 
 
