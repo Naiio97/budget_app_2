@@ -115,7 +115,7 @@ export default function RozpocetPage() {
 
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
-    const { data: recurringExpenses = [] } = useQuery<RecurringExpense[]>({
+    useQuery<RecurringExpense[]>({
         queryKey: queryKeys.recurringExpenses,
         queryFn: () => fetch(`${API_BASE}/recurring-expenses`).then(r => r.json()),
         staleTime: 5 * 60 * 1000,

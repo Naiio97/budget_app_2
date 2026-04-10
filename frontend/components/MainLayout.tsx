@@ -77,7 +77,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         }
     };
 
-    const getBankLogo = (institution: string | undefined, type: string) => {
+    const getBankLogo = (institution: string | undefined) => {
         if (!institution) return null;
 
         const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -117,7 +117,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 </div>
             ) : (
                 accounts.map((account) => {
-                    const logoUrl = getBankLogo(account.institution, account.type);
+                    const logoUrl = getBankLogo(account.institution);
                     let href = `/accounts/${account.id}`;
                     if (account.type === 'investment') {
                         href = '/investments';

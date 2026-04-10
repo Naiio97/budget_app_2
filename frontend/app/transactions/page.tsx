@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
@@ -44,15 +44,10 @@ export default function TransactionsPage() {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
             setPage(1);
+            setMobileVisible(10);
         }, 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
-
-    // Reset page on filter change
-    useEffect(() => {
-        setPage(1);
-        setMobileVisible(10);
-    }, [selectedCategory, selectedAccount, selectedMonth, amountType, debouncedSearch]);
 
     // Compute date range from selected month
     const getDateRange = () => {
@@ -95,22 +90,20 @@ export default function TransactionsPage() {
         staleTime: 5 * 60 * 1000, // kategorie se mění zřídka
     });
 
-    const allTransactions: Transaction[] = txData?.items || [];
+    const allTransactions = useMemo(() => txData?.items ?? [], [txData]);
     const totalPages = txData?.pages || 1;
     const totalItems = txData?.total || 0;
     const accounts = dashData?.accounts || [];
     const monthlyStats = dashData?.monthly || { income: 0, expenses: 0 };
 
-    // When new page of transactions is loaded, append to allTransactions
-    // (We need a special handler since the effect above replaces allTransactions)
-    // Actually, let's use a different approach: accumulate on mobile
     const [accumulatedTransactions, setAccumulatedTransactions] = useState<Transaction[]>([]);
     const [lastFetchedPage, setLastFetchedPage] = useState(0);
 
-    // Accumulate transactions when page changes on mobile
+    // Accumulate transactions as pages load on mobile.
     useEffect(() => {
         if (allTransactions.length === 0) return;
         if (page === 1) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setAccumulatedTransactions(allTransactions);
             setLastFetchedPage(1);
         } else if (page > lastFetchedPage) {
@@ -122,12 +115,6 @@ export default function TransactionsPage() {
             setLastFetchedPage(page);
         }
     }, [allTransactions, page, lastFetchedPage]);
-
-    // Reset accumulated on filter changes
-    useEffect(() => {
-        setAccumulatedTransactions([]);
-        setLastFetchedPage(0);
-    }, [debouncedSearch, selectedCategory, selectedAccount, selectedMonth, amountType]);
 
     // The actual displayed transactions
     const finalDisplayTransactions = isMobile
@@ -210,7 +197,7 @@ export default function TransactionsPage() {
                                     label: m.label,
                                 }))}
                                 value={selectedMonth}
-                                onChange={(val) => setSelectedMonth(val)}
+                                onChange={(val) => { setSelectedMonth(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny měsíce"
                             />
                         </div>
@@ -221,7 +208,7 @@ export default function TransactionsPage() {
                                     { value: 'expense', label: 'Výdaje', icon: '💸' },
                                 ]}
                                 value={amountType}
-                                onChange={(val) => setAmountType(val)}
+                                onChange={(val) => { setAmountType(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Vše"
                             />
                         </div>
@@ -233,7 +220,7 @@ export default function TransactionsPage() {
                                     icon: cat.icon,
                                 }))}
                                 value={selectedCategory}
-                                onChange={(val) => setSelectedCategory(val)}
+                                onChange={(val) => { setSelectedCategory(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny kategorie"
                                 searchable={true}
                                 searchPlaceholder="🔍 Hledat kategorii..."
@@ -246,7 +233,7 @@ export default function TransactionsPage() {
                                     label: acc.name,
                                 }))}
                                 value={selectedAccount}
-                                onChange={(val) => setSelectedAccount(val)}
+                                onChange={(val) => { setSelectedAccount(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny účty"
                             />
                         </div>
