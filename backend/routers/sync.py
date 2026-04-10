@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
+import asyncio
 import json
 import logging
 
@@ -373,9 +374,12 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
             
             for account in bank_accounts:
                 try:
-                    balances = await gocardless_service.get_account_balances(account.id)
+                    balances, clean_transactions = await asyncio.gather(
+                        gocardless_service.get_account_balances(account.id),
+                        gocardless_service.get_account_transactions(account.id),
+                    )
                     balance_list = balances.balances or []
-                    
+
                     if balance_list:
                         balance_types = [b.balanceType for b in balance_list]
                         logger.debug(f"Account {account.id} has balance types: {balance_types}")
@@ -404,8 +408,6 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                             account.currency = currency
                             account.last_synced = datetime.utcnow()
                         
-                    clean_transactions = await gocardless_service.get_account_transactions(account.id)
-                    
                     rows_to_upsert = []
                     for tx_data in clean_transactions:
                         tx_id = (
