@@ -51,4 +51,3 @@ wheels/
 
 # --- Database & Misc ---
 *.sqlite3
-*.db
