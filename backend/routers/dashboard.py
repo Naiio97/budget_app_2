@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 from database import get_db
 from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel
 from services.trading212 import trading212_service
+from services.exchange_rates import get_exchange_rate
+import json
 
 router = APIRouter()
 
@@ -27,10 +29,28 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     )
     manual_accounts = manual_result.scalars().all()
     
+    # Calculate investment balance — re-convert if sync stored wrong rate (fallback 1.0)
+    investment_balance = 0
+    for acc in accounts:
+        if acc.type != "investment":
+            continue
+        balance = acc.balance
+        details = json.loads(acc.details_json) if acc.details_json else {}
+        original_currency = details.get("original_currency", acc.currency)
+        stored_rate = details.get("exchange_rate", 1.0)
+        original_balance = details.get("original_balance")
+        if (
+            original_currency != "CZK"
+            and original_balance is not None
+            and abs(stored_rate - 1.0) < 0.001
+        ):
+            live_rate = await get_exchange_rate(original_currency, "CZK")
+            balance = original_balance * live_rate
+        investment_balance += balance
+
     # Calculate totals (for manual accounts, only count my_balance)
-    total_balance = sum(acc.balance for acc in accounts)
     bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
-    investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
+    total_balance = bank_balance + investment_balance
     
     # Calculate manual account balances (only my money)
     manual_balance = 0
@@ -71,17 +91,32 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             categories[cat] += abs(tx.amount)
     
     # Build accounts list including manual accounts
-    accounts_list = [
-        {
+    # For investment accounts, re-convert balance if sync stored wrong rate (fallback 1.0)
+    accounts_list = []
+    for acc in accounts:
+        balance = acc.balance
+        currency = acc.currency
+        if acc.type == "investment":
+            details = json.loads(acc.details_json) if acc.details_json else {}
+            original_currency = details.get("original_currency", acc.currency)
+            stored_rate = details.get("exchange_rate", 1.0)
+            original_balance = details.get("original_balance")
+            if (
+                original_currency != "CZK"
+                and original_balance is not None
+                and abs(stored_rate - 1.0) < 0.001
+            ):
+                live_rate = await get_exchange_rate(original_currency, "CZK")
+                balance = round(original_balance * live_rate, 2)
+                currency = "CZK"
+        accounts_list.append({
             "id": acc.id,
             "name": acc.name,
             "type": acc.type,
-            "balance": acc.balance,
-            "currency": acc.currency,
+            "balance": balance,
+            "currency": currency,
             "institution": acc.institution
-        }
-        for acc in accounts
-    ]
+        })
     
     # Add manual accounts to the list
     for macc in manual_accounts:

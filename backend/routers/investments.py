@@ -8,6 +8,7 @@ import json
 
 from database import get_db
 from models import AccountModel, TransactionModel
+from services.exchange_rates import get_exchange_rate
 
 router = APIRouter()
 
@@ -56,9 +57,25 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
     )
     transactions = tx_result.scalars().all()
     
+    # Detect failed exchange rate conversion during sync (rate fell back to 1.0)
+    # In that case re-convert from original EUR value using current rate
+    total_value = account.balance
+    details = json.loads(account.details_json) if account.details_json else {}
+    original_currency = details.get("original_currency", account.currency)
+    stored_rate = details.get("exchange_rate", 1.0)
+    original_balance = details.get("original_balance")
+
+    if (
+        original_currency != "CZK"
+        and original_balance is not None
+        and abs(stored_rate - 1.0) < 0.001  # rate was effectively 1.0 = conversion failed
+    ):
+        live_rate = await get_exchange_rate(original_currency, "CZK")
+        total_value = original_balance * live_rate
+
     return {
-        "total_value": account.balance,
-        "currency": account.currency,
+        "total_value": round(total_value, 2),
+        "currency": "CZK",
         "last_synced": account.last_synced.isoformat() if account.last_synced else None,
         "transactions": [
             {
