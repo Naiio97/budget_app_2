@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Optional
@@ -85,8 +86,7 @@ async def get_transactions(
     
     result = await db.execute(query)
     rows = result.all()
-    
-    import json
+
     items = []
     for tx, account_name in rows:
         # Extract creditor/debtor names from raw_json
@@ -203,26 +203,38 @@ async def update_transaction_category(
     
     # Extract merchant name for learning
     if data.learn and tx.description:
-        # Get the creditor name from description (usually first word/phrase)
-        merchant = tx.description.lower().strip()
-        
-        # Check if rule already exists
+        # Prefer creditorName from raw_json — it's cleaner than the full description
+        # (e.g. "Lidl" instead of "Nákup 5465LIDL CZ S.R.O BRNO ref 12345678")
+        pattern = None
+        if tx.raw_json:
+            try:
+                raw = json.loads(tx.raw_json)
+                creditor = (raw.get("creditorName") or "").strip()
+                if creditor and len(creditor) >= 3:
+                    pattern = creditor.lower()
+            except Exception:
+                pass
+
+        if not pattern:
+            pattern = tx.description.lower().strip()
+
+        # Check if rule already exists for this pattern
         existing = await db.execute(
-            select(CategoryRuleModel).where(CategoryRuleModel.pattern == merchant)
+            select(CategoryRuleModel).where(CategoryRuleModel.pattern == pattern)
         )
         existing_rule = existing.scalar_one_or_none()
-        
+
         if existing_rule:
-            # Update existing rule
+            # Update existing rule — user explicitly chose a category, so promote to user-defined
             existing_rule.category = data.category
+            existing_rule.is_user_defined = True
             existing_rule.match_count += 1
         else:
-            # Create new learned rule
             rule = CategoryRuleModel(
-                pattern=merchant,
+                pattern=pattern,
                 category=data.category,
-                is_user_defined=False,  # Learned from user action
-                match_count=1
+                is_user_defined=True,   # User explicitly set this
+                match_count=1,
             )
             db.add(rule)
     

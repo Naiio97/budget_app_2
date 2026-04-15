@@ -206,26 +206,159 @@ async def detect_and_mark_transfers(db: AsyncSession):
     return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": marked_my_account}
 
 
+# ISO 20022 purpose codes → category
+PURPOSE_CODE_MAP: dict[str, str] = {
+    "SALA": "Salary",   # Salary payment
+    "PAYR": "Salary",   # Payroll
+    "BONU": "Salary",   # Bonus payment
+    "PENS": "Salary",   # Pension payment
+    "SSBE": "Salary",   # Social security benefit
+    "BENE": "Salary",   # Unemployment benefit
+    "TAXS": "Utilities",  # Tax payment
+    "VATX": "Utilities",  # VAT tax
+    "INSR": "Utilities",  # Insurance premium
+    "RENT": "Utilities",  # Rent
+    "OTHR": None,         # Other — don't auto-assign
+}
+
+# MCC (Merchant Category Code) → category
+MCC_CATEGORY_MAP: dict[str, str] = {
+    # Food & Grocery
+    "5411": "Food",  # Grocery stores
+    "5412": "Food",  # Convenience stores
+    "5422": "Food",  # Meat shops
+    "5441": "Food",  # Candy/nut/confectionery
+    "5451": "Food",  # Dairies
+    "5461": "Food",  # Bakeries
+    "5499": "Food",  # Misc food stores
+    "5811": "Food",  # Caterers
+    "5812": "Food",  # Eating places / restaurants
+    "5813": "Food",  # Bars / taverns
+    "5814": "Food",  # Fast food
+    "5912": "Health",  # Drug stores / pharmacies
+    # Transport
+    "4111": "Transport",  # Local commuter transport
+    "4112": "Transport",  # Passenger railways
+    "4121": "Transport",  # Taxicabs / limousines
+    "4131": "Transport",  # Bus lines
+    "4411": "Transport",  # Cruise lines
+    "4511": "Transport",  # Airlines
+    "4814": "Utilities",  # Telecom
+    "4816": "Utilities",  # Computer network services (internet)
+    "4899": "Utilities",  # Cable / satellite TV
+    "4900": "Utilities",  # Utilities (electric, gas, water)
+    "5541": "Transport",  # Service stations / gas stations
+    "5542": "Transport",  # Automated fuel dispensers
+    "7523": "Transport",  # Parking lots
+    "7531": "Transport",  # Auto repair
+    "7534": "Transport",  # Tyre retreading
+    "7538": "Transport",  # Auto service shops
+    # Shopping
+    "5045": "Shopping",  # Computers / peripherals
+    "5065": "Shopping",  # Electrical parts
+    "5200": "Shopping",  # Home supply / hardware
+    "5211": "Shopping",  # Lumber / building materials
+    "5251": "Shopping",  # Hardware stores
+    "5310": "Shopping",  # Discount stores
+    "5311": "Shopping",  # Department stores
+    "5331": "Shopping",  # Variety stores
+    "5399": "Shopping",  # Misc general merchandise
+    "5621": "Shopping",  # Women's clothing
+    "5631": "Shopping",  # Accessories / lingerie
+    "5641": "Shopping",  # Children's clothing
+    "5651": "Shopping",  # Family clothing
+    "5661": "Shopping",  # Shoe stores
+    "5691": "Shopping",  # Men's clothing
+    "5699": "Shopping",  # Misc clothing
+    "5712": "Shopping",  # Furniture
+    "5719": "Shopping",  # Misc home furnishings
+    "5732": "Shopping",  # Electronics
+    "5733": "Shopping",  # Music stores
+    "5734": "Shopping",  # Computer software
+    "5912": "Health",    # Pharmacies
+    "5940": "Shopping",  # Sporting goods
+    "5941": "Shopping",  # Sporting goods
+    "5945": "Shopping",  # Hobby / toy / game shops
+    "5977": "Shopping",  # Cosmetics
+    "5999": "Shopping",  # Misc retail
+    # Health
+    "5047": "Health",    # Medical / dental supplies
+    "5122": "Health",    # Drugs / proprietaries
+    "8011": "Health",    # Doctors / physicians
+    "8021": "Health",    # Dentists
+    "8031": "Health",    # Osteopaths
+    "8041": "Health",    # Chiropractors
+    "8042": "Health",    # Optometrists
+    "8049": "Health",    # Podiatrists
+    "8050": "Health",    # Nursing / personal care
+    "8062": "Health",    # Hospitals
+    "8071": "Health",    # Medical lab
+    "8099": "Health",    # Health practitioners
+    # Entertainment
+    "5815": "Entertainment",  # Digital content (streaming)
+    "5816": "Entertainment",  # Digital games
+    "5817": "Entertainment",  # Digital apps
+    "5818": "Entertainment",  # Digital media
+    "7011": "Entertainment",  # Hotels / lodging
+    "7832": "Entertainment",  # Motion picture theatres
+    "7922": "Entertainment",  # Theatrical producers
+    "7929": "Entertainment",  # Bands / orchestras
+    "7941": "Entertainment",  # Sports clubs / fields
+    "7991": "Entertainment",  # Tourist attractions
+    "7993": "Entertainment",  # Video game arcades
+    "7996": "Entertainment",  # Amusement parks
+    "7997": "Entertainment",  # Membership clubs (fitness etc.)
+    "7999": "Entertainment",  # Recreation services
+}
+
+
+def categorize_by_purpose_code(tx: dict) -> str | None:
+    """Return category based on ISO 20022 purposeCode, or None if not applicable"""
+    purpose = tx.get("purposeCode") or tx.get("purpose_code") or ""
+    if not purpose:
+        return None
+    mapped = PURPOSE_CODE_MAP.get(purpose.upper())
+    return mapped  # may be None
+
+
+def categorize_by_mcc(tx: dict) -> str | None:
+    """Return category based on MCC code, or None if no MCC present"""
+    mcc = tx.get("merchantCategoryCode") or tx.get("mcc") or ""
+    if not mcc:
+        return None
+    return MCC_CATEGORY_MAP.get(str(mcc).strip())
+
+
 def categorize_transaction(tx: dict) -> str:
-    """Smart category detection based on description with Czech merchants"""
-    # DEFENZIVNÍ OPRAVA ZDE:
-    raw_desc = (tx.get("remittanceInformationUnstructured") or 
-                tx.get("creditorName") or 
-                tx.get("debtorName") or 
+    """Smart category detection: purposeCode → MCC → keyword matching"""
+    # 1. purposeCode
+    by_purpose = categorize_by_purpose_code(tx)
+    if by_purpose:
+        return by_purpose
+
+    # 2. MCC
+    by_mcc = categorize_by_mcc(tx)
+    if by_mcc:
+        return by_mcc
+
+    # 3. Keyword matching
+    raw_desc = (tx.get("remittanceInformationUnstructured") or
+                tx.get("creditorName") or
+                tx.get("debtorName") or
                 "")
     desc = str(raw_desc).lower()
-    
+
     categories = {
         "food": [
             "lidl", "albert", "tesco", "billa", "kaufland", "penny", "globus", "makro", "coop", "norma", "žabka",
             "restaurant", "restaurace", "bistro", "food", "wolt", "dáme jídlo", "damejidlo", "bolt food", "foodora",
-            "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa", 
+            "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa",
             "pizza", "sushi", "kebab", "banh mi", "thai", "vietnam", "čína", "china", "asia", "grill",
             "kavárna", "kavarna", "café", "cafe", "pekárna", "pekarna", "cukrárna", "cukrarna", "bakery",
             "hospoda", "pub", "pivnice", "bar", "pivovar", "brewery",
             "bageterie", "qerko", "rohlik", "rohlík", "košík", "kosik",
             "řeznictví", "reznictvi", "uzeniny", "maso",
-            "luxor", "miners", "cinestar bar"
+            "luxor", "miners", "cinestar bar",
         ],
         "transport": [
             "uber", "bolt", "liftago", "taxi",
@@ -233,7 +366,7 @@ def categorize_transaction(tx: dict) -> str:
             "mhd", "jízdenka", "jizdenka", "prague transport", "dpp", "pid", "litacka", "lítačka",
             "parking", "parkovani", "parkoviště", "parkování",
             "dálnice", "dalnice", "mýto", "myto",
-            "autoservis", "pneuservis", "autopůjčovna"
+            "autoservis", "pneuservis", "autopůjčovna",
         ],
         "utilities": [
             "čez", "cez", "pražské vodovody", "innogy", "eon", "pre", "pražská energetika",
@@ -241,7 +374,7 @@ def categorize_transaction(tx: dict) -> str:
             "upc", "skylink", "digi",
             "pojištění", "pojisteni", "allianz", "generali", "kooperativa", "čpp", "cpp",
             "nájem", "najem", "rent", "svj", "bytové",
-            "plyn", "elektřina", "elektrina", "voda", "teplo"
+            "plyn", "elektřina", "elektrina", "voda", "teplo",
         ],
         "entertainment": [
             "netflix", "spotify", "hbo", "disney", "apple tv", "youtube", "deezer", "tidal",
@@ -249,7 +382,7 @@ def categorize_transaction(tx: dict) -> str:
             "steam", "playstation", "xbox", "nintendo", "epic games", "tipsport", "fortuna", "sazka",
             "fitness", "gym", "posilovna", "bazén", "bazen", "wellness", "sauna", "squash", "tenis",
             "ticketmaster", "ticketportal", "goout", "eventim",
-            "audioteka", "bookbeat"
+            "audioteka", "bookbeat",
         ],
         "shopping": [
             "amazon", "alza", "mall.cz", "czc", "datart", "electro world", "planeo", "okay",
@@ -257,36 +390,33 @@ def categorize_transaction(tx: dict) -> str:
             "ikea", "obi", "hornbach", "bauhaus", "baumax", "jysk", "sconto", "xxxlutz", "asko", "möbelix",
             "tesco", "dm", "rossmann", "douglas", "sephora",
             "heureka", "aliexpress", "wish", "shein", "temu",
-            "decathlon", "sportisimo", "hervis"
+            "decathlon", "sportisimo", "hervis",
         ],
         "salary": [
-            "mzda", "plat", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie"
+            "mzda", "plat", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie",
         ],
         "health": [
             "lékárna", "lekarna", "pharmacy", "doktor", "doctor", "nemocnice", "hospital", "klinika", "clinic",
-            "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni"
+            "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni",
         ],
     }
-    
+
     for category, keywords in categories.items():
         if any(kw in desc for kw in keywords):
             return category.capitalize()
-    
+
     return "Other"
 
 
 async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
-    """Smart category detection with priority: user rules > learned rules > built-in keywords"""
-    # DEFENZIVNÍ OPRAVA ZDE:
-    raw_desc = (tx.get("remittanceInformationUnstructured") or 
-                tx.get("creditorName") or 
-                tx.get("debtorName") or 
+    """Smart category detection with priority: user rules > purposeCode > MCC > keywords"""
+    raw_desc = (tx.get("remittanceInformationUnstructured") or
+                tx.get("creditorName") or
+                tx.get("debtorName") or
                 "")
     desc = str(raw_desc).lower()
-    
-    if not desc:
-        return "Other"
-    
+
+    # 1. User-defined rules (highest priority — explicit user preference)
     user_rules = await db.execute(
         select(CategoryRuleModel)
         .where(CategoryRuleModel.is_user_defined == True)
@@ -296,17 +426,30 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
         if rule.pattern.lower() in desc:
             rule.match_count += 1
             return rule.category
-    
-    learned_rules = await db.execute(
-        select(CategoryRuleModel)
-        .where(CategoryRuleModel.is_user_defined == False)
-        .order_by(CategoryRuleModel.match_count.desc())
-    )
-    for rule in learned_rules.scalars():
-        if rule.pattern.lower() in desc:
-            rule.match_count += 1
-            return rule.category
-    
+
+    # 2. purposeCode (ISO 20022 — very reliable for salary, insurance, tax, rent)
+    by_purpose = categorize_by_purpose_code(tx)
+    if by_purpose:
+        return by_purpose
+
+    # 3. MCC code (merchant category — reliable for card payments)
+    by_mcc = categorize_by_mcc(tx)
+    if by_mcc:
+        return by_mcc
+
+    # 4. Learned rules (from previous categorizations)
+    if desc:
+        learned_rules = await db.execute(
+            select(CategoryRuleModel)
+            .where(CategoryRuleModel.is_user_defined == False)
+            .order_by(CategoryRuleModel.match_count.desc())
+        )
+        for rule in learned_rules.scalars():
+            if rule.pattern.lower() in desc:
+                rule.match_count += 1
+                return rule.category
+
+    # 5. Keyword matching fallback
     return categorize_transaction(tx)
 
 
