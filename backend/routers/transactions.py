@@ -249,6 +249,69 @@ async def update_transaction_category(
     }
 
 
+@router.get("/{transaction_id}")
+async def get_transaction_detail(
+    transaction_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get full transaction detail including raw bank data"""
+    result = await db.execute(
+        select(TransactionModel, AccountModel.name.label("account_name"))
+        .join(AccountModel, TransactionModel.account_id == AccountModel.id, isouter=True)
+        .where(TransactionModel.id == transaction_id)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    tx, account_name = row
+
+    raw = {}
+    if tx.raw_json:
+        try:
+            raw = json.loads(tx.raw_json)
+        except Exception:
+            pass
+
+    # Extract creditor/debtor account numbers
+    creditor_acc = raw.get("creditorAccount") or {}
+    debtor_acc = raw.get("debtorAccount") or {}
+    balance_after = raw.get("balanceAfterTransaction") or {}
+    balance_amount = balance_after.get("balanceAmount") or {}
+
+    currency_exchange = raw.get("currencyExchange") or []
+    fx = currency_exchange[0] if currency_exchange else {}
+
+    return {
+        "id": tx.id,
+        "date": tx.date,
+        "value_date": raw.get("valueDate"),
+        "booking_date_time": raw.get("bookingDateTime"),
+        "description": tx.description,
+        "amount": tx.amount,
+        "currency": tx.currency,
+        "category": tx.category,
+        "account_id": tx.account_id,
+        "account_name": account_name,
+        "account_type": tx.account_type,
+        "transaction_type": tx.transaction_type,
+        "is_excluded": tx.is_excluded,
+        "creditor_name": raw.get("creditorName"),
+        "debtor_name": raw.get("debtorName"),
+        "creditor_iban": creditor_acc.get("iban") or creditor_acc.get("bban"),
+        "debtor_iban": debtor_acc.get("iban") or debtor_acc.get("bban"),
+        "remittance_info": raw.get("remittanceInformationUnstructured") or raw.get("remittanceInformationStructured"),
+        "end_to_end_id": raw.get("endToEndId"),
+        "bank_tx_code": raw.get("proprietaryBankTransactionCode") or raw.get("bankTransactionCode"),
+        "additional_info": raw.get("additionalInformation"),
+        "balance_after": float(balance_amount["amount"]) if balance_amount.get("amount") else None,
+        "balance_after_currency": balance_amount.get("currency"),
+        "fx_rate": fx.get("exchangeRate"),
+        "fx_source_currency": fx.get("sourceCurrency"),
+        "fx_target_currency": fx.get("targetCurrency"),
+    }
+
+
 @router.get("/available-categories")
 async def get_available_categories():
     """Get list of available categories"""

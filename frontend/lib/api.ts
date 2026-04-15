@@ -377,6 +377,39 @@ export async function getPies(): Promise<{ pies: Pie[]; currency: string }> {
     return fetchApi<{ pies: Pie[]; currency: string }>('/investments/pies');
 }
 
+export interface TransactionDetail {
+    id: string;
+    date: string;
+    value_date: string | null;
+    booking_date_time: string | null;
+    description: string;
+    amount: number;
+    currency: string;
+    category: string | null;
+    account_id: string;
+    account_name: string | null;
+    account_type: string;
+    transaction_type: string;
+    is_excluded: boolean;
+    creditor_name: string | null;
+    debtor_name: string | null;
+    creditor_iban: string | null;
+    debtor_iban: string | null;
+    remittance_info: string | null;
+    end_to_end_id: string | null;
+    bank_tx_code: string | null;
+    additional_info: string | null;
+    balance_after: number | null;
+    balance_after_currency: string | null;
+    fx_rate: string | null;
+    fx_source_currency: string | null;
+    fx_target_currency: string | null;
+}
+
+export async function getTransactionDetail(id: string): Promise<TransactionDetail> {
+    return fetchApi<TransactionDetail>(`/transactions/${id}`);
+}
+
 // === Budgets & Goals ===
 
 export interface Budget {

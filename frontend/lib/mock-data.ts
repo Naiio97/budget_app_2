@@ -134,5 +134,6 @@ export const MOCK_SYNC_STATUS: SyncStatus = {
     status: 'completed',
     last_sync: new Date().toISOString(),
     accounts_synced: 3,
-    transactions_synced: 156
+    transactions_synced: 156,
+    syncs_today: 1,
 };
