@@ -325,6 +325,34 @@ export async function getDividends(limit: number = 50): Promise<{ dividends: Div
     return fetchApi<{ dividends: Dividend[] }>(`/investments/dividends?limit=${limit}`);
 }
 
+export interface InvestmentPortfolioDetail {
+    total_value: number;
+    invested: number;
+    result: number;
+    cash_free: number;
+    currency: string;
+    last_synced: string | null;
+}
+
+export async function getPortfolioDetail(): Promise<InvestmentPortfolioDetail> {
+    return fetchApi<InvestmentPortfolioDetail>('/investments/portfolio-detail');
+}
+
+export interface PortfolioPosition {
+    ticker: string;
+    quantity: number;
+    average_price_eur: number;
+    current_price_eur: number;
+    value_czk: number;
+    invested_czk: number;
+    ppl_czk: number;
+    ppl_pct: number;
+}
+
+export async function getPositions(): Promise<{ positions: PortfolioPosition[]; currency: string }> {
+    return fetchApi<{ positions: PortfolioPosition[]; currency: string }>('/investments/positions');
+}
+
 // === Budgets & Goals ===
 
 export interface Budget {

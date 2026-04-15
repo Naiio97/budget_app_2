@@ -8,7 +8,7 @@ import json
 import logging
 
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel
+from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
@@ -472,34 +472,56 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
         try:
             cash = await trading212_service.get_account_info()
             portfolio = await trading212_service.get_portfolio()
-            
+
             eur_total_value = cash.get("free", 0) + sum(
                 p.get("currentPrice", 0) * p.get("quantity", 0) for p in portfolio
             )
             base_currency = cash.get("currency", "EUR")
-            
+
             exchange_rate = 1.0
             target_currency = "CZK"
-            
+
             if base_currency != target_currency:
                 exchange_rate = await get_exchange_rate(base_currency, target_currency)
-            
+
             czk_total_value = eur_total_value * exchange_rate
-            
-            logger.info(f"Trading 212: {eur_total_value} {base_currency} -> {czk_total_value} {target_currency} (Rate: {exchange_rate})")
-            
+
+            # Extract P&L fields from cash endpoint
+            # T212 API uses "ppl" for unrealized P&L; "result" may also be present
+            invested_eur = float(cash.get("invested", 0) or 0)
+            result_eur = float(cash.get("ppl", 0) or cash.get("result", 0) or 0)
+            cash_free_eur = float(cash.get("free", 0) or 0)
+
+            logger.info(f"Trading 212: {eur_total_value} {base_currency} -> {czk_total_value} {target_currency} (Rate: {exchange_rate}), invested={invested_eur}, result={result_eur}")
+
+            # Store simplified positions (only fields we need for display)
+            simplified_positions = [
+                {
+                    "ticker": p.get("ticker", ""),
+                    "quantity": p.get("quantity", 0),
+                    "averagePrice": p.get("averagePrice", 0),
+                    "currentPrice": p.get("currentPrice", 0),
+                    "ppl": p.get("ppl", 0),
+                    "fxPpl": p.get("fxPpl", 0),
+                }
+                for p in portfolio
+            ]
+
+            details_payload = json.dumps({
+                "cash": cash,
+                "positions": simplified_positions,
+                "positions_count": len(portfolio),
+                "original_currency": base_currency,
+                "original_balance": eur_total_value,
+                "exchange_rate": exchange_rate,
+            })
+
             t212_account = await db.get(AccountModel, "trading212")
             if t212_account:
                 t212_account.balance = float(czk_total_value)
                 t212_account.currency = target_currency
                 t212_account.last_synced = datetime.utcnow()
-                t212_account.details_json = json.dumps({
-                    "cash": cash, 
-                    "positions": len(portfolio),
-                    "original_currency": base_currency,
-                    "original_balance": eur_total_value,
-                    "exchange_rate": exchange_rate
-                })
+                t212_account.details_json = details_payload
             else:
                 t212_account = AccountModel(
                     id="trading212",
@@ -508,16 +530,41 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     balance=float(czk_total_value),
                     currency=target_currency,
                     institution="Trading 212",
-                    details_json=json.dumps({
-                        "cash": cash,
-                        "original_currency": base_currency,
-                        "original_balance": eur_total_value,
-                        "exchange_rate": exchange_rate
-                    }),
+                    details_json=details_payload,
                     last_synced=datetime.utcnow()
                 )
                 db.add(t212_account)
-            
+
+            # Save daily portfolio snapshot (upsert by date)
+            try:
+                today = datetime.utcnow().strftime("%Y-%m-%d")
+                snapshot_stmt = pg_insert(PortfolioSnapshotModel).values({
+                    "snapshot_date": today,
+                    "total_value_czk": float(czk_total_value),
+                    "invested_czk": invested_eur * exchange_rate,
+                    "result_czk": result_eur * exchange_rate,
+                    "cash_free_czk": cash_free_eur * exchange_rate,
+                    "total_value_eur": eur_total_value,
+                    "exchange_rate": exchange_rate,
+                    "positions_count": len(portfolio),
+                })
+                snapshot_stmt = snapshot_stmt.on_conflict_do_update(
+                    index_elements=["snapshot_date"],
+                    set_={
+                        "total_value_czk": snapshot_stmt.excluded.total_value_czk,
+                        "invested_czk": snapshot_stmt.excluded.invested_czk,
+                        "result_czk": snapshot_stmt.excluded.result_czk,
+                        "cash_free_czk": snapshot_stmt.excluded.cash_free_czk,
+                        "total_value_eur": snapshot_stmt.excluded.total_value_eur,
+                        "exchange_rate": snapshot_stmt.excluded.exchange_rate,
+                        "positions_count": snapshot_stmt.excluded.positions_count,
+                    }
+                )
+                await db.execute(snapshot_stmt)
+                logger.info(f"Portfolio snapshot saved for {today}: {czk_total_value:.0f} CZK")
+            except Exception as snap_err:
+                logger.warning(f"Portfolio snapshot skipped (table may not exist yet — run migrations): {snap_err}")
+
             accounts_synced += 1
             
             # Sync orders

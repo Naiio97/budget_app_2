@@ -67,7 +67,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             queryClient.invalidateQueries({ queryKey: queryKeys.budgetOverview });
             queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
             queryClient.invalidateQueries({ queryKey: queryKeys.investmentPortfolio });
+            queryClient.invalidateQueries({ queryKey: queryKeys.portfolioDetail });
+            queryClient.invalidateQueries({ queryKey: queryKeys.portfolioPositions });
             queryClient.invalidateQueries({ queryKey: queryKeys.dividends });
+            queryClient.invalidateQueries({ queryKey: ['portfolio-history'] });
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
         } catch (error) {
             console.error('Sync failed:', error);
