@@ -197,21 +197,7 @@ export default function InvestmentsPage() {
 
                 {/* Chart */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <div className="chart-header-wrap">
-                        <h3 style={{ margin: 0 }}>📊 Vývoj hodnoty</h3>
-                        <div className="period-buttons" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                            {['1W', '1M', '3M', '6M', '1Y'].map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => setPeriod(p)}
-                                    className={`btn ${period === p ? 'btn-primary' : ''}`}
-                                    style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1, minWidth: '40px' }}
-                                >
-                                    {p}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <h3 style={{ margin: '0 0 var(--spacing-md)' }}>📊 Vývoj hodnoty</h3>
 
                     {history && history.history.length >= 2 ? (
                         <div style={{ height: '300px' }}>
@@ -263,6 +249,20 @@ export default function InvestmentsPage() {
                             </span>
                         </div>
                     )}
+
+                    {/* Period buttons below the chart */}
+                    <div style={{ display: 'flex', gap: '4px', marginTop: 'var(--spacing-md)' }}>
+                        {['1W', '1M', '3M', '6M', '1Y'].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => setPeriod(p)}
+                                className={`btn ${period === p ? 'btn-primary' : ''}`}
+                                style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1 }}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
                 </GlassCard>
 
                 {/* Positions */}

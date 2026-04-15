@@ -1044,16 +1044,6 @@ select.input {
     justify-content: space-between !important;
   }
 
-  .chart-header-wrap {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-sm);
-  }
-
-  .chart-header-wrap .period-buttons {
-    width: 100%;
-  }
-
   .period-buttons-desktop {
     display: none !important;
   }
