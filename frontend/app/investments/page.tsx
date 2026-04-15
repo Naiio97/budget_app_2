@@ -252,7 +252,7 @@ export default function InvestmentsPage() {
 
                     {/* Period buttons below the chart */}
                     <div style={{ display: 'flex', gap: '4px', marginTop: 'var(--spacing-md)' }}>
-                        {['1W', '1M', '3M', '6M', '1Y'].map(p => (
+                        {['1W', '1M', '3M', '6M', '1Y', 'ALL'].map(p => (
                             <button
                                 key={p}
                                 onClick={() => setPeriod(p)}
