@@ -650,6 +650,45 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 for p in portfolio
             ]
 
+            # Fetch pies with names (detail endpoint needed for name field)
+            pies_data = []
+            try:
+                pies_list = await trading212_service.get_pies()
+                if isinstance(pies_list, list):
+                    for pie_basic in pies_list:
+                        pie_id = pie_basic.get("id")
+                        if not pie_id:
+                            continue
+                        try:
+                            detail = await trading212_service.get_pie_detail(pie_id)
+                            settings_block = detail.get("settings", {})
+                            result_block = pie_basic.get("result", {})
+                            pies_data.append({
+                                "id": pie_id,
+                                "name": settings_block.get("name", f"Pie {pie_id}"),
+                                "icon": settings_block.get("icon", ""),
+                                "goal": settings_block.get("goal"),
+                                "invested_eur": float(result_block.get("investedValue", 0) or 0),
+                                "value_eur": float(result_block.get("value", 0) or 0),
+                                "result_eur": float(result_block.get("result", 0) or 0),
+                                "result_pct": float(result_block.get("resultCoefficient", 0) or 0) * 100,
+                                "instruments": [
+                                    {
+                                        "ticker": inst.get("ticker", ""),
+                                        "current_share": float(inst.get("currentShare", 0) or 0),
+                                        "expected_share": float(inst.get("expectedShare", 0) or 0),
+                                        "owned_quantity": float(inst.get("ownedQuantity", 0) or 0),
+                                        "value_eur": float((inst.get("result") or {}).get("value", 0) or 0),
+                                        "result_eur": float((inst.get("result") or {}).get("result", 0) or 0),
+                                    }
+                                    for inst in detail.get("instruments", [])
+                                ],
+                            })
+                        except Exception as pie_err:
+                            logger.warning(f"Could not fetch detail for pie {pie_id}: {pie_err}")
+            except Exception as pies_err:
+                logger.warning(f"Pies sync skipped: {pies_err}")
+
             details_payload = json.dumps({
                 "cash": cash,
                 "positions": simplified_positions,
@@ -657,6 +696,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 "original_currency": base_currency,
                 "original_balance": eur_total_value,
                 "exchange_rate": exchange_rate,
+                "pies": pies_data,
             })
 
             t212_account = await db.get(AccountModel, "trading212")

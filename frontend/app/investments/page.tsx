@@ -11,11 +11,13 @@ import {
     getDividends,
     getPortfolioDetail,
     getPositions,
+    getPies,
     InvestmentPortfolio,
     InvestmentPortfolioDetail,
     PortfolioHistory,
     PortfolioPosition,
-    Dividend
+    Dividend,
+    Pie,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import {
@@ -57,9 +59,24 @@ export default function InvestmentsPage() {
     });
     const positions = positionsData?.positions ?? [];
 
+    const { data: piesData } = useQuery<{ pies: Pie[]; currency: string }>({
+        queryKey: queryKeys.pies,
+        queryFn: getPies,
+    });
+    const pies = piesData?.pies ?? [];
+
     const dividends: Dividend[] = dividendsData?.dividends || [];
     const loading = loadingPortfolio || loadingHistory;
     const error = isError ? 'Nepodařilo se načíst investice' : null;
+
+    const PIE_ICON_MAP: Record<string, string> = {
+        Umbrella: '☂️', Home: '🏠', Savings: '🏦', Vacation: '🌴', Health: '🏥',
+        Education: '🎓', Tech: '💻', Energy: '⚡', Finance: '💹', Food: '🍔',
+        Car: '🚗', Entertainment: '🎬', Shopping: '🛒', Sports: '🏋️',
+        Gift: '🎁', Star: '⭐', Rocket: '🚀', Heart: '❤️', Globe: '🌍',
+        Chart: '📊', Diamond: '💎', Crown: '👑',
+    };
+    const pieIcon = (icon: string) => PIE_ICON_MAP[icon] ?? '🥧';
 
     const formatCurrency = (amount: number, currency: string = 'CZK') => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -290,6 +307,84 @@ export default function InvestmentsPage() {
                                             {pos.ppl_pct >= 0 ? '+' : ''}{pos.ppl_pct.toFixed(2)} %
                                         </div>
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    </GlassCard>
+                )}
+
+                {/* Pies */}
+                {pies.length > 0 && (
+                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>🥧 Pies</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                            {pies.map((pie) => (
+                                <div key={pie.id} style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    padding: '12px',
+                                }}>
+                                    {/* Pie header */}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <span style={{ fontSize: '1.2rem' }}>{pieIcon(pie.icon)}</span>
+                                            <span style={{ fontWeight: 600 }}>{pie.name}</span>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontWeight: 600 }}>{formatCurrency(pie.value_czk)}</div>
+                                            <div style={{
+                                                fontSize: '0.8rem',
+                                                color: pie.result_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)',
+                                            }}>
+                                                {pie.result_czk >= 0 ? '+' : ''}{formatCurrency(pie.result_czk)}
+                                                <span style={{ opacity: 0.8, marginLeft: '4px' }}>
+                                                    ({pie.result_pct >= 0 ? '+' : ''}{pie.result_pct.toFixed(2)} %)
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Instrument bars */}
+                                    {pie.instruments.length > 0 && (
+                                        <>
+                                            {/* Stacked progress bar */}
+                                            <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px', gap: '1px' }}>
+                                                {pie.instruments.slice(0, 10).map((inst, i) => {
+                                                    const hue = (i * 47) % 360;
+                                                    return (
+                                                        <div key={inst.ticker} style={{
+                                                            flex: inst.current_share,
+                                                            background: `hsl(${hue}, 70%, 55%)`,
+                                                        }} title={`${inst.ticker} ${inst.current_share.toFixed(1)}%`} />
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Top 5 instruments */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                {pie.instruments.slice(0, 5).map((inst, i) => {
+                                                    const hue = (i * 47) % 360;
+                                                    return (
+                                                        <div key={inst.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: `hsl(${hue}, 70%, 55%)`, flexShrink: 0 }} />
+                                                                <span>{inst.ticker}</span>
+                                                            </div>
+                                                            <div style={{ display: 'flex', gap: '12px' }}>
+                                                                <span className="text-tertiary">{inst.current_share.toFixed(1)} %</span>
+                                                                <span>{formatCurrency(inst.value_czk)}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {pie.instruments.length > 5 && (
+                                                    <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                                        + {pie.instruments.length - 5} dalších pozic
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             ))}
                         </div>

@@ -24,4 +24,5 @@ export const queryKeys = {
   familyAccounts: ['family-accounts'] as const,
   apiKeys: ['api-keys'] as const,
   syncStatus: ['sync-status'] as const,
+  pies: ['pies'] as const,
 };

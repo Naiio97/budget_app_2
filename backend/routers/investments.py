@@ -225,6 +225,51 @@ async def get_dividends(limit: int = 50, db: AsyncSession = Depends(get_db)):
     return {"dividends": dividends}
 
 
+@router.get("/pies")
+async def get_pies(db: AsyncSession = Depends(get_db)):
+    """Get Trading 212 pies from last sync"""
+    result = await db.execute(
+        select(AccountModel).where(AccountModel.type == "investment")
+    )
+    account = result.scalar_one_or_none()
+
+    if not account or not account.details_json:
+        return {"pies": [], "currency": "CZK"}
+
+    details = json.loads(account.details_json)
+    exchange_rate = details.get("exchange_rate", 1.0)
+    raw_pies = details.get("pies", [])
+
+    if not isinstance(raw_pies, list):
+        return {"pies": [], "currency": "CZK"}
+
+    pies = []
+    for p in raw_pies:
+        pies.append({
+            "id": p.get("id"),
+            "name": p.get("name", ""),
+            "icon": p.get("icon", ""),
+            "goal": p.get("goal"),
+            "invested_czk": round(p.get("invested_eur", 0) * exchange_rate, 2),
+            "value_czk": round(p.get("value_eur", 0) * exchange_rate, 2),
+            "result_czk": round(p.get("result_eur", 0) * exchange_rate, 2),
+            "result_pct": round(p.get("result_pct", 0), 2),
+            "instruments": [
+                {
+                    "ticker": inst.get("ticker", "").replace("_US_EQ", "").replace("_EQ", ""),
+                    "current_share": round(inst.get("current_share", 0) * 100, 1),
+                    "value_czk": round(inst.get("value_eur", 0) * exchange_rate, 2),
+                    "result_czk": round(inst.get("result_eur", 0) * exchange_rate, 2),
+                }
+                for inst in p.get("instruments", [])
+            ],
+        })
+
+    # Sort by value descending
+    pies.sort(key=lambda x: x["value_czk"], reverse=True)
+    return {"pies": pies, "currency": "CZK"}
+
+
 @router.get("/summary")
 async def get_investment_summary(db: AsyncSession = Depends(get_db)):
     """Get investment account summary from database"""

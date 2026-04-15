@@ -52,8 +52,12 @@ class Trading212Service:
         return await self._request("GET", f"/equity/portfolio/{ticker}")
     
     async def get_pies(self) -> List[dict]:
-        """Get all pies"""
+        """Get all pies (basic info — no name)"""
         return await self._request("GET", "/equity/pies")
+
+    async def get_pie_detail(self, pie_id: int) -> dict:
+        """Get detailed pie info including name and per-instrument results"""
+        return await self._request("GET", f"/equity/pies/{pie_id}")
     
     async def get_dividends(self, cursor: Optional[str] = None, limit: int = 50) -> dict:
         """Get dividend history"""

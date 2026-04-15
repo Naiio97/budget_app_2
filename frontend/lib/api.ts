@@ -354,6 +354,29 @@ export async function getPositions(): Promise<{ positions: PortfolioPosition[]; 
     return fetchApi<{ positions: PortfolioPosition[]; currency: string }>('/investments/positions');
 }
 
+export interface PieInstrument {
+    ticker: string;
+    current_share: number;  // percentage
+    value_czk: number;
+    result_czk: number;
+}
+
+export interface Pie {
+    id: number;
+    name: string;
+    icon: string;
+    goal: number | null;
+    invested_czk: number;
+    value_czk: number;
+    result_czk: number;
+    result_pct: number;
+    instruments: PieInstrument[];
+}
+
+export async function getPies(): Promise<{ pies: Pie[]; currency: string }> {
+    return fetchApi<{ pies: Pie[]; currency: string }>('/investments/pies');
+}
+
 // === Budgets & Goals ===
 
 export interface Budget {

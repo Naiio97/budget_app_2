@@ -79,6 +79,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             queryClient.invalidateQueries({ queryKey: ['portfolio-history'] });
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
             queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
+            queryClient.invalidateQueries({ queryKey: queryKeys.pies });
         } catch (error) {
             console.error('Sync failed:', error);
             alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
