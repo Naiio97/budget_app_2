@@ -23,4 +23,5 @@ export const queryKeys = {
   monthlyReport: (months: number) => ['monthly-report', months] as const,
   familyAccounts: ['family-accounts'] as const,
   apiKeys: ['api-keys'] as const,
+  syncStatus: ['sync-status'] as const,
 };

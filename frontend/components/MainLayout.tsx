@@ -4,8 +4,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { syncData } from '@/lib/api';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { syncData, getSyncStatus, SyncStatus } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { queryKeys } from '@/lib/queryKeys';
@@ -23,6 +23,12 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isMobile, setIsMobile] = useState(false);
     const { accounts } = useAccounts();
     const queryClient = useQueryClient();
+
+    const { data: syncStatus } = useQuery<SyncStatus>({
+        queryKey: queryKeys.syncStatus,
+        queryFn: getSyncStatus,
+        refetchInterval: 60_000, // refresh every minute
+    });
 
     // All navigation items
     const navItems = [
@@ -72,6 +78,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             queryClient.invalidateQueries({ queryKey: queryKeys.dividends });
             queryClient.invalidateQueries({ queryKey: ['portfolio-history'] });
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
         } catch (error) {
             console.error('Sync failed:', error);
             alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
@@ -213,6 +220,28 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             </>
                         )}
                     </button>
+
+                    {/* Sync status info */}
+                    {syncStatus && syncStatus.status !== 'never' && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', paddingLeft: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {syncStatus.last_sync && (
+                                <span>
+                                    Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}
+                                </span>
+                            )}
+                            <span style={{
+                                color: syncStatus.syncs_today >= 4
+                                    ? 'var(--accent-danger)'
+                                    : syncStatus.syncs_today >= 3
+                                        ? 'var(--accent-warning, #f59e0b)'
+                                        : 'var(--text-tertiary)',
+                                fontWeight: syncStatus.syncs_today >= 3 ? 600 : undefined,
+                            }}>
+                                {syncStatus.syncs_today}/4 dnes
+                                {syncStatus.syncs_today >= 4 && ' — denní limit'}
+                            </span>
+                        </div>
+                    )}
                 </div>
             </div>
         </>

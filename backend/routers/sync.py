@@ -837,25 +837,39 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
 @router.get("/status")
 async def get_sync_status(db: AsyncSession = Depends(get_db)):
     """Get the status of the last synchronization"""
+    from sqlalchemy import func
+
     result = await db.execute(
         select(SyncStatusModel).order_by(SyncStatusModel.id.desc()).limit(1)
     )
     sync_status = result.scalar_one_or_none()
-    
+
+    # Count successful syncs today (UTC date)
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    count_result = await db.execute(
+        select(func.count()).select_from(SyncStatusModel).where(
+            SyncStatusModel.status == "completed",
+            SyncStatusModel.started_at >= today_start,
+        )
+    )
+    syncs_today = count_result.scalar() or 0
+
     if not sync_status:
         return {
             "status": "never",
             "last_sync": None,
             "accounts_synced": 0,
-            "transactions_synced": 0
+            "transactions_synced": 0,
+            "syncs_today": syncs_today,
         }
-    
+
     return {
         "status": sync_status.status,
         "last_sync": sync_status.completed_at.isoformat() if sync_status.completed_at else sync_status.started_at.isoformat(),
         "accounts_synced": sync_status.accounts_synced,
         "transactions_synced": sync_status.transactions_synced,
-        "error": sync_status.error_message
+        "error": sync_status.error_message,
+        "syncs_today": syncs_today,
     }
 
 

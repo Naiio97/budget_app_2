@@ -209,6 +209,7 @@ export interface SyncStatus {
     accounts_synced: number;
     transactions_synced: number;
     error?: string;
+    syncs_today: number;
 }
 
 export interface SyncResult {
