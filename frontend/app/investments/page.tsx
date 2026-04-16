@@ -318,13 +318,12 @@ export default function InvestmentsPage() {
                                                     </Pie>
                                                     <Tooltip
                                                         contentStyle={{
-                                                            background: 'rgba(15,20,30,0.75)',
-                                                            backdropFilter: 'blur(8px)',
-                                                            border: '1px solid rgba(255,255,255,0.25)',
+                                                            background: '#1e293b',
+                                                            border: '1px solid #334155',
                                                             borderRadius: '8px',
                                                             fontSize: '0.78rem',
-                                                            color: '#fff',
-                                                            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                                                            color: '#e2e8f0',
+                                                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8), 0 8px 10px -6px rgba(0,0,0,0.8)',
                                                         }}
                                                         formatter={(value: number | undefined, name: string | undefined) => [`${(value ?? 0).toFixed(1)} %`, name ?? '']}
                                                     />
