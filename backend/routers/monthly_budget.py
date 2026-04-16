@@ -42,7 +42,8 @@ class MonthlyExpenseResponse(BaseModel):
     name: str
     amount: float
     my_percentage: int = 100
-    my_amount: float = 0  # Calculated: amount * my_percentage / 100
+    my_amount: float = 0  # Effective: my_amount_override ?? amount * my_percentage / 100
+    my_amount_override: Optional[float] = None
     is_paid: bool
     is_auto_paid: bool
     matched_transaction_id: Optional[str] = None
@@ -67,7 +68,7 @@ class MonthlyBudgetResponse(BaseModel):
 class RecurringExpenseCreate(BaseModel):
     name: str
     default_amount: float
-    my_percentage: int = 100
+    my_percentage: float = 100
     is_auto_paid: bool = False
     match_pattern: Optional[str] = None
     category: Optional[str] = None
@@ -76,7 +77,7 @@ class RecurringExpenseCreate(BaseModel):
 class RecurringExpenseUpdate(BaseModel):
     name: Optional[str] = None
     default_amount: Optional[float] = None
-    my_percentage: Optional[int] = None
+    my_percentage: Optional[float] = None
     is_auto_paid: Optional[bool] = None
     match_pattern: Optional[str] = None
     category: Optional[str] = None
@@ -88,7 +89,7 @@ class RecurringExpenseResponse(BaseModel):
     id: int
     name: str
     default_amount: float
-    my_percentage: int = 100
+    my_percentage: float = 100
     is_auto_paid: bool
     match_pattern: Optional[str]
     category: Optional[str]
@@ -99,6 +100,7 @@ class RecurringExpenseResponse(BaseModel):
 class MonthlyExpenseUpdate(BaseModel):
     amount: Optional[float] = None
     my_percentage: Optional[int] = None
+    my_amount_override: Optional[float] = None  # Přímé zadání v Kč; -1 = reset (zpět na percentage)
     is_paid: Optional[bool] = None
     name: Optional[str] = None
 
@@ -182,8 +184,12 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
     expenses = expenses_result.scalars().all()
     
     total_income = budget.salary + budget.other_income + budget.meal_vouchers
-    # Calculate total using my_amount (amount * my_percentage / 100)
-    total_expenses = sum(e.amount * (e.my_percentage or 100) / 100 for e in expenses)
+    def effective_my_amount(e) -> float:
+        if e.my_amount_override is not None:
+            return e.my_amount_override
+        return e.amount * (e.my_percentage or 100) / 100
+
+    total_expenses = sum(effective_my_amount(e) for e in expenses)
     
     return MonthlyBudgetResponse(
         id=budget.id,
@@ -202,7 +208,8 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
             name=e.name,
             amount=e.amount,
             my_percentage=e.my_percentage or 100,
-            my_amount=e.amount * (e.my_percentage or 100) / 100,
+            my_amount=effective_my_amount(e),
+            my_amount_override=e.my_amount_override,
             is_paid=e.is_paid,
             is_auto_paid=e.is_auto_paid,
             matched_transaction_id=e.matched_transaction_id,
@@ -314,6 +321,7 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
             name=exp.name,
             amount=exp.amount,
             my_percentage=exp.my_percentage or 100,
+            my_amount_override=exp.my_amount_override,
             is_auto_paid=exp.is_auto_paid,
             is_paid=False  # Reset paid status for new month
         )
@@ -633,11 +641,14 @@ async def update_monthly_expense(expense_id: int, data: MonthlyExpenseUpdate, db
         expense.amount = data.amount
     if data.my_percentage is not None:
         expense.my_percentage = data.my_percentage
+        expense.my_amount_override = None  # reset override when switching to % mode
+    if data.my_amount_override is not None:
+        expense.my_amount_override = data.my_amount_override if data.my_amount_override >= 0 else None
     if data.is_paid is not None:
         expense.is_paid = data.is_paid
     if data.name is not None:
         expense.name = data.name
-    
+
     await db.commit()
     return {"status": "updated"}
 

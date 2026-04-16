@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
@@ -15,6 +15,7 @@ interface MonthlyExpense {
     amount: number;
     my_percentage: number;
     my_amount: number;
+    my_amount_override: number | null;
     is_paid: boolean;
     is_auto_paid: boolean;
     matched_transaction_id: string | null;
@@ -47,10 +48,11 @@ interface RecurringExpense {
     is_active: boolean;
 }
 
-interface ManualAccountItem {
+interface Envelope {
     id: number;
     name: string;
     amount: number;
+    is_mine: boolean;
     note: string | null;
 }
 
@@ -59,9 +61,8 @@ interface ManualAccount {
     name: string;
     balance: number;
     currency: string;
-    items: ManualAccountItem[];
-    items_total: number;
-    available_balance: number;
+    my_balance: number;
+    envelopes: Envelope[];
 }
 
 interface AnnualData {
@@ -95,7 +96,6 @@ const MONTH_NAMES = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen',
 export default function RozpocetPage() {
     const queryClient = useQueryClient();
 
-    // Current view
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth() + 1;
@@ -111,7 +111,12 @@ export default function RozpocetPage() {
     const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
     const [editAccountBalance, setEditAccountBalance] = useState('');
     const [showAddItem, setShowAddItem] = useState<number | null>(null);
-    const [newItem, setNewItem] = useState({ name: '', amount: '', note: '' });
+    const [newItem, setNewItem] = useState({ name: '', amount: '', is_mine: false, note: '' });
+    const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+    const [editingMyAmounts, setEditingMyAmounts] = useState<Record<number, string>>({});
+
+    // Track which months we've already auto-synced so we don't loop
+    const autoSyncedMonths = useRef<Set<string>>(new Set());
 
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
@@ -138,20 +143,50 @@ export default function RozpocetPage() {
         enabled: viewMode === 'year',
     });
 
-    const refreshBudget = () =>
-        queryClient.invalidateQueries({ queryKey: queryKeys.monthlyBudget(yearMonth) });
+    const refreshBudget = useCallback(() =>
+        queryClient.invalidateQueries({ queryKey: queryKeys.monthlyBudget(yearMonth) }),
+        [queryClient, yearMonth]
+    );
 
     const refreshManualAccounts = () =>
         queryClient.invalidateQueries({ queryKey: queryKeys.manualAccounts });
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency: 'CZK',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(amount);
+    const formatCurrency = (amount: number) =>
+        new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+
+    // === Month navigation ===
+    const goToPrevMonth = () => {
+        if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); }
+        else setSelectedMonth(m => m - 1);
     };
+    const goToNextMonth = () => {
+        if (selectedMonth === 12) { setSelectedMonth(1); setSelectedYear(y => y + 1); }
+        else setSelectedMonth(m => m + 1);
+    };
+
+    // === Auto-sync on month open ===
+    // - Income sync: only when salary is 0 (don't overwrite manually set values)
+    // - Match transactions: always (idempotent, just marks expenses as paid)
+    useEffect(() => {
+        if (!budget || viewMode !== 'month') return;
+        if (autoSyncedMonths.current.has(yearMonth)) return;
+        autoSyncedMonths.current.add(yearMonth);
+
+        const runAutoSync = async () => {
+            setIsAutoSyncing(true);
+            try {
+                if (budget.salary === 0) {
+                    await fetch(`${API_BASE}/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
+                }
+                await fetch(`${API_BASE}/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
+                await refreshBudget();
+            } finally {
+                setIsAutoSyncing(false);
+            }
+        };
+
+        runAutoSync();
+    }, [budget?.id, yearMonth, viewMode, refreshBudget]);
 
     // === Handlers ===
 
@@ -194,12 +229,29 @@ export default function RozpocetPage() {
         }
     };
 
+    const saveMyAmount = async (expense: MonthlyExpense) => {
+        const raw = editingMyAmounts[expense.id];
+        if (raw === undefined) return;
+        const newMyAmount = parseFloat(raw) || 0;
+        setEditingMyAmounts(prev => { const next = { ...prev }; delete next[expense.id]; return next; });
+        try {
+            await fetch(`${API_BASE}/monthly-expenses/${expense.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ my_amount_override: newMyAmount }),
+            });
+            refreshBudget();
+        } catch (err) {
+            console.error('Failed to update my_amount:', err);
+        }
+    };
+
     const updateExpensePercentage = async (expenseId: number, my_percentage: number) => {
         try {
             await fetch(`${API_BASE}/monthly-expenses/${expenseId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ my_percentage })
+                body: JSON.stringify({ my_percentage, my_amount_override: -1 })
             });
             refreshBudget();
         } catch (err) {
@@ -256,11 +308,7 @@ export default function RozpocetPage() {
         try {
             const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
             const data = await res.json();
-            const details = data.details || {};
-            alert(`Spárováno ${data.matched_count} výdajů:\n\n` +
-                `📝 Podle patternu: ${details.by_pattern || 0}\n` +
-                `💰 Podle částky: ${details.by_amount || 0}\n` +
-                `📂 Podle kategorie: ${details.by_category || 0}`);
+            alert(`Spárováno ${data.matched_count} výdajů:\n\n📝 Podle patternu: ${data.details?.by_pattern || 0}\n💰 Podle částky: ${data.details?.by_amount || 0}\n📂 Podle kategorie: ${data.details?.by_category || 0}`);
             refreshBudget();
         } catch (err) {
             console.error('Failed to match transactions:', err);
@@ -271,11 +319,8 @@ export default function RozpocetPage() {
         try {
             const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
             const data = await res.json();
-            if (res.ok) {
-                alert(`Zkopírováno ${data.expenses_copied} výdajů z ${data.from}`);
-            } else {
-                alert(data.detail || 'Chyba při kopírování');
-            }
+            if (res.ok) alert(`Zkopírováno ${data.expenses_copied} výdajů z ${data.from}`);
+            else alert(data.detail || 'Chyba při kopírování');
             refreshBudget();
         } catch (err) {
             console.error('Failed to copy from previous:', err);
@@ -336,33 +381,137 @@ export default function RozpocetPage() {
     const addAccountItem = async (accountId: number) => {
         if (!newItem.name || !newItem.amount) return;
         try {
-            await fetch(`${API_BASE}/manual-accounts/${accountId}/items`, {
+            await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newItem.name, amount: parseFloat(newItem.amount), note: newItem.note || null })
+                body: JSON.stringify({ name: newItem.name, amount: parseFloat(newItem.amount), is_mine: newItem.is_mine, note: newItem.note || null })
             });
-            setNewItem({ name: '', amount: '', note: '' });
+            setNewItem({ name: '', amount: '', is_mine: false, note: '' });
             setShowAddItem(null);
             refreshManualAccounts();
         } catch (err) {
-            console.error('Failed to add item:', err);
+            console.error('Failed to add envelope:', err);
         }
     };
 
     const deleteAccountItem = async (accountId: number, itemId: number) => {
         try {
-            await fetch(`${API_BASE}/manual-accounts/${accountId}/items/${itemId}`, { method: 'DELETE' });
+            await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes/${itemId}`, { method: 'DELETE' });
             refreshManualAccounts();
         } catch (err) {
-            console.error('Failed to delete item:', err);
+            console.error('Failed to delete envelope:', err);
         }
     };
 
+    // === Computed stats ===
+    const totalIncome = budget?.total_income || 0;
+    const totalExpenses = budget?.total_expenses || 0;
+    const remaining = budget?.remaining || 0;
+    const investmentAmount = budget?.investment_amount || 0;
+    const expensePct = totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0;
+    const savingsRate = totalIncome > 0 ? Math.round(((investmentAmount + (budget?.surplus_to_savings || 0)) / totalIncome) * 100) : 0;
+    const paidCount = budget?.expenses.filter(e => e.is_paid).length || 0;
+    const totalCount = budget?.expenses.length || 0;
+    const budgetUsedPct = Math.min(100, totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0);
+
     // === Render Functions ===
 
-    // Removed renderMonthTabs() as it is replaced by native selects in the header below.
+    const renderKpiBar = () => {
+        if (!budget) return null;
+        const isOverBudget = remaining < 0;
 
+        return (
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: 'var(--spacing-sm)',
+                marginBottom: 'var(--spacing-md)',
+            }}>
+                {/* Příjmy */}
+                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjmy</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(totalIncome)}</div>
+                    {isAutoSyncing && <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>🔄 Načítám...</div>}
+                </GlassCard>
 
+                {/* Výdaje */}
+                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Výdaje</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-danger, #ef4444)' }}>{formatCurrency(totalExpenses)}</div>
+                    <div style={{ marginTop: '6px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${budgetUsedPct}%`, background: budgetUsedPct > 90 ? 'var(--accent-danger, #ef4444)' : budgetUsedPct > 70 ? '#f59e0b' : 'var(--accent-success)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '3px' }}>{expensePct}% z příjmů</div>
+                </GlassCard>
+
+                {/* Zbývá */}
+                <GlassCard style={{ padding: '12px 16px', margin: 0, background: isOverBudget ? 'rgba(239, 68, 68, 0.08)' : undefined }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zbývá</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: isOverBudget ? 'var(--accent-danger, #ef4444)' : 'var(--accent-success)' }}>
+                        {isOverBudget ? '−' : '+'}{formatCurrency(Math.abs(remaining))}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                        {isOverBudget ? '⚠️ Přečerpáno' : '✓ V pohodě'}
+                    </div>
+                </GlassCard>
+
+                {/* Zaplaceno */}
+                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zaplaceno</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: paidCount === totalCount && totalCount > 0 ? 'var(--accent-success)' : 'var(--text-primary)' }}>
+                        {paidCount} / {totalCount}
+                    </div>
+                    <div style={{ marginTop: '6px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: totalCount > 0 ? `${(paidCount / totalCount) * 100}%` : '0%', background: 'var(--accent-success)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '3px' }}>výdajů</div>
+                </GlassCard>
+
+                {/* Spoření */}
+                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Spoření</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-primary)' }}>{formatCurrency(investmentAmount + (budget?.surplus_to_savings || 0))}</div>
+                    <div style={{ marginTop: '6px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, savingsRate)}%`, background: 'var(--accent-primary)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '3px' }}>{savingsRate}% z příjmů</div>
+                </GlassCard>
+            </div>
+        );
+    };
+
+    const renderExpenseChart = () => {
+        if (!budget?.expenses.length) return null;
+        const sorted = [...budget.expenses].sort((a, b) => b.my_amount - a.my_amount);
+        const maxAmount = sorted[0]?.my_amount || 1;
+
+        return (
+            <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
+                <h3 style={{ margin: '0 0 var(--spacing-md) 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📊 Výdaje podle položek</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {sorted.slice(0, 10).map(exp => {
+                        const pct = Math.round((exp.my_amount / totalExpenses) * 100);
+                        const barWidth = Math.round((exp.my_amount / maxAmount) * 100);
+                        return (
+                            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0, background: exp.is_paid ? 'var(--accent-success)' : exp.is_auto_paid ? 'rgba(34, 197, 94, 0.4)' : 'rgba(255,255,255,0.2)' }} />
+                                <span style={{ fontSize: '0.78rem', width: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={exp.name}>{exp.name}</span>
+                                <div style={{ flex: 1, height: '14px', background: 'rgba(255,255,255,0.07)', borderRadius: '3px', overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${barWidth}%`, background: exp.is_paid ? 'var(--accent-success)' : 'var(--accent-primary)', borderRadius: '3px', opacity: exp.is_paid ? 0.8 : 1, transition: 'width 0.4s ease' }} />
+                                </div>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '36px', textAlign: 'right', flexShrink: 0 }}>{pct}%</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', width: '72px', textAlign: 'right', flexShrink: 0 }}>{formatCurrency(exp.my_amount)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div style={{ marginTop: '10px', display: 'flex', gap: '16px', fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
+                    <span><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-success)', marginRight: '4px' }} />Zaplaceno</span>
+                    <span><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-primary)', marginRight: '4px' }} />Nezaplaceno</span>
+                </div>
+            </GlassCard>
+        );
+    };
 
     const renderIncomeSection = () => (
         <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
@@ -391,17 +540,9 @@ export default function RozpocetPage() {
                         />
                     </div>
                 ))}
-                <div style={{
-                    borderTop: '1px solid rgba(255,255,255,0.1)',
-                    paddingTop: '8px',
-                    marginTop: '8px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontWeight: 600,
-                    color: 'var(--accent-success)'
-                }}>
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--accent-success)' }}>
                     <span>Příjmy celkem</span>
-                    <span>{formatCurrency(budget?.total_income || 0)}</span>
+                    <span>{formatCurrency(totalIncome)}</span>
                 </div>
             </div>
         </GlassCard>
@@ -410,7 +551,7 @@ export default function RozpocetPage() {
     const renderExpensesSection = () => (
         <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
             <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-error)' }}>📋 Pravidelné výdaje</h3>
+                <h3 style={{ margin: 0, color: 'var(--accent-error, #ef4444)' }}>📋 Pravidelné výdaje</h3>
                 <div className="section-actions">
                     <button className="btn" onClick={copyFromPrevious} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
                         📋 Z minula
@@ -425,44 +566,14 @@ export default function RozpocetPage() {
             </div>
 
             {showAddExpense && (
-                <div style={{
-                    padding: 'var(--spacing-md)',
-                    background: 'rgba(255,255,255,0.05)',
-                    borderRadius: '8px',
-                    marginBottom: 'var(--spacing-md)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                }}>
-                    <input
-                        className="input"
-                        placeholder="Název výdaje"
-                        value={newExpense.name}
-                        onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })}
-                    />
+                <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input className="input" placeholder="Název výdaje" value={newExpense.name} onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })} />
                     <div style={{ display: 'flex', gap: '8px' }}>
-                        <input
-                            type="number"
-                            className="input"
-                            placeholder="Částka"
-                            value={newExpense.amount}
-                            onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
-                            style={{ flex: 1 }}
-                        />
-                        <input
-                            className="input"
-                            placeholder="Match pattern (volitelné)"
-                            value={newExpense.match_pattern}
-                            onChange={(e) => setNewExpense({ ...newExpense, match_pattern: e.target.value })}
-                            style={{ flex: 1 }}
-                        />
+                        <input type="number" className="input" placeholder="Částka" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })} style={{ flex: 1 }} />
+                        <input className="input" placeholder="Match pattern (volitelné)" value={newExpense.match_pattern} onChange={(e) => setNewExpense({ ...newExpense, match_pattern: e.target.value })} style={{ flex: 1 }} />
                     </div>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input
-                            type="checkbox"
-                            checked={newExpense.is_auto_paid}
-                            onChange={(e) => setNewExpense({ ...newExpense, is_auto_paid: e.target.checked })}
-                        />
+                        <input type="checkbox" checked={newExpense.is_auto_paid} onChange={(e) => setNewExpense({ ...newExpense, is_auto_paid: e.target.checked })} />
                         Automatická platba (zelená)
                     </label>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -472,7 +583,20 @@ export default function RozpocetPage() {
                 </div>
             )}
 
-            <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+            {/* Progress header */}
+            {totalCount > 0 && (
+                <div style={{ marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                        <span>Zaplaceno {paidCount} z {totalCount}</span>
+                        <span>{formatCurrency(budget?.expenses.filter(e => e.is_paid).reduce((s, e) => s + e.my_amount, 0) || 0)} / {formatCurrency(totalExpenses)}</span>
+                    </div>
+                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${totalCount > 0 ? (paidCount / totalCount) * 100 : 0}%`, background: 'var(--accent-success)', borderRadius: '3px', transition: 'width 0.4s ease' }} />
+                    </div>
+                </div>
+            )}
+
+            <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
                 {budget?.expenses.map(expense => (
                     <div
                         key={expense.id}
@@ -481,139 +605,147 @@ export default function RozpocetPage() {
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center',
-                            padding: '8px',
+                            padding: '7px 6px',
                             borderRadius: '6px',
-                            background: expense.is_auto_paid ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
-                            marginBottom: '4px'
+                            background: expense.is_auto_paid ? 'rgba(34, 197, 94, 0.08)' : 'transparent',
+                            marginBottom: '2px',
+                            borderLeft: expense.matched_transaction_id ? '3px solid var(--accent-success)' : '3px solid transparent',
                         }}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, width: '100%' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                             <input
                                 type="checkbox"
                                 checked={expense.is_paid}
                                 onChange={() => toggleExpensePaid(expense.id, expense.is_paid)}
-                                style={{ cursor: 'pointer' }}
+                                style={{ cursor: 'pointer', flexShrink: 0 }}
                             />
-                            <span style={{
-                                textDecoration: expense.is_paid ? 'line-through' : 'none',
-                                opacity: expense.is_paid ? 0.6 : 1,
-                                flex: 1
-                            }}>
+                            <span style={{ textDecoration: expense.is_paid ? 'line-through' : 'none', opacity: expense.is_paid ? 0.55 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.875rem' }}>
                                 {expense.name}
-                                {expense.matched_transaction_id && <span style={{ marginLeft: '4px', fontSize: '0.7rem' }}>✓</span>}
+                                {expense.matched_transaction_id && <span style={{ marginLeft: '5px', fontSize: '0.7rem', color: 'var(--accent-success)' }}>✓ spárováno</span>}
                             </span>
                         </div>
-                        <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            {/* Percentage selector */}
+                        <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                             <CustomSelect
-                                value={expense.my_percentage.toString()}
-                                onChange={(val) => updateExpensePercentage(expense.id, parseInt(val))}
-                                style={{
-                                    width: '80px',
-                                    fontSize: '0.75rem',
+                                compact
+                                value={expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom'}
+                                onChange={(val) => {
+                                    if (val === '100') updateExpensePercentage(expense.id, 100);
+                                    else if (val === '50') updateExpensePercentage(expense.id, 50);
+                                    // 'custom' → jen zobrazí my_amount input, uloží se až po zadání částky
+                                    else setEditingMyAmounts(prev => ({
+                                        ...prev,
+                                        [expense.id]: String(Math.round(expense.my_amount)),
+                                    }));
                                 }}
+                                style={{ width: '86px' }}
                                 options={[
                                     { value: '100', label: '100%' },
                                     { value: '50', label: '50%' },
-                                    { value: '33', label: '33%' },
-                                    { value: '25', label: '25%' },
+                                    { value: 'custom', label: 'Vlastní' },
                                 ]}
                             />
-                            {/* Amount input */}
                             <input
                                 type="number"
                                 className="input"
                                 value={expense.amount}
                                 onChange={(e) => updateExpenseAmount(expense.id, parseFloat(e.target.value) || 0)}
                                 style={{ width: '85px', textAlign: 'right', padding: '4px 8px' }}
-                                title="Celková platba"
+                                title="Celková částka"
                             />
-                            {/* Show my_amount if not 100% */}
                             {expense.my_percentage < 100 && (
-                                <span style={{
-                                    fontSize: '0.75rem',
-                                    color: 'var(--accent-primary)',
-                                    minWidth: '70px',
-                                    textAlign: 'right'
-                                }} title="Můj podíl">
-                                    → {formatCurrency(expense.my_amount)}
-                                </span>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
+                                    onChange={(e) => setEditingMyAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
+                                    onBlur={() => saveMyAmount(expense)}
+                                    style={{ width: '80px', textAlign: 'right', padding: '4px 8px', color: 'var(--accent-primary)', borderColor: 'rgba(0,122,255,0.3)' }}
+                                    title="Moje část (Kč)"
+                                />
                             )}
                             <button
                                 onClick={() => deleteMonthlyExpense(expense.id, expense.recurring_expense_id)}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: '0.8rem',
-                                    opacity: 0.5,
-                                    padding: '4px'
-                                }}
-                                title="Smazat výdaj"
-                            >
-                                🗑️
-                            </button>
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.4, padding: '4px' }}
+                            >🗑️</button>
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div style={{
-                borderTop: '1px solid rgba(255,255,255,0.1)',
-                paddingTop: '8px',
-                marginTop: '8px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontWeight: 600
-            }}>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                 <span>Výdaje celkem</span>
-                <span style={{ color: 'var(--accent-error)' }}>{formatCurrency(budget?.total_expenses || 0)}</span>
+                <span style={{ color: 'var(--accent-error, #ef4444)' }}>{formatCurrency(totalExpenses)}</span>
             </div>
         </GlassCard>
     );
 
-    const renderSurplusSection = () => (
-        <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
-            <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>📊 Přebytek</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Investice tento měsíc</span>
-                    <input
-                        type="number"
-                        className="input"
-                        value={budget?.investment_amount || 0}
-                        onChange={(e) => updateBudget('investment_amount', parseFloat(e.target.value) || 0)}
-                        style={{ width: '120px', textAlign: 'right', padding: '4px 8px' }}
-                    />
-                </div>
-                <div style={{
-                    padding: 'var(--spacing-md)',
-                    background: (budget?.remaining || 0) >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                    borderRadius: '8px',
-                    textAlign: 'center'
-                }}>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Zbylé peníze</div>
+    const renderSurplusSection = () => {
+        const isOverBudget = remaining < 0;
+        const netSavings = investmentAmount + (budget?.surplus_to_savings || 0);
+        return (
+            <GlassCard style={{ marginBottom: 'var(--spacing-md)' }}>
+                <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>📊 Přebytek & Spoření</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem' }}>Investice tento měsíc</span>
+                        <input
+                            type="number"
+                            className="input"
+                            value={budget?.investment_amount || 0}
+                            onChange={(e) => updateBudget('investment_amount', parseFloat(e.target.value) || 0)}
+                            style={{ width: '110px', textAlign: 'right', padding: '4px 8px' }}
+                        />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem' }}>Posláno na spořící účet</span>
+                        <input
+                            type="number"
+                            className="input"
+                            value={budget?.surplus_to_savings || 0}
+                            onChange={(e) => updateBudget('surplus_to_savings', parseFloat(e.target.value) || 0)}
+                            style={{ width: '110px', textAlign: 'right', padding: '4px 8px' }}
+                        />
+                    </div>
+
+                    {/* Savings rate bar */}
+                    {totalIncome > 0 && (
+                        <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
+                                <span style={{ color: 'var(--text-secondary)' }}>Spořící sazba</span>
+                                <span style={{ fontWeight: 600, color: savingsRate >= 15 ? 'var(--accent-success)' : savingsRate >= 10 ? '#f59e0b' : 'var(--accent-danger, #ef4444)' }}>
+                                    {savingsRate}% {savingsRate >= 15 ? '✓' : savingsRate >= 10 ? '~' : '↓'}
+                                </span>
+                            </div>
+                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ height: '100%', width: `${Math.min(100, savingsRate)}%`, background: savingsRate >= 15 ? 'var(--accent-success)' : savingsRate >= 10 ? '#f59e0b' : 'var(--accent-danger, #ef4444)', borderRadius: '3px', transition: 'width 0.5s ease' }} />
+                                {/* 15% target marker */}
+                                <div style={{ position: 'absolute', top: 0, left: '15%', width: '2px', height: '100%', background: 'rgba(255,255,255,0.4)' }} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                                <span>{formatCurrency(netSavings)} ušetřeno</span>
+                                <span>cíl: 15%</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Remaining */}
                     <div style={{
-                        fontSize: '1.5rem',
-                        fontWeight: 700,
-                        color: (budget?.remaining || 0) >= 0 ? 'var(--accent-success)' : 'var(--accent-error)'
+                        padding: 'var(--spacing-md)',
+                        background: isOverBudget ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                        borderRadius: '8px',
+                        textAlign: 'center',
+                        border: `1px solid ${isOverBudget ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}`,
                     }}>
-                        {formatCurrency(budget?.remaining || 0)}
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Zbylé peníze</div>
+                        <div style={{ fontSize: '1.6rem', fontWeight: 700, color: isOverBudget ? 'var(--accent-danger, #ef4444)' : 'var(--accent-success)' }}>
+                            {formatCurrency(remaining)}
+                        </div>
+                        {isOverBudget && <div style={{ fontSize: '0.78rem', color: 'var(--accent-danger, #ef4444)', marginTop: '2px' }}>⚠️ Přečerpáno!</div>}
                     </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Posláno na spořící účet</span>
-                    <input
-                        type="number"
-                        className="input"
-                        value={budget?.surplus_to_savings || 0}
-                        onChange={(e) => updateBudget('surplus_to_savings', parseFloat(e.target.value) || 0)}
-                        style={{ width: '120px', textAlign: 'right', padding: '4px 8px' }}
-                    />
-                </div>
-            </div>
-        </GlassCard>
-    );
+            </GlassCard>
+        );
+    };
 
     const renderManualAccounts = () => (
         <GlassCard>
@@ -621,84 +753,50 @@ export default function RozpocetPage() {
                 <h3 style={{ margin: 0, color: 'var(--accent-primary)' }}>🏦 Spořící účty</h3>
                 <div className="section-actions">
                     <button className="btn btn-primary" onClick={() => setShowAddAccount(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-                        + Přidat účet
+                        + Přidat
                     </button>
                 </div>
             </div>
 
             {showAddAccount && (
-                <div style={{
-                    padding: 'var(--spacing-md)',
-                    background: 'rgba(255,255,255,0.05)',
-                    borderRadius: '8px',
-                    marginBottom: 'var(--spacing-md)',
-                    display: 'flex',
-                    gap: '8px'
-                }}>
-                    <input
-                        className="input"
-                        placeholder="Název účtu"
-                        value={newAccount.name}
-                        onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
-                        style={{ flex: 1 }}
-                    />
-                    <input
-                        type="number"
-                        className="input"
-                        placeholder="Zůstatek"
-                        value={newAccount.balance}
-                        onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })}
-                        style={{ width: '120px' }}
-                    />
+                <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)', display: 'flex', gap: '8px' }}>
+                    <input className="input" placeholder="Název účtu" value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} style={{ flex: 1 }} />
+                    <input type="number" className="input" placeholder="Zůstatek" value={newAccount.balance} onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })} style={{ width: '120px' }} />
                     <button className="btn btn-primary" onClick={createManualAccount}>Uložit</button>
                     <button className="btn" onClick={() => setShowAddAccount(false)}>×</button>
                 </div>
             )}
 
             {manualAccounts.map(account => (
-                <div key={account.id} style={{
-                    padding: 'var(--spacing-md)',
-                    background: 'rgba(255,255,255,0.03)',
-                    borderRadius: '8px',
-                    marginBottom: 'var(--spacing-sm)'
-                }}>
+                <div key={account.id} style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', marginBottom: 'var(--spacing-sm)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <span style={{ fontWeight: 600 }}>{account.name}</span>
                         {editingAccountId === account.id ? (
                             <div style={{ display: 'flex', gap: '4px' }}>
-                                <input
-                                    type="number"
-                                    className="input"
-                                    value={editAccountBalance}
-                                    onChange={(e) => setEditAccountBalance(e.target.value)}
-                                    style={{ width: '100px', padding: '4px 8px' }}
-                                />
+                                <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: '100px', padding: '4px 8px' }} />
                                 <button className="btn btn-primary" onClick={() => updateManualAccountBalance(account.id)} style={{ padding: '4px 8px' }}>✓</button>
                                 <button className="btn" onClick={() => setEditingAccountId(null)} style={{ padding: '4px 8px' }}>×</button>
                             </div>
                         ) : (
-                            <span
-                                onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }}
-                                style={{ cursor: 'pointer', color: 'var(--accent-primary)' }}
-                            >
+                            <span onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }} style={{ cursor: 'pointer', color: 'var(--accent-primary)', fontWeight: 600 }}>
                                 {formatCurrency(account.balance)} ✏️
                             </span>
                         )}
                     </div>
 
-                    {/* Items */}
-                    {Array.isArray(account.items) && account.items.length > 0 && (
-                        <div style={{ paddingLeft: '16px', borderLeft: '2px solid rgba(255,255,255,0.1)', marginBottom: '8px' }}>
-                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Položky (není moje):</div>
-                            {account.items.map(item => (
-                                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '2px' }}>
-                                    <span>{item.name}</span>
+                    {Array.isArray(account.envelopes) && account.envelopes.length > 0 && (
+                        <div style={{ paddingLeft: '14px', borderLeft: '2px solid rgba(255,255,255,0.1)', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Obálky:</div>
+                            {account.envelopes.map(env => (
+                                <div key={env.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.83rem', marginBottom: '2px' }}>
+                                    <span style={{ color: 'var(--text-secondary)' }}>
+                                        {env.is_mine ? '💚' : '📌'} {env.name}
+                                    </span>
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <span style={{ color: 'var(--accent-warning)' }}>-{formatCurrency(item.amount)}</span>
-                                        <button
-                                            onClick={() => deleteAccountItem(account.id, item.id)}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', opacity: 0.5 }}
-                                        >🗑️</button>
+                                        <span style={{ color: env.is_mine ? 'var(--accent-success)' : '#f59e0b' }}>
+                                            {env.is_mine ? '' : '−'}{formatCurrency(env.amount)}
+                                        </span>
+                                        <button onClick={() => deleteAccountItem(account.id, env.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', opacity: 0.4 }}>🗑️</button>
                                     </div>
                                 </div>
                             ))}
@@ -706,32 +804,38 @@ export default function RozpocetPage() {
                     )}
 
                     {showAddItem === account.id ? (
-                        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-                            <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
-                            <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: '80px', padding: '4px 8px' }} />
-                            <button className="btn btn-primary" onClick={() => addAccountItem(account.id)} style={{ padding: '4px 8px' }}>✓</button>
-                            <button className="btn" onClick={() => setShowAddItem(null)} style={{ padding: '4px 8px' }}>×</button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                                <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
+                                <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: '80px', padding: '4px 8px' }} />
+                                <button className="btn btn-primary" onClick={() => addAccountItem(account.id)} style={{ padding: '4px 8px' }}>✓</button>
+                                <button className="btn" onClick={() => setShowAddItem(null)} style={{ padding: '4px 8px' }}>×</button>
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'pointer', paddingLeft: '2px' }}>
+                                <input type="checkbox" checked={newItem.is_mine} onChange={(e) => setNewItem({ ...newItem, is_mine: e.target.checked })} />
+                                Volné (moje peníze)
+                            </label>
                         </div>
                     ) : (
-                        <button
-                            onClick={() => setShowAddItem(account.id)}
-                            style={{ fontSize: '0.75rem', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
-                        >
-                            + Přidat položku
+                        <button onClick={() => setShowAddItem(account.id)} style={{ fontSize: '0.75rem', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '2px 0' }}>
+                            + Přidat obálku
                         </button>
                     )}
 
-                    <div style={{
-                        borderTop: '1px solid rgba(255,255,255,0.1)',
-                        paddingTop: '8px',
-                        marginTop: '8px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontWeight: 600,
-                        color: 'var(--accent-success)'
-                    }}>
-                        <span>Reálně moje</span>
-                        <span>{formatCurrency(account.available_balance)}</span>
+                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.83rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                            <span>Cizí rezervy</span>
+                            <span>−{formatCurrency(account.balance - account.my_balance)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--accent-success)' }}>
+                            <span>Volné k utracení</span>
+                            <span>{formatCurrency(account.my_balance)}</span>
+                        </div>
+                        {account.balance > 0 && (
+                            <div style={{ marginTop: '8px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.min(100, (account.my_balance / account.balance) * 100)}%`, background: 'var(--accent-success)', borderRadius: '3px' }} />
+                            </div>
+                        )}
                     </div>
                 </div>
             ))}
@@ -741,88 +845,83 @@ export default function RozpocetPage() {
     const renderAnnualOverview = () => {
         if (!annualData) return <div>Načítám...</div>;
 
-        const maxIncome = Math.max(...annualData.months.map(m => m.income));
-        const maxExpenses = Math.max(...annualData.months.map(m => m.expenses));
-        const maxValue = Math.max(maxIncome, maxExpenses);
+        const maxValue = Math.max(...annualData.months.map(m => Math.max(m.income, m.expenses)));
+        const activeMonths = annualData.months.filter(m => m.income > 0);
 
         return (
             <>
-                {/* Summary Cards */}
                 <div className="dashboard-grid" style={{ gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
                     <GlassCard>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Příjmy celkem</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(annualData.totals.income)}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Příjmy celkem</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(annualData.totals.income)}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>⌀ {formatCurrency(annualData.averages.income)}/měs</div>
                     </GlassCard>
                     <GlassCard>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Výdaje celkem</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-error)' }}>{formatCurrency(annualData.totals.expenses)}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Výdaje celkem</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-danger, #ef4444)' }}>{formatCurrency(annualData.totals.expenses)}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>⌀ {formatCurrency(annualData.averages.expenses)}/měs</div>
                     </GlassCard>
                     <GlassCard>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Investice</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-primary)' }}>{formatCurrency(annualData.totals.investments)}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Investice</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-primary)' }}>{formatCurrency(annualData.totals.investments)}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>⌀ {formatCurrency(annualData.averages.investments)}/měs</div>
                     </GlassCard>
                     <GlassCard>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Čistý zisk</div>
-                        <div style={{ fontSize: '1.25rem', fontWeight: 700, color: annualData.totals.net >= 0 ? 'var(--accent-success)' : 'var(--accent-error)' }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Čistý zisk</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: annualData.totals.net >= 0 ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)' }}>
                             {formatCurrency(annualData.totals.net)}
                         </div>
+                        {activeMonths.length > 0 && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                úspor. sazba: {annualData.totals.income > 0 ? Math.round((annualData.totals.investments / annualData.totals.income) * 100) : 0}%
+                            </div>
+                        )}
                     </GlassCard>
                 </div>
 
-                {/* Monthly Chart */}
+                {/* Monthly chart */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>📈 Měsíční přehled</h3>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', height: '200px' }}>
+                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>📈 Měsíční přehled {selectedYear}</h3>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', height: '180px' }}>
                         {annualData.months.map((month, idx) => (
-                            <div key={month.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                                <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '180px' }}>
-                                    <div
-                                        style={{
-                                            width: '12px',
-                                            height: `${(month.income / maxValue) * 100}%`,
-                                            background: 'var(--accent-success)',
-                                            borderRadius: '2px 2px 0 0',
-                                            minHeight: month.income > 0 ? '4px' : '0'
-                                        }}
-                                        title={`Příjmy: ${formatCurrency(month.income)}`}
-                                    />
-                                    <div
-                                        style={{
-                                            width: '12px',
-                                            height: `${(month.expenses / maxValue) * 100}%`,
-                                            background: 'var(--accent-error)',
-                                            borderRadius: '2px 2px 0 0',
-                                            minHeight: month.expenses > 0 ? '4px' : '0'
-                                        }}
-                                        title={`Výdaje: ${formatCurrency(month.expenses)}`}
-                                    />
+                            <div
+                                key={month.month}
+                                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', cursor: 'pointer' }}
+                                onClick={() => { setViewMode('month'); setSelectedMonth(month.month); }}
+                                title={`${MONTH_NAMES[idx]}: Příjmy ${formatCurrency(month.income)}, Výdaje ${formatCurrency(month.expenses)}`}
+                            >
+                                <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '160px' }}>
+                                    <div style={{ width: '10px', height: maxValue > 0 ? `${(month.income / maxValue) * 100}%` : '0%', background: 'var(--accent-success)', borderRadius: '2px 2px 0 0', minHeight: month.income > 0 ? '4px' : '0', transition: 'height 0.3s ease' }} />
+                                    <div style={{ width: '10px', height: maxValue > 0 ? `${(month.expenses / maxValue) * 100}%` : '0%', background: 'var(--accent-danger, #ef4444)', borderRadius: '2px 2px 0 0', minHeight: month.expenses > 0 ? '4px' : '0', opacity: month.expenses > month.income ? 1 : 0.75, transition: 'height 0.3s ease' }} />
                                 </div>
-                                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{MONTH_NAMES[idx].substring(0, 3)}</span>
+                                <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{MONTH_NAMES[idx].substring(0, 3)}</span>
                             </div>
                         ))}
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'center', marginTop: 'var(--spacing-md)' }}>
-                        <span style={{ fontSize: '0.8rem' }}><span style={{ display: 'inline-block', width: '12px', height: '12px', background: 'var(--accent-success)', borderRadius: '2px', marginRight: '4px' }} />Příjmy</span>
-                        <span style={{ fontSize: '0.8rem' }}><span style={{ display: 'inline-block', width: '12px', height: '12px', background: 'var(--accent-error)', borderRadius: '2px', marginRight: '4px' }} />Výdaje</span>
+                    <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'center', marginTop: 'var(--spacing-sm)', fontSize: '0.78rem' }}>
+                        <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--accent-success)', borderRadius: '2px', marginRight: '4px' }} />Příjmy</span>
+                        <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--accent-danger, #ef4444)', borderRadius: '2px', marginRight: '4px' }} />Výdaje</span>
                     </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '4px' }}>Klikni na měsíc pro detail</div>
                 </GlassCard>
 
-                {/* Expense Breakdown */}
+                {/* Expense breakdown */}
                 <GlassCard>
-                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>🍕 Výdaje podle kategorií</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>🍕 Výdaje podle položek</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                         {Object.entries(annualData.expense_breakdown)
                             .sort(([, a], [, b]) => b - a)
+                            .slice(0, 15)
                             .map(([name, amount]) => {
-                                const percentage = (amount / annualData.totals.expenses) * 100;
+                                const pct = (amount / annualData.totals.expenses) * 100;
                                 return (
                                     <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ width: '150px', fontSize: '0.85rem' }}>{name}</span>
-                                        <div style={{ flex: 1, height: '16px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-                                            <div style={{ height: '100%', width: `${percentage}%`, background: 'var(--accent-primary)', borderRadius: '4px' }} />
+                                        <span style={{ width: '140px', fontSize: '0.83rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                                        <div style={{ flex: 1, height: '14px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                                            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent-primary)', borderRadius: '3px' }} />
                                         </div>
-                                        <span style={{ width: '100px', textAlign: 'right', fontSize: '0.85rem' }}>{formatCurrency(amount)}</span>
-                                        <span style={{ width: '50px', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{percentage.toFixed(0)}%</span>
+                                        <span style={{ width: '90px', textAlign: 'right', fontSize: '0.83rem' }}>{formatCurrency(amount)}</span>
+                                        <span style={{ width: '40px', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{pct.toFixed(0)}%</span>
                                     </div>
                                 );
                             })}
@@ -832,96 +931,90 @@ export default function RozpocetPage() {
         );
     };
 
+    const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
+
     return (
         <MainLayout>
             <div className="page-container">
-                {/* Header Toolbar */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: 'var(--spacing-lg)' }}>
-                    {/* Title */}
-                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>
-                        📅 Rozpočet
-                    </h1>
-
-                    {/* Actions */}
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <button
-                            onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')}
-                            className="btn"
-                            style={{
-                                background: viewMode === 'year' ? 'var(--accent-warning)' : 'rgba(255,255,255,0.05)',
-                                color: viewMode === 'year' ? '#000' : 'var(--text-primary)',
-                                padding: '6px 12px',
-                                fontSize: '0.85rem',
-                                fontWeight: viewMode === 'year' ? 600 : 400
-                            }}
-                        >
-                            {viewMode === 'year' ? 'Zpět na měsíc' : '📊 Roční přehled'}
-                        </button>
-                        {viewMode === 'month' && (
+                {/* Header */}
+                <div style={{ marginBottom: 'var(--spacing-md)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>📅 Měsíční rozpočet</h1>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {isAutoSyncing && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block', width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--accent-primary)', borderRadius: '50%' }} />
+                                    Auto-sync...
+                                </span>
+                            )}
                             <button
+                                onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')}
                                 className="btn"
-                                onClick={deleteBudget}
-                                style={{
-                                    fontSize: '0.85rem',
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    color: 'var(--accent-error)',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    padding: '6px 12px',
-                                }}
-                                title="Smazat tento měsíc"
+                                style={{ background: viewMode === 'year' ? 'var(--accent-warning, #f59e0b)' : 'rgba(255,255,255,0.05)', color: viewMode === 'year' ? '#000' : 'var(--text-primary)', padding: '6px 12px', fontSize: '0.85rem', fontWeight: viewMode === 'year' ? 600 : 400 }}
                             >
-                                🗑️ Smazat
+                                {viewMode === 'year' ? '← Na měsíc' : '📊 Roční přehled'}
                             </button>
-                        )}
+                            {viewMode === 'month' && (
+                                <button className="btn" onClick={deleteBudget} style={{ fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger, #ef4444)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '6px 12px' }}>
+                                    🗑️ Smazat
+                                </button>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Filters Row: Native Selects for Month & Year */}
+                    {/* Month navigation */}
                     {viewMode === 'month' && (
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <button className="btn" onClick={goToPrevMonth} style={{ padding: '8px 12px', fontSize: '1rem' }}>←</button>
                             <CustomSelect
                                 value={selectedMonth.toString()}
                                 onChange={(val) => setSelectedMonth(Number(val))}
                                 style={{ width: '150px' }}
-                                options={MONTH_NAMES.map((name, idx) => ({
-                                    value: (idx + 1).toString(),
-                                    label: name
-                                }))}
+                                options={MONTH_NAMES.map((name, idx) => ({ value: (idx + 1).toString(), label: name }))}
                             />
-
                             <CustomSelect
                                 value={selectedYear.toString()}
                                 onChange={(val) => setSelectedYear(Number(val))}
-                                style={{ width: '120px' }}
-                                options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i)
-                                    .sort((a, b) => b - a)
-                                    .map(y => ({
-                                        value: y.toString(),
-                                        label: y.toString()
-                                    }))}
+                                style={{ width: '110px' }}
+                                options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))}
                             />
+                            <button className="btn" onClick={goToNextMonth} style={{ padding: '8px 12px', fontSize: '1rem' }}>→</button>
+                            {!isCurrentMonth && (
+                                <button className="btn" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }} style={{ fontSize: '0.8rem', padding: '6px 10px', background: 'rgba(255,255,255,0.05)' }}>
+                                    Dnes
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Year navigation */}
+                    {viewMode === 'year' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button className="btn" onClick={() => setSelectedYear(y => y - 1)} style={{ padding: '8px 12px', fontSize: '1rem' }}>←</button>
+                            <span style={{ fontWeight: 600, fontSize: '1.1rem', minWidth: '60px', textAlign: 'center' }}>{selectedYear}</span>
+                            <button className="btn" onClick={() => setSelectedYear(y => y + 1)} style={{ padding: '8px 12px', fontSize: '1rem' }}>→</button>
                         </div>
                     )}
                 </div>
 
                 {/* Content */}
                 {viewMode === 'month' ? (
-                    <div className="rozpocet-grid">
-                        {/* Left Column - Income & Savings */}
-                        <div>
-                            {renderIncomeSection()}
-                            {renderSurplusSection()}
+                    <>
+                        {renderKpiBar()}
+                        <div className="rozpocet-grid">
+                            <div>
+                                {renderIncomeSection()}
+                                {renderSurplusSection()}
+                            </div>
+                            <div>
+                                {renderExpensesSection()}
+                                {renderExpenseChart()}
+                            </div>
+                            <div>
+                                {renderManualAccounts()}
+                            </div>
                         </div>
-
-                        {/* Middle Column - Expenses */}
-                        <div>
-                            {renderExpensesSection()}
-                        </div>
-
-                        {/* Right Column - Manual Accounts */}
-                        <div>
-                            {renderManualAccounts()}
-                        </div>
-                    </div>
+                    </>
                 ) : (
                     renderAnnualOverview()
                 )}

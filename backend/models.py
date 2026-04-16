@@ -171,6 +171,7 @@ class MonthlyExpenseModel(Base):
     name = Column(String, nullable=False)  # Může být jiný než recurring
     amount = Column(Float, nullable=False)  # Celková částka platby
     my_percentage = Column(Integer, default=100)  # Můj podíl v %
+    my_amount_override = Column(Float, nullable=True)  # Přímé zadání moje části v Kč (přebíjí my_percentage)
     is_paid = Column(Boolean, default=False)
     is_auto_paid = Column(Boolean, default=False)
     matched_transaction_id = Column(String, nullable=True)  # ID transakce co to zaplatila
