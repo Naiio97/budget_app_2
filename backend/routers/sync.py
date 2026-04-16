@@ -668,10 +668,10 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                                 "name": settings_block.get("name", f"Pie {pie_id}"),
                                 "icon": settings_block.get("icon", ""),
                                 "goal": settings_block.get("goal"),
-                                "invested_eur": float(result_block.get("investedValue", 0) or 0),
-                                "value_eur": float(result_block.get("value", 0) or 0),
-                                "result_eur": float(result_block.get("result", 0) or 0),
-                                "result_pct": float(result_block.get("resultCoefficient", 0) or 0) * 100,
+                                "invested_eur": float(result_block.get("priceAvgInvestedValue", 0) or 0),
+                                "value_eur": float(result_block.get("priceAvgValue", 0) or 0),
+                                "result_eur": float(result_block.get("priceAvgResult", 0) or 0),
+                                "result_pct": float(result_block.get("priceAvgResultCoef", 0) or 0) * 100,
                                 "instruments": [
                                     {
                                         "ticker": inst.get("ticker", ""),

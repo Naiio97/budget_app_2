@@ -270,6 +270,19 @@ async def get_pies(db: AsyncSession = Depends(get_db)):
     return {"pies": pies, "currency": "CZK"}
 
 
+@router.get("/debug/pies-raw")
+async def debug_pies_raw():
+    """Debug: return raw T212 API response for pies (list + first pie detail)"""
+    from services.trading212 import trading212_service
+    pies_list = await trading212_service.get_pies()
+    detail = None
+    if isinstance(pies_list, list) and pies_list:
+        first_id = pies_list[0].get("id")
+        if first_id:
+            detail = await trading212_service.get_pie_detail(first_id)
+    return {"pies_list": pies_list, "first_pie_detail": detail}
+
+
 @router.get("/summary")
 async def get_investment_summary(db: AsyncSession = Depends(get_db)):
     """Get investment account summary from database"""
