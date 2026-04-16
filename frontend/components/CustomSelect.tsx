@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 interface Option {
@@ -32,13 +32,17 @@ export default function CustomSelect({
 }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
-    const [mounted, setMounted] = useState(false);
     const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 100, left: 100, width: 200 });
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => { setMounted(true); }, []);
+    // useSyncExternalStore: server returns false, client returns true — no effect needed
+    const mounted = useSyncExternalStore(
+        () => () => {},
+        () => true,
+        () => false,
+    );
 
     useLayoutEffect(() => {
         if (!isOpen || !buttonRef.current) return;
