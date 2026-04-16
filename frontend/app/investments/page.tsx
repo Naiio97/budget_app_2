@@ -296,9 +296,9 @@ export default function InvestmentsPage() {
                                     padding: '12px',
                                 }}>
                                     {pie.instruments.length > 0 && (
-                                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                                        <div className="pie-layout">
                                             {/* Donut chart */}
-                                            <div style={{ flexShrink: 0, width: 160, height: 160 }}>
+                                            <div className="pie-donut-wrap">
                                                 <PieChart width={160} height={160}>
                                                     <Pie
                                                         data={pie.instruments.map((inst) => ({
@@ -333,7 +333,7 @@ export default function InvestmentsPage() {
                                             </div>
 
                                             {/* Right: pie name + value + instruments */}
-                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
+                                            <div className="pie-right">
                                                 {/* Pie header */}
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -358,12 +358,7 @@ export default function InvestmentsPage() {
                                                     const pos = positionMap[inst.ticker];
                                                     const hue = (i * 47) % 360;
                                                     return (
-                                                        <div key={inst.ticker} style={{
-                                                            display: 'grid',
-                                                            gridTemplateColumns: '1fr auto auto',
-                                                            gap: '10px',
-                                                            alignItems: 'center',
-                                                        }}>
+                                                        <div key={inst.ticker} className="pie-inst-grid">
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                                                                 <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: `hsl(${hue}, 70%, 55%)`, flexShrink: 0 }} />
                                                                 <div style={{ minWidth: 0 }}>
@@ -380,7 +375,7 @@ export default function InvestmentsPage() {
                                                                 <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>{inst.current_share.toFixed(1)} %</div>
                                                             </div>
                                                             {pos && (
-                                                                <div style={{ textAlign: 'right', minWidth: '68px', color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                                <div className="pie-inst-ppl" style={{ color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
                                                                     <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>
                                                                         {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)}
                                                                     </div>

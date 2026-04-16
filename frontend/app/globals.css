@@ -599,6 +599,58 @@ select.input {
   gap: 0;
 }
 
+/* Pie positions layout */
+.pie-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.pie-donut-wrap {
+  flex-shrink: 0;
+  width: 160px;
+  height: 160px;
+}
+
+.pie-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pie-inst-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.pie-inst-ppl {
+  text-align: right;
+  min-width: 68px;
+}
+
+@media (max-width: 480px) {
+  .pie-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pie-right {
+    width: 100%;
+  }
+
+  .pie-inst-grid {
+    grid-template-columns: 1fr auto;
+  }
+
+  .pie-inst-ppl {
+    display: none;
+  }
+}
+
 /* Day group */
 .tx-day-group {
   display: flex;
