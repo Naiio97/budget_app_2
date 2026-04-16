@@ -11,6 +11,8 @@ export const queryKeys = {
   investmentPortfolio: ['investment-portfolio'] as const,
   portfolioHistory: (period: string) => ['portfolio-history', period] as const,
   dividends: ['dividends'] as const,
+  portfolioDetail: ['portfolio-detail'] as const,
+  portfolioPositions: ['portfolio-positions'] as const,
   accountDetail: (id: string, page: number) => ['account-detail', id, page] as const,
   categories: ['categories'] as const,
   recurringExpenses: ['recurring-expenses'] as const,
@@ -21,4 +23,6 @@ export const queryKeys = {
   monthlyReport: (months: number) => ['monthly-report', months] as const,
   familyAccounts: ['family-accounts'] as const,
   apiKeys: ['api-keys'] as const,
+  syncStatus: ['sync-status'] as const,
+  pies: ['pies'] as const,
 };

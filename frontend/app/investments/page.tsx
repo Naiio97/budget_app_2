@@ -9,9 +9,15 @@ import {
     getInvestmentPortfolio,
     getPortfolioHistory,
     getDividends,
+    getPortfolioDetail,
+    getPositions,
+    getPies,
     InvestmentPortfolio,
+    InvestmentPortfolioDetail,
     PortfolioHistory,
-    Dividend
+    PortfolioPosition,
+    Dividend,
+    Pie as PieData,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import {
@@ -21,7 +27,10 @@ import {
     Tooltip,
     ResponsiveContainer,
     Area,
-    AreaChart
+    AreaChart,
+    PieChart,
+    Pie,
+    Cell,
 } from 'recharts';
 
 export default function InvestmentsPage() {
@@ -42,9 +51,49 @@ export default function InvestmentsPage() {
         queryFn: () => getDividends(20),
     });
 
+    const { data: detail } = useQuery<InvestmentPortfolioDetail>({
+        queryKey: queryKeys.portfolioDetail,
+        queryFn: getPortfolioDetail,
+    });
+
+    const { data: positionsData } = useQuery<{ positions: PortfolioPosition[]; currency: string }>({
+        queryKey: queryKeys.portfolioPositions,
+        queryFn: getPositions,
+    });
+    const positions = positionsData?.positions ?? [];
+
+    const { data: piesData } = useQuery<{ pies: PieData[]; currency: string }>({
+        queryKey: queryKeys.pies,
+        queryFn: getPies,
+    });
+    const pies = piesData?.pies ?? [];
+
     const dividends: Dividend[] = dividendsData?.dividends || [];
     const loading = loadingPortfolio || loadingHistory;
     const error = isError ? 'Nepodařilo se načíst investice' : null;
+
+    const PIE_ICON_MAP: Record<string, string> = {
+        Umbrella: '☂️', Home: '🏠', Savings: '🏦', Vacation: '🌴', Health: '🏥',
+        Education: '🎓', Tech: '💻', Energy: '⚡', Finance: '💹', Food: '🍔',
+        Car: '🚗', Entertainment: '🎬', Shopping: '🛒', Sports: '🏋️',
+        Gift: '🎁', Star: '⭐', Rocket: '🚀', Heart: '❤️', Globe: '🌍',
+        Chart: '📊', Diamond: '💎', Crown: '👑', Coins: '🪙',
+    };
+    const pieIcon = (icon: string) => PIE_ICON_MAP[icon] ?? '🥧';
+
+    // Map ticker -> position for enriching pie instruments
+    const positionMap = positions.reduce((acc, pos) => {
+        const clean = pos.ticker.replace('_US_EQ', '').replace('_EQ', '');
+        acc[clean] = pos;
+        return acc;
+    }, {} as Record<string, PortfolioPosition>);
+
+    // Positions not belonging to any pie
+    const tickersInPies = new Set(pies.flatMap(p => p.instruments.map(i => i.ticker)));
+    const orphanPositions = positions.filter(pos => {
+        const clean = pos.ticker.replace('_US_EQ', '').replace('_EQ', '');
+        return !tickersInPies.has(clean);
+    });
 
     const formatCurrency = (amount: number, currency: string = 'CZK') => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -119,34 +168,55 @@ export default function InvestmentsPage() {
                 {/* Summary Card */}
                 {portfolio && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <div className="text-secondary" style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
-                            Celková hodnota portfolia
-                        </div>
-                        <div style={{ fontSize: '2rem', fontWeight: 600 }}>
-                            {formatCurrency(portfolio.total_value, portfolio.currency)}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                            <div>
+                                <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Celková hodnota</div>
+                                <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>
+                                    {formatCurrency(portfolio.total_value, portfolio.currency)}
+                                </div>
+                            </div>
+                            {detail && detail.invested > 0 && (
+                                <>
+                                    <div>
+                                        <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Investováno</div>
+                                        <div style={{ fontSize: '1.4rem', fontWeight: 500 }}>
+                                            {formatCurrency(detail.invested, detail.currency)}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Zisk / Ztráta</div>
+                                        <div style={{
+                                            fontSize: '1.4rem',
+                                            fontWeight: 600,
+                                            color: detail.result >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'
+                                        }}>
+                                            {detail.result >= 0 ? '+' : ''}{formatCurrency(detail.result, detail.currency)}
+                                            {detail.invested > 0 && (
+                                                <span style={{ fontSize: '0.85rem', marginLeft: '6px', opacity: 0.8 }}>
+                                                    ({detail.result >= 0 ? '+' : ''}{((detail.result / detail.invested) * 100).toFixed(2)} %)
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {detail.cash_free > 0 && (
+                                        <div>
+                                            <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Volná hotovost</div>
+                                            <div style={{ fontSize: '1.1rem', fontWeight: 500 }}>
+                                                {formatCurrency(detail.cash_free, detail.currency)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
                         </div>
                     </GlassCard>
                 )}
 
                 {/* Chart */}
-                {history && history.history.length > 0 && (
-                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <div className="chart-header-wrap">
-                            <h3 style={{ margin: 0 }}>📊 Vývoj hodnoty</h3>
-                            <div className="period-buttons" style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                {['1W', '1M', '3M', '6M', '1Y'].map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPeriod(p)}
-                                        className={`btn ${period === p ? 'btn-primary' : ''}`}
-                                        style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1, minWidth: '40px' }}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                    <h3 style={{ margin: '0 0 var(--spacing-md)' }}>📊 Vývoj hodnoty</h3>
 
+                    {history && history.history.length >= 2 ? (
                         <div style={{ height: '300px' }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={history.history}>
@@ -188,6 +258,174 @@ export default function InvestmentsPage() {
                                 </AreaChart>
                             </ResponsiveContainer>
                         </div>
+                    ) : (
+                        <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '1.5rem' }}>📈</span>
+                            <span className="text-secondary" style={{ fontSize: '0.85rem' }}>
+                                Graf se plní po každém syncu — zatím málo dat ({history?.history.length ?? 0} bod{history?.history.length === 1 ? '' : 'ů'})
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Period buttons below the chart */}
+                    <div style={{ display: 'flex', gap: '4px', marginTop: 'var(--spacing-md)' }}>
+                        {['1W', '1M', '3M', '6M', '1Y', 'ALL'].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => setPeriod(p)}
+                                className={`btn ${period === p ? 'btn-primary' : ''}`}
+                                style={{ padding: '6px 12px', fontSize: '0.8rem', flex: 1 }}
+                            >
+                                {p}
+                            </button>
+                        ))}
+                    </div>
+                </GlassCard>
+
+                {/* Positions — merged with Pies */}
+                {(pies.length > 0 || positions.length > 0) && (
+                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>Pozice</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+
+                            {/* Pies — each as a group with enriched instruments */}
+                            {pies.map((pie) => (
+                                <div key={pie.id} style={{
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    padding: '12px',
+                                }}>
+                                    {pie.instruments.length > 0 && (
+                                        <div className="pie-layout">
+                                            {/* Donut chart */}
+                                            <div className="pie-donut-wrap">
+                                                <PieChart width={160} height={160}>
+                                                    <Pie
+                                                        data={pie.instruments.map((inst) => ({
+                                                            name: inst.ticker,
+                                                            value: inst.current_share,
+                                                        }))}
+                                                        cx={75}
+                                                        cy={75}
+                                                        innerRadius={50}
+                                                        outerRadius={72}
+                                                        dataKey="value"
+                                                        strokeWidth={0}
+                                                    >
+                                                        {pie.instruments.map((inst, i) => (
+                                                            <Cell key={inst.ticker} fill={`hsl(${(i * 47) % 360}, 70%, 55%)`} />
+                                                        ))}
+                                                    </Pie>
+                                                    <Tooltip
+                                                        contentStyle={{
+                                                            background: '#1e293b',
+                                                            border: '1px solid #334155',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.78rem',
+                                                            color: '#ffffff',
+                                                            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8), 0 8px 10px -6px rgba(0,0,0,0.8)',
+                                                        }}
+                                                        labelStyle={{ color: '#ffffff', fontWeight: 600 }}
+                                                        itemStyle={{ color: '#ffffff' }}
+                                                        formatter={(value: number | undefined, name: string | undefined) => [`${(value ?? 0).toFixed(1)} %`, name ?? '']}
+                                                    />
+                                                </PieChart>
+                                            </div>
+
+                                            {/* Right: pie name + value + instruments */}
+                                            <div className="pie-right">
+                                                {/* Pie header */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontSize: '1.1rem' }}>{pieIcon(pie.icon)}</span>
+                                                        <span style={{ fontWeight: 600 }}>{pie.name}</span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontWeight: 600 }}>{formatCurrency(pie.value_czk)}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: pie.result_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                            {pie.result_czk >= 0 ? '+' : ''}{formatCurrency(pie.result_czk)}
+                                                            <span style={{ opacity: 0.8, marginLeft: '4px' }}>
+                                                                ({pie.result_pct >= 0 ? '+' : ''}{pie.result_pct.toFixed(2)} %)
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+
+                                            {/* Instruments enriched with position data */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
+                                                {pie.instruments.map((inst, i) => {
+                                                    const pos = positionMap[inst.ticker];
+                                                    const hue = (i * 47) % 360;
+                                                    return (
+                                                        <div key={inst.ticker} className="pie-inst-grid">
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                                                                <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: `hsl(${hue}, 70%, 55%)`, flexShrink: 0 }} />
+                                                                <div style={{ minWidth: 0 }}>
+                                                                    <div style={{ fontWeight: 500, fontSize: '0.88rem' }}>{inst.ticker}</div>
+                                                                    {pos && (
+                                                                        <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>
+                                                                            {pos.quantity.toFixed(pos.quantity % 1 === 0 ? 0 : 4)} ks · {pos.current_price_eur.toFixed(2)} €
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div style={{ textAlign: 'right' }}>
+                                                                <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatCurrency(inst.value_czk)}</div>
+                                                                <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>{inst.current_share.toFixed(1)} %</div>
+                                                            </div>
+                                                            {pos && (
+                                                                <div className="pie-inst-ppl" style={{ color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                                    <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>
+                                                                        {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.73rem', opacity: 0.85 }}>
+                                                                        {pos.ppl_pct >= 0 ? '+' : ''}{pos.ppl_pct.toFixed(2)} %
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+
+                            {/* Orphan positions — not part of any pie */}
+                            {orphanPositions.map((pos) => (
+                                <div key={pos.ticker} style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr auto auto',
+                                    gap: '12px',
+                                    alignItems: 'center',
+                                    padding: '10px 12px',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: 'var(--radius-sm)',
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{pos.ticker.replace('_US_EQ', '').replace('_EQ', '')}</div>
+                                        <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                            {pos.quantity.toFixed(pos.quantity % 1 === 0 ? 0 : 4)} ks · prům. {pos.average_price_eur.toFixed(2)} €
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: 500 }}>{formatCurrency(pos.value_czk)}</div>
+                                        <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>{pos.current_price_eur.toFixed(2)} €</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right', minWidth: '80px', color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                        <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
+                                            {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                            {pos.ppl_pct >= 0 ? '+' : ''}{pos.ppl_pct.toFixed(2)} %
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </GlassCard>
                 )}
 
@@ -197,15 +435,12 @@ export default function InvestmentsPage() {
                     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
                     gap: 'var(--spacing-lg)'
                 }}>
-                    {/* Transactions */}
-                    {portfolio && (
+                    {/* Transactions — only when data exists */}
+                    {portfolio && portfolio.transactions.length > 0 && (
                         <GlassCard>
                             <h3 style={{ marginBottom: 'var(--spacing-md)' }}>📋 Poslední transakce</h3>
-                            {portfolio.transactions.length === 0 ? (
-                                <p className="text-secondary">Žádné transakce</p>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    {portfolio.transactions.slice(0, 10).map((tx) => (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {portfolio.transactions.slice(0, 10).map((tx) => (
                                         <div
                                             key={tx.id}
                                             style={{
@@ -232,16 +467,13 @@ export default function InvestmentsPage() {
                                         </div>
                                     ))}
                                 </div>
-                            )}
                         </GlassCard>
                     )}
 
-                    {/* Dividends */}
-                    <GlassCard>
-                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💰 Dividendy</h3>
-                        {dividends.length === 0 ? (
-                            <p className="text-secondary">Žádné dividendy</p>
-                        ) : (
+                    {/* Dividends — only when data exists */}
+                    {dividends.length > 0 && (
+                        <GlassCard>
+                            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💰 Dividendy</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {dividends.slice(0, 10).map((div, i) => (
                                     <div
@@ -267,8 +499,8 @@ export default function InvestmentsPage() {
                                     </div>
                                 ))}
                             </div>
-                        )}
-                    </GlassCard>
+                        </GlassCard>
+                    )}
                 </div>
             </div>
         </MainLayout>

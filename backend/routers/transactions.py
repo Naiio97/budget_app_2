@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Optional
@@ -85,8 +86,7 @@ async def get_transactions(
     
     result = await db.execute(query)
     rows = result.all()
-    
-    import json
+
     items = []
     for tx, account_name in rows:
         # Extract creditor/debtor names from raw_json
@@ -203,26 +203,38 @@ async def update_transaction_category(
     
     # Extract merchant name for learning
     if data.learn and tx.description:
-        # Get the creditor name from description (usually first word/phrase)
-        merchant = tx.description.lower().strip()
-        
-        # Check if rule already exists
+        # Prefer creditorName from raw_json — it's cleaner than the full description
+        # (e.g. "Lidl" instead of "Nákup 5465LIDL CZ S.R.O BRNO ref 12345678")
+        pattern = None
+        if tx.raw_json:
+            try:
+                raw = json.loads(tx.raw_json)
+                creditor = (raw.get("creditorName") or "").strip()
+                if creditor and len(creditor) >= 3:
+                    pattern = creditor.lower()
+            except Exception:
+                pass
+
+        if not pattern:
+            pattern = tx.description.lower().strip()
+
+        # Check if rule already exists for this pattern
         existing = await db.execute(
-            select(CategoryRuleModel).where(CategoryRuleModel.pattern == merchant)
+            select(CategoryRuleModel).where(CategoryRuleModel.pattern == pattern)
         )
         existing_rule = existing.scalar_one_or_none()
-        
+
         if existing_rule:
-            # Update existing rule
+            # Update existing rule — user explicitly chose a category, so promote to user-defined
             existing_rule.category = data.category
+            existing_rule.is_user_defined = True
             existing_rule.match_count += 1
         else:
-            # Create new learned rule
             rule = CategoryRuleModel(
-                pattern=merchant,
+                pattern=pattern,
                 category=data.category,
-                is_user_defined=False,  # Learned from user action
-                match_count=1
+                is_user_defined=True,   # User explicitly set this
+                match_count=1,
             )
             db.add(rule)
     
@@ -234,6 +246,69 @@ async def update_transaction_category(
         "new_category": data.category,
         "is_excluded": tx.is_excluded,
         "rule_created": data.learn
+    }
+
+
+@router.get("/{transaction_id}")
+async def get_transaction_detail(
+    transaction_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Get full transaction detail including raw bank data"""
+    result = await db.execute(
+        select(TransactionModel, AccountModel.name.label("account_name"))
+        .join(AccountModel, TransactionModel.account_id == AccountModel.id, isouter=True)
+        .where(TransactionModel.id == transaction_id)
+    )
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    tx, account_name = row
+
+    raw = {}
+    if tx.raw_json:
+        try:
+            raw = json.loads(tx.raw_json)
+        except Exception:
+            pass
+
+    # Extract creditor/debtor account numbers
+    creditor_acc = raw.get("creditorAccount") or {}
+    debtor_acc = raw.get("debtorAccount") or {}
+    balance_after = raw.get("balanceAfterTransaction") or {}
+    balance_amount = balance_after.get("balanceAmount") or {}
+
+    currency_exchange = raw.get("currencyExchange") or []
+    fx = currency_exchange[0] if currency_exchange else {}
+
+    return {
+        "id": tx.id,
+        "date": tx.date,
+        "value_date": raw.get("valueDate"),
+        "booking_date_time": raw.get("bookingDateTime"),
+        "description": tx.description,
+        "amount": tx.amount,
+        "currency": tx.currency,
+        "category": tx.category,
+        "account_id": tx.account_id,
+        "account_name": account_name,
+        "account_type": tx.account_type,
+        "transaction_type": tx.transaction_type,
+        "is_excluded": tx.is_excluded,
+        "creditor_name": raw.get("creditorName"),
+        "debtor_name": raw.get("debtorName"),
+        "creditor_iban": creditor_acc.get("iban") or creditor_acc.get("bban"),
+        "debtor_iban": debtor_acc.get("iban") or debtor_acc.get("bban"),
+        "remittance_info": raw.get("remittanceInformationUnstructured") or raw.get("remittanceInformationStructured"),
+        "end_to_end_id": raw.get("endToEndId"),
+        "bank_tx_code": raw.get("proprietaryBankTransactionCode") or raw.get("bankTransactionCode"),
+        "additional_info": raw.get("additionalInformation"),
+        "balance_after": float(balance_amount["amount"]) if balance_amount.get("amount") else None,
+        "balance_after_currency": balance_amount.get("currency"),
+        "fx_rate": fx.get("exchangeRate"),
+        "fx_source_currency": fx.get("sourceCurrency"),
+        "fx_target_currency": fx.get("targetCurrency"),
     }
 
 
