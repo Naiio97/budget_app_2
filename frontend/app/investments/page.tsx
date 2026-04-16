@@ -295,38 +295,20 @@ export default function InvestmentsPage() {
                                     borderRadius: 'var(--radius-sm)',
                                     padding: '12px',
                                 }}>
-                                    {/* Pie header */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <span style={{ fontSize: '1.2rem' }}>{pieIcon(pie.icon)}</span>
-                                            <span style={{ fontWeight: 600 }}>{pie.name}</span>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontWeight: 600 }}>{formatCurrency(pie.value_czk)}</div>
-                                            <div style={{ fontSize: '0.8rem', color: pie.result_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                                                {pie.result_czk >= 0 ? '+' : ''}{formatCurrency(pie.result_czk)}
-                                                <span style={{ opacity: 0.8, marginLeft: '4px' }}>
-                                                    ({pie.result_pct >= 0 ? '+' : ''}{pie.result_pct.toFixed(2)} %)
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
                                     {pie.instruments.length > 0 && (
-                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
                                             {/* Donut chart */}
-                                            <div style={{ flexShrink: 0, width: 120, height: 120 }}>
-                                                <PieChart width={120} height={120}>
+                                            <div style={{ flexShrink: 0, width: 160, height: 160 }}>
+                                                <PieChart width={160} height={160}>
                                                     <Pie
-                                                        data={pie.instruments.map((inst, i) => ({
+                                                        data={pie.instruments.map((inst) => ({
                                                             name: inst.ticker,
                                                             value: inst.current_share,
-                                                            color: `hsl(${(i * 47) % 360}, 70%, 55%)`,
                                                         }))}
-                                                        cx={55}
-                                                        cy={55}
-                                                        innerRadius={36}
-                                                        outerRadius={55}
+                                                        cx={75}
+                                                        cy={75}
+                                                        innerRadius={50}
+                                                        outerRadius={72}
                                                         dataKey="value"
                                                         strokeWidth={0}
                                                     >
@@ -336,18 +318,41 @@ export default function InvestmentsPage() {
                                                     </Pie>
                                                     <Tooltip
                                                         contentStyle={{
-                                                            background: 'rgba(30,30,40,0.95)',
-                                                            border: '1px solid rgba(255,255,255,0.15)',
-                                                            borderRadius: '6px',
+                                                            background: 'rgba(15,20,30,0.75)',
+                                                            backdropFilter: 'blur(8px)',
+                                                            border: '1px solid rgba(255,255,255,0.25)',
+                                                            borderRadius: '8px',
                                                             fontSize: '0.78rem',
+                                                            color: '#fff',
+                                                            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
                                                         }}
                                                         formatter={(value: number | undefined, name: string | undefined) => [`${(value ?? 0).toFixed(1)} %`, name ?? '']}
                                                     />
                                                 </PieChart>
                                             </div>
 
+                                            {/* Right: pie name + value + instruments */}
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
+                                                {/* Pie header */}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontSize: '1.1rem' }}>{pieIcon(pie.icon)}</span>
+                                                        <span style={{ fontWeight: 600 }}>{pie.name}</span>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div style={{ fontWeight: 600 }}>{formatCurrency(pie.value_czk)}</div>
+                                                        <div style={{ fontSize: '0.8rem', color: pie.result_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                            {pie.result_czk >= 0 ? '+' : ''}{formatCurrency(pie.result_czk)}
+                                                            <span style={{ opacity: 0.8, marginLeft: '4px' }}>
+                                                                ({pie.result_pct >= 0 ? '+' : ''}{pie.result_pct.toFixed(2)} %)
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }} />
+
                                             {/* Instruments enriched with position data */}
-                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', justifyContent: 'center', minWidth: 0 }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
                                                 {pie.instruments.map((inst, i) => {
                                                     const pos = positionMap[inst.ticker];
                                                     const hue = (i * 47) % 360;
@@ -386,6 +391,7 @@ export default function InvestmentsPage() {
                                                         </div>
                                                     );
                                                 })}
+                                            </div>
                                             </div>
                                         </div>
                                     )}
