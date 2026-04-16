@@ -322,9 +322,11 @@ export default function InvestmentsPage() {
                                                             border: '1px solid #334155',
                                                             borderRadius: '8px',
                                                             fontSize: '0.78rem',
-                                                            color: '#e2e8f0',
+                                                            color: '#ffffff',
                                                             boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8), 0 8px 10px -6px rgba(0,0,0,0.8)',
                                                         }}
+                                                        labelStyle={{ color: '#ffffff', fontWeight: 600 }}
+                                                        itemStyle={{ color: '#ffffff' }}
                                                         formatter={(value: number | undefined, name: string | undefined) => [`${(value ?? 0).toFixed(1)} %`, name ?? '']}
                                                     />
                                                 </PieChart>
