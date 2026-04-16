@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 interface Option {
@@ -33,11 +33,18 @@ export default function CustomSelect({
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const [mounted, setMounted] = useState(false);
+    const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 100, left: 100, width: 200 });
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => { setMounted(true); }, []);
+
+    useLayoutEffect(() => {
+        if (!isOpen || !buttonRef.current) return;
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+    }, [isOpen]);
 
     const selectedOption = options.find(o => o.value === value);
     const filteredOptions = searchable && search
@@ -70,21 +77,13 @@ export default function CustomSelect({
         close();
     };
 
-    const getDropdownStyle = (): React.CSSProperties => {
-        if (!buttonRef.current) return { position: 'fixed', top: 100, left: 100, width: 200, zIndex: 999999 };
-        const rect = buttonRef.current.getBoundingClientRect();
-        return {
-            position: 'fixed',
-            top: rect.bottom + 6,
-            left: rect.left,
-            width: rect.width,
-            zIndex: 999999,
-        };
-    };
-
     const dropdownEl = isOpen ? (
         <div style={{
-            ...getDropdownStyle(),
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            zIndex: 999999,
             background: '#1e293b',
             border: '1px solid rgba(255, 255, 255, 0.15)',
             borderRadius: '10px',
