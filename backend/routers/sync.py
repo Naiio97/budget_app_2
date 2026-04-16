@@ -678,8 +678,8 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                                         "current_share": float(inst.get("currentShare", 0) or 0),
                                         "expected_share": float(inst.get("expectedShare", 0) or 0),
                                         "owned_quantity": float(inst.get("ownedQuantity", 0) or 0),
-                                        "value_eur": float((inst.get("result") or {}).get("value", 0) or 0),
-                                        "result_eur": float((inst.get("result") or {}).get("result", 0) or 0),
+                                        "value_eur": float((inst.get("result") or {}).get("priceAvgValue", 0) or 0),
+                                        "result_eur": float((inst.get("result") or {}).get("priceAvgResult", 0) or 0),
                                     }
                                     for inst in detail.get("instruments", [])
                                 ],

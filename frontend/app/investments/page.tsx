@@ -74,9 +74,23 @@ export default function InvestmentsPage() {
         Education: '🎓', Tech: '💻', Energy: '⚡', Finance: '💹', Food: '🍔',
         Car: '🚗', Entertainment: '🎬', Shopping: '🛒', Sports: '🏋️',
         Gift: '🎁', Star: '⭐', Rocket: '🚀', Heart: '❤️', Globe: '🌍',
-        Chart: '📊', Diamond: '💎', Crown: '👑',
+        Chart: '📊', Diamond: '💎', Crown: '👑', Coins: '🪙',
     };
     const pieIcon = (icon: string) => PIE_ICON_MAP[icon] ?? '🥧';
+
+    // Map ticker -> position for enriching pie instruments
+    const positionMap = positions.reduce((acc, pos) => {
+        const clean = pos.ticker.replace('_US_EQ', '').replace('_EQ', '');
+        acc[clean] = pos;
+        return acc;
+    }, {} as Record<string, PortfolioPosition>);
+
+    // Positions not belonging to any pie
+    const tickersInPies = new Set(pies.flatMap(p => p.instruments.map(i => i.ticker)));
+    const orphanPositions = positions.filter(pos => {
+        const clean = pos.ticker.replace('_US_EQ', '').replace('_EQ', '');
+        return !tickersInPies.has(clean);
+    });
 
     const formatCurrency = (amount: number, currency: string = 'CZK') => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -265,59 +279,13 @@ export default function InvestmentsPage() {
                     </div>
                 </GlassCard>
 
-                {/* Positions */}
-                {positions.length > 0 && (
+                {/* Positions — merged with Pies */}
+                {(pies.length > 0 || positions.length > 0) && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
                         <h3 style={{ marginBottom: 'var(--spacing-md)' }}>Pozice</h3>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {positions.map((pos) => (
-                                <div
-                                    key={pos.ticker}
-                                    style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '1fr auto auto',
-                                        gap: '12px',
-                                        alignItems: 'center',
-                                        padding: '10px 12px',
-                                        background: 'rgba(255,255,255,0.05)',
-                                        borderRadius: 'var(--radius-sm)',
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{pos.ticker.replace('_US_EQ', '').replace('_EQ', '')}</div>
-                                        <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                            {pos.quantity % 1 === 0 ? pos.quantity : pos.quantity.toFixed(4)} ks · prům. {pos.average_price_eur.toFixed(2)} €
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontWeight: 500 }}>{formatCurrency(pos.value_czk)}</div>
-                                        <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                            {pos.current_price_eur.toFixed(2)} €
-                                        </div>
-                                    </div>
-                                    <div style={{
-                                        textAlign: 'right',
-                                        color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)',
-                                        minWidth: '80px',
-                                    }}>
-                                        <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
-                                            {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)}
-                                        </div>
-                                        <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
-                                            {pos.ppl_pct >= 0 ? '+' : ''}{pos.ppl_pct.toFixed(2)} %
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </GlassCard>
-                )}
-
-                {/* Pies */}
-                {pies.length > 0 && (
-                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>🥧 Pies</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+
+                            {/* Pies — each as a group with enriched instruments */}
                             {pies.map((pie) => (
                                 <div key={pie.id} style={{
                                     background: 'rgba(255,255,255,0.05)',
@@ -325,17 +293,14 @@ export default function InvestmentsPage() {
                                     padding: '12px',
                                 }}>
                                     {/* Pie header */}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                             <span style={{ fontSize: '1.2rem' }}>{pieIcon(pie.icon)}</span>
                                             <span style={{ fontWeight: 600 }}>{pie.name}</span>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <div style={{ fontWeight: 600 }}>{formatCurrency(pie.value_czk)}</div>
-                                            <div style={{
-                                                fontSize: '0.8rem',
-                                                color: pie.result_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)',
-                                            }}>
+                                            <div style={{ fontSize: '0.8rem', color: pie.result_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
                                                 {pie.result_czk >= 0 ? '+' : ''}{formatCurrency(pie.result_czk)}
                                                 <span style={{ opacity: 0.8, marginLeft: '4px' }}>
                                                     ({pie.result_pct >= 0 ? '+' : ''}{pie.result_pct.toFixed(2)} %)
@@ -344,47 +309,93 @@ export default function InvestmentsPage() {
                                         </div>
                                     </div>
 
-                                    {/* Instrument bars */}
                                     {pie.instruments.length > 0 && (
                                         <>
                                             {/* Stacked progress bar */}
-                                            <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px', gap: '1px' }}>
-                                                {pie.instruments.slice(0, 10).map((inst, i) => {
+                                            <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', marginBottom: '10px', gap: '1px' }}>
+                                                {pie.instruments.map((inst, i) => (
+                                                    <div key={inst.ticker} style={{
+                                                        flex: inst.current_share,
+                                                        background: `hsl(${(i * 47) % 360}, 70%, 55%)`,
+                                                    }} title={`${inst.ticker} ${inst.current_share.toFixed(1)}%`} />
+                                                ))}
+                                            </div>
+
+                                            {/* Instruments enriched with position data */}
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {pie.instruments.map((inst, i) => {
+                                                    const pos = positionMap[inst.ticker];
                                                     const hue = (i * 47) % 360;
                                                     return (
                                                         <div key={inst.ticker} style={{
-                                                            flex: inst.current_share,
-                                                            background: `hsl(${hue}, 70%, 55%)`,
-                                                        }} title={`${inst.ticker} ${inst.current_share.toFixed(1)}%`} />
-                                                    );
-                                                })}
-                                            </div>
-
-                                            {/* Top 5 instruments */}
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                                {pie.instruments.slice(0, 5).map((inst, i) => {
-                                                    const hue = (i * 47) % 360;
-                                                    return (
-                                                        <div key={inst.ticker} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem' }}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                            display: 'grid',
+                                                            gridTemplateColumns: '1fr auto auto',
+                                                            gap: '12px',
+                                                            alignItems: 'center',
+                                                        }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                                 <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: `hsl(${hue}, 70%, 55%)`, flexShrink: 0 }} />
-                                                                <span>{inst.ticker}</span>
+                                                                <div>
+                                                                    <div style={{ fontWeight: 500, fontSize: '0.88rem' }}>{inst.ticker}</div>
+                                                                    {pos && (
+                                                                        <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>
+                                                                            {pos.quantity.toFixed(pos.quantity % 1 === 0 ? 0 : 4)} ks · {pos.current_price_eur.toFixed(2)} €
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <div style={{ display: 'flex', gap: '12px' }}>
-                                                                <span className="text-tertiary">{inst.current_share.toFixed(1)} %</span>
-                                                                <span>{formatCurrency(inst.value_czk)}</span>
+                                                            <div style={{ textAlign: 'right' }}>
+                                                                <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{formatCurrency(inst.value_czk)}</div>
+                                                                <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>{inst.current_share.toFixed(1)} %</div>
                                                             </div>
+                                                            {pos && (
+                                                                <div style={{ textAlign: 'right', minWidth: '72px', color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                                    <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                                                                        {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)}
+                                                                    </div>
+                                                                    <div style={{ fontSize: '0.73rem', opacity: 0.85 }}>
+                                                                        {pos.ppl_pct >= 0 ? '+' : ''}{pos.ppl_pct.toFixed(2)} %
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     );
                                                 })}
-                                                {pie.instruments.length > 5 && (
-                                                    <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                                        + {pie.instruments.length - 5} dalších pozic
-                                                    </div>
-                                                )}
                                             </div>
                                         </>
                                     )}
+                                </div>
+                            ))}
+
+                            {/* Orphan positions — not part of any pie */}
+                            {orphanPositions.map((pos) => (
+                                <div key={pos.ticker} style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '1fr auto auto',
+                                    gap: '12px',
+                                    alignItems: 'center',
+                                    padding: '10px 12px',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    borderRadius: 'var(--radius-sm)',
+                                }}>
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{pos.ticker.replace('_US_EQ', '').replace('_EQ', '')}</div>
+                                        <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
+                                            {pos.quantity.toFixed(pos.quantity % 1 === 0 ? 0 : 4)} ks · prům. {pos.average_price_eur.toFixed(2)} €
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: 500 }}>{formatCurrency(pos.value_czk)}</div>
+                                        <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>{pos.current_price_eur.toFixed(2)} €</div>
+                                    </div>
+                                    <div style={{ textAlign: 'right', minWidth: '80px', color: pos.ppl_czk >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                        <div style={{ fontWeight: 500, fontSize: '0.85rem' }}>
+                                            {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                                            {pos.ppl_pct >= 0 ? '+' : ''}{pos.ppl_pct.toFixed(2)} %
+                                        </div>
+                                    </div>
                                 </div>
                             ))}
                         </div>
