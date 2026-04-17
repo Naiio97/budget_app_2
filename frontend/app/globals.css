@@ -160,6 +160,17 @@ body::before {
   border-radius: var(--radius-md);
 }
 
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* Card Variants */
 .glass-card {
   padding: var(--spacing-lg);
@@ -250,6 +261,12 @@ h6 {
 
 .btn-primary:hover {
   box-shadow: 0 6px 24px rgba(0, 122, 255, 0.4);
+}
+
+.income-input-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 /* Input */
@@ -448,7 +465,11 @@ select.input {
   display: grid;
   grid-template-columns: 1fr 1.5fr 1fr;
   gap: var(--spacing-md);
+  align-items: start;
 }
+
+.grid-col1-wrapper { display: flex; flex-direction: column; gap: var(--spacing-md); }
+.grid-expenses { display: flex; flex-direction: column; gap: var(--spacing-md); }
 
 .section-header-wrap {
   display: flex;
@@ -955,6 +976,43 @@ select.input {
 
   .rozpocet-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .grid-col1-wrapper {
+    display: contents;
+  }
+
+  .grid-expenses {
+    gap: 8px;
+  }
+
+  .month-nav {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+  }
+
+  .month-nav-arrow {
+    flex-shrink: 0;
+    padding: 8px 10px !important;
+  }
+
+  .month-nav > div {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+
+  .grid-income   { order: 1; }
+  .grid-expenses { order: 2; }
+  .grid-surplus  { order: 3; }
+  .grid-manual   { order: 4; }
+
+  .grid-income .glass-card,
+  .grid-surplus .glass-card,
+  .grid-expenses .glass-card,
+  .grid-manual .glass-card {
+    margin-bottom: 0 !important;
   }
 
   /* Rozpocet page elements improvements */
@@ -998,14 +1056,48 @@ select.input {
   .expense-row {
     flex-direction: column;
     align-items: flex-start !important;
-    gap: 8px;
-    padding: 12px 8px !important;
+    gap: 4px;
+    padding: 8px 6px !important;
+    margin-bottom: 0 !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.07) !important;
   }
 
   .expense-actions {
     width: 100%;
+    justify-content: flex-start;
+    gap: 6px !important;
+    margin-top: 2px;
+  }
+
+  .expense-actions input[type="number"] {
+    width: 92px !important;
+    min-height: 36px !important;
+    height: 36px;
+    font-size: 0.875rem !important;
+    flex: none !important;
+  }
+
+  .expense-actions button[type="button"] {
+    min-height: 36px !important;
+    height: 36px;
+    font-size: 0.875rem !important;
+    width: 74px !important;
+  }
+
+  .income-input-row {
+    display: flex;
     justify-content: space-between;
-    margin-top: 4px;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 4px 0;
+  }
+
+  .income-input-row input[type="number"] {
+    min-height: 36px !important;
+    height: 36px;
+    width: 110px !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
   }
 
   /* Adjust stat values for mobile */
@@ -1250,6 +1342,14 @@ select.input {
 }
 
 @media (min-width: 769px) and (max-width: 1400px) {
+  .rozpocet-grid {
+    grid-template-columns: 1fr 1.8fr;
+  }
+
+  .grid-manual {
+    grid-column: 1 / -1;
+  }
+
   .compact-nav-header {
     display: flex;
     padding: var(--spacing-xl) var(--spacing-xl) 0 var(--spacing-xl);

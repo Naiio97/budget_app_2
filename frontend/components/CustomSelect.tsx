@@ -177,7 +177,7 @@ export default function CustomSelect({
                     border: `1px solid ${isOpen ? 'var(--accent-primary)' : 'var(--glass-border-light)'}`,
                     borderRadius: 'var(--radius-md)',
                     color: selectedOption ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    fontSize: '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
+                    fontSize: compact ? '0.875rem' : '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
                     backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
                     transition: 'all 0.15s ease-out', outline: 'none',
                     opacity: disabled ? 0.5 : 1,

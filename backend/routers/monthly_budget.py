@@ -854,6 +854,43 @@ async def delete_manual_account_item(account_id: int, item_id: int, db: AsyncSes
 
 # === Annual Overview ===
 
+async def _compute_year_totals(year: int, db: AsyncSession):
+    """Spočítej roční součty pro daný rok (bez expense breakdown)."""
+    total_income = 0
+    total_expenses = 0
+    total_investments = 0
+    total_savings = 0
+
+    for month in range(1, 13):
+        year_month = f"{year:04d}-{month:02d}"
+        result = await db.execute(
+            select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
+        )
+        budget = result.scalar_one_or_none()
+        if not budget:
+            continue
+
+        expenses_result = await db.execute(
+            select(func.sum(MonthlyExpenseModel.amount))
+            .where(MonthlyExpenseModel.budget_id == budget.id)
+        )
+        month_expenses = expenses_result.scalar() or 0
+        month_income = budget.salary + budget.other_income + budget.meal_vouchers
+
+        total_income += month_income
+        total_expenses += month_expenses
+        total_investments += budget.investment_amount
+        total_savings += budget.surplus_to_savings
+
+    return {
+        "income": total_income,
+        "expenses": total_expenses,
+        "investments": total_investments,
+        "savings": total_savings,
+        "net": total_income - total_expenses,
+    }
+
+
 @router.get("/annual-overview/{year}")
 async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
     """Roční přehled"""
@@ -862,24 +899,24 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
     total_expenses = 0
     total_investments = 0
     total_savings = 0
-    
+
     for month in range(1, 13):
         year_month = f"{year:04d}-{month:02d}"
-        
+
         result = await db.execute(
             select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
         )
         budget = result.scalar_one_or_none()
-        
+
         if budget:
             expenses_result = await db.execute(
                 select(func.sum(MonthlyExpenseModel.amount))
                 .where(MonthlyExpenseModel.budget_id == budget.id)
             )
             month_expenses = expenses_result.scalar() or 0
-            
+
             month_income = budget.salary + budget.other_income + budget.meal_vouchers
-            
+
             months_data.append({
                 "month": month,
                 "year_month": year_month,
@@ -889,7 +926,7 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
                 "savings": budget.surplus_to_savings,
                 "remaining": month_income - month_expenses - budget.investment_amount
             })
-            
+
             total_income += month_income
             total_expenses += month_expenses
             total_investments += budget.investment_amount
@@ -904,7 +941,7 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
                 "savings": 0,
                 "remaining": 0
             })
-    
+
     # Get expense breakdown by category
     expense_breakdown = {}
     for month in range(1, 13):
@@ -913,18 +950,20 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
             select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
         )
         budget = result.scalar_one_or_none()
-        
+
         if budget:
             expenses_result = await db.execute(
                 select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id)
             )
             expenses = expenses_result.scalars().all()
-            
+
             for exp in expenses:
                 if exp.name not in expense_breakdown:
                     expense_breakdown[exp.name] = 0
                 expense_breakdown[exp.name] += exp.amount
-    
+
+    previous_year_totals = await _compute_year_totals(year - 1, db)
+
     return {
         "year": year,
         "months": months_data,
@@ -935,6 +974,7 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
             "savings": total_savings,
             "net": total_income - total_expenses
         },
+        "previous_year": previous_year_totals,
         "expense_breakdown": expense_breakdown,
         "averages": {
             "income": total_income / 12,
