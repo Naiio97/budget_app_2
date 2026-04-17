@@ -83,7 +83,13 @@ async def save_api_keys(request: ApiKeysRequest, db: AsyncSession = Depends(get_
         updated_keys.append("trading212_api_key")
     
     await db.commit()
-    
+
+    # If GoCardless credentials changed, clear the cached token so the next
+    # sync picks up the new credentials immediately
+    if any(k.startswith("gocardless_") for k in updated_keys):
+        from services.gocardless import gocardless_service
+        gocardless_service.clear_token()
+
     return {"status": "saved", "updated_keys": updated_keys}
 
 

@@ -209,6 +209,7 @@ export interface SyncStatus {
     accounts_synced: number;
     transactions_synced: number;
     error?: string;
+    syncs_today: number;
 }
 
 export interface SyncResult {
@@ -323,6 +324,90 @@ export async function getPortfolioHistory(period: string = '1M'): Promise<Portfo
 
 export async function getDividends(limit: number = 50): Promise<{ dividends: Dividend[] }> {
     return fetchApi<{ dividends: Dividend[] }>(`/investments/dividends?limit=${limit}`);
+}
+
+export interface InvestmentPortfolioDetail {
+    total_value: number;
+    invested: number;
+    result: number;
+    cash_free: number;
+    currency: string;
+    last_synced: string | null;
+}
+
+export async function getPortfolioDetail(): Promise<InvestmentPortfolioDetail> {
+    return fetchApi<InvestmentPortfolioDetail>('/investments/portfolio-detail');
+}
+
+export interface PortfolioPosition {
+    ticker: string;
+    quantity: number;
+    average_price_eur: number;
+    current_price_eur: number;
+    value_czk: number;
+    invested_czk: number;
+    ppl_czk: number;
+    ppl_pct: number;
+}
+
+export async function getPositions(): Promise<{ positions: PortfolioPosition[]; currency: string }> {
+    return fetchApi<{ positions: PortfolioPosition[]; currency: string }>('/investments/positions');
+}
+
+export interface PieInstrument {
+    ticker: string;
+    current_share: number;  // percentage
+    value_czk: number;
+    result_czk: number;
+}
+
+export interface Pie {
+    id: number;
+    name: string;
+    icon: string;
+    goal: number | null;
+    invested_czk: number;
+    value_czk: number;
+    result_czk: number;
+    result_pct: number;
+    instruments: PieInstrument[];
+}
+
+export async function getPies(): Promise<{ pies: Pie[]; currency: string }> {
+    return fetchApi<{ pies: Pie[]; currency: string }>('/investments/pies');
+}
+
+export interface TransactionDetail {
+    id: string;
+    date: string;
+    value_date: string | null;
+    booking_date_time: string | null;
+    description: string;
+    amount: number;
+    currency: string;
+    category: string | null;
+    account_id: string;
+    account_name: string | null;
+    account_type: string;
+    transaction_type: string;
+    is_excluded: boolean;
+    creditor_name: string | null;
+    debtor_name: string | null;
+    creditor_iban: string | null;
+    debtor_iban: string | null;
+    remittance_info: string | null;
+    end_to_end_id: string | null;
+    bank_tx_code: string | null;
+    additional_info: string | null;
+    balance_after: number | null;
+    balance_after_currency: string | null;
+    fx_rate: string | null;
+    fx_source_currency: string | null;
+    fx_target_currency: string | null;
+}
+
+export async function getTransactionDetail(id: string): Promise<TransactionDetail> {
+    return fetchApi<TransactionDetail>(`/transactions/${id}`);
 }
 
 // === Budgets & Goals ===

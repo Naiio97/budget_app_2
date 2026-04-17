@@ -160,17 +160,6 @@ body::before {
   border-radius: var(--radius-md);
 }
 
-/* Hide number input spinners */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
 /* Card Variants */
 .glass-card {
   padding: var(--spacing-lg);
@@ -261,12 +250,6 @@ h6 {
 
 .btn-primary:hover {
   box-shadow: 0 6px 24px rgba(0, 122, 255, 0.4);
-}
-
-.income-input-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 /* Input */
@@ -465,11 +448,7 @@ select.input {
   display: grid;
   grid-template-columns: 1fr 1.5fr 1fr;
   gap: var(--spacing-md);
-  align-items: start;
 }
-
-.grid-col1-wrapper { display: flex; flex-direction: column; gap: var(--spacing-md); }
-.grid-expenses { display: flex; flex-direction: column; gap: var(--spacing-md); }
 
 .section-header-wrap {
   display: flex;
@@ -618,6 +597,122 @@ select.input {
   display: flex;
   flex-direction: column;
   gap: 0;
+}
+
+/* Pie positions layout */
+.pie-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.pie-donut-wrap {
+  flex-shrink: 0;
+  width: 160px;
+  height: 160px;
+}
+
+.pie-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pie-inst-grid {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.pie-inst-ppl {
+  text-align: right;
+  min-width: 68px;
+}
+
+@media (max-width: 480px) {
+  .pie-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pie-right {
+    width: 100%;
+  }
+
+  .pie-inst-grid {
+    grid-template-columns: 1fr auto;
+  }
+
+  .pie-inst-ppl {
+    display: none;
+  }
+}
+
+/* Day group */
+.tx-day-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.tx-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 4px 6px;
+  margin-top: 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.tx-day-group:first-child .tx-day-header {
+  margin-top: 0;
+}
+
+.tx-day-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+}
+
+.tx-day-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-day-income {
+  color: var(--accent-success);
+  font-weight: 500;
+}
+
+.tx-day-expense {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* Category and account labels in transaction rows */
+.transaction-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.tx-category-label {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.tx-account-label {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
 }
 
 .transaction-item {
@@ -976,43 +1071,6 @@ select.input {
 
   .rozpocet-grid {
     grid-template-columns: 1fr;
-    gap: 8px;
-  }
-
-  .grid-col1-wrapper {
-    display: contents;
-  }
-
-  .grid-expenses {
-    gap: 8px;
-  }
-
-  .month-nav {
-    flex-wrap: nowrap !important;
-    gap: 6px !important;
-  }
-
-  .month-nav-arrow {
-    flex-shrink: 0;
-    padding: 8px 10px !important;
-  }
-
-  .month-nav > div {
-    flex: 1 1 0 !important;
-    min-width: 0 !important;
-    width: auto !important;
-  }
-
-  .grid-income   { order: 1; }
-  .grid-expenses { order: 2; }
-  .grid-surplus  { order: 3; }
-  .grid-manual   { order: 4; }
-
-  .grid-income .glass-card,
-  .grid-surplus .glass-card,
-  .grid-expenses .glass-card,
-  .grid-manual .glass-card {
-    margin-bottom: 0 !important;
   }
 
   /* Rozpocet page elements improvements */
@@ -1038,12 +1096,6 @@ select.input {
     justify-content: space-between !important;
   }
 
-  .chart-header-wrap {
-    flex-direction: row;
-    align-items: center;
-    gap: 0;
-  }
-
   .period-buttons-desktop {
     display: none !important;
   }
@@ -1056,48 +1108,14 @@ select.input {
   .expense-row {
     flex-direction: column;
     align-items: flex-start !important;
-    gap: 4px;
-    padding: 8px 6px !important;
-    margin-bottom: 0 !important;
-    border-radius: 0 !important;
-    border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+    gap: 8px;
+    padding: 12px 8px !important;
   }
 
   .expense-actions {
     width: 100%;
-    justify-content: flex-start;
-    gap: 6px !important;
-    margin-top: 2px;
-  }
-
-  .expense-actions input[type="number"] {
-    width: 92px !important;
-    min-height: 36px !important;
-    height: 36px;
-    font-size: 0.875rem !important;
-    flex: none !important;
-  }
-
-  .expense-actions button[type="button"] {
-    min-height: 36px !important;
-    height: 36px;
-    font-size: 0.875rem !important;
-    width: 74px !important;
-  }
-
-  .income-input-row {
-    display: flex;
     justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    padding: 4px 0;
-  }
-
-  .income-input-row input[type="number"] {
-    min-height: 36px !important;
-    height: 36px;
-    width: 110px !important;
-    border: 1px solid rgba(255,255,255,0.2) !important;
+    margin-top: 4px;
   }
 
   /* Adjust stat values for mobile */
@@ -1172,7 +1190,7 @@ select.input {
     line-height: 1.3;
   }
 
-  .transaction-date {
+  .transaction-meta {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
@@ -1180,8 +1198,8 @@ select.input {
     font-size: 0.75rem;
   }
 
-  .transaction-date span {
-    margin-left: 0 !important;
+  .tx-day-header {
+    padding: 8px 4px 5px;
   }
 
   .transaction-amount {
@@ -1342,14 +1360,6 @@ select.input {
 }
 
 @media (min-width: 769px) and (max-width: 1400px) {
-  .rozpocet-grid {
-    grid-template-columns: 1fr 1.8fr;
-  }
-
-  .grid-manual {
-    grid-column: 1 / -1;
-  }
-
   .compact-nav-header {
     display: flex;
     padding: var(--spacing-xl) var(--spacing-xl) 0 var(--spacing-xl);

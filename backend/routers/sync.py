@@ -8,7 +8,7 @@ import json
 import logging
 
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel
+from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
@@ -206,26 +206,159 @@ async def detect_and_mark_transfers(db: AsyncSession):
     return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": marked_my_account}
 
 
+# ISO 20022 purpose codes → category
+PURPOSE_CODE_MAP: dict[str, str] = {
+    "SALA": "Salary",   # Salary payment
+    "PAYR": "Salary",   # Payroll
+    "BONU": "Salary",   # Bonus payment
+    "PENS": "Salary",   # Pension payment
+    "SSBE": "Salary",   # Social security benefit
+    "BENE": "Salary",   # Unemployment benefit
+    "TAXS": "Utilities",  # Tax payment
+    "VATX": "Utilities",  # VAT tax
+    "INSR": "Utilities",  # Insurance premium
+    "RENT": "Utilities",  # Rent
+    "OTHR": None,         # Other — don't auto-assign
+}
+
+# MCC (Merchant Category Code) → category
+MCC_CATEGORY_MAP: dict[str, str] = {
+    # Food & Grocery
+    "5411": "Food",  # Grocery stores
+    "5412": "Food",  # Convenience stores
+    "5422": "Food",  # Meat shops
+    "5441": "Food",  # Candy/nut/confectionery
+    "5451": "Food",  # Dairies
+    "5461": "Food",  # Bakeries
+    "5499": "Food",  # Misc food stores
+    "5811": "Food",  # Caterers
+    "5812": "Food",  # Eating places / restaurants
+    "5813": "Food",  # Bars / taverns
+    "5814": "Food",  # Fast food
+    "5912": "Health",  # Drug stores / pharmacies
+    # Transport
+    "4111": "Transport",  # Local commuter transport
+    "4112": "Transport",  # Passenger railways
+    "4121": "Transport",  # Taxicabs / limousines
+    "4131": "Transport",  # Bus lines
+    "4411": "Transport",  # Cruise lines
+    "4511": "Transport",  # Airlines
+    "4814": "Utilities",  # Telecom
+    "4816": "Utilities",  # Computer network services (internet)
+    "4899": "Utilities",  # Cable / satellite TV
+    "4900": "Utilities",  # Utilities (electric, gas, water)
+    "5541": "Transport",  # Service stations / gas stations
+    "5542": "Transport",  # Automated fuel dispensers
+    "7523": "Transport",  # Parking lots
+    "7531": "Transport",  # Auto repair
+    "7534": "Transport",  # Tyre retreading
+    "7538": "Transport",  # Auto service shops
+    # Shopping
+    "5045": "Shopping",  # Computers / peripherals
+    "5065": "Shopping",  # Electrical parts
+    "5200": "Shopping",  # Home supply / hardware
+    "5211": "Shopping",  # Lumber / building materials
+    "5251": "Shopping",  # Hardware stores
+    "5310": "Shopping",  # Discount stores
+    "5311": "Shopping",  # Department stores
+    "5331": "Shopping",  # Variety stores
+    "5399": "Shopping",  # Misc general merchandise
+    "5621": "Shopping",  # Women's clothing
+    "5631": "Shopping",  # Accessories / lingerie
+    "5641": "Shopping",  # Children's clothing
+    "5651": "Shopping",  # Family clothing
+    "5661": "Shopping",  # Shoe stores
+    "5691": "Shopping",  # Men's clothing
+    "5699": "Shopping",  # Misc clothing
+    "5712": "Shopping",  # Furniture
+    "5719": "Shopping",  # Misc home furnishings
+    "5732": "Shopping",  # Electronics
+    "5733": "Shopping",  # Music stores
+    "5734": "Shopping",  # Computer software
+    "5912": "Health",    # Pharmacies
+    "5940": "Shopping",  # Sporting goods
+    "5941": "Shopping",  # Sporting goods
+    "5945": "Shopping",  # Hobby / toy / game shops
+    "5977": "Shopping",  # Cosmetics
+    "5999": "Shopping",  # Misc retail
+    # Health
+    "5047": "Health",    # Medical / dental supplies
+    "5122": "Health",    # Drugs / proprietaries
+    "8011": "Health",    # Doctors / physicians
+    "8021": "Health",    # Dentists
+    "8031": "Health",    # Osteopaths
+    "8041": "Health",    # Chiropractors
+    "8042": "Health",    # Optometrists
+    "8049": "Health",    # Podiatrists
+    "8050": "Health",    # Nursing / personal care
+    "8062": "Health",    # Hospitals
+    "8071": "Health",    # Medical lab
+    "8099": "Health",    # Health practitioners
+    # Entertainment
+    "5815": "Entertainment",  # Digital content (streaming)
+    "5816": "Entertainment",  # Digital games
+    "5817": "Entertainment",  # Digital apps
+    "5818": "Entertainment",  # Digital media
+    "7011": "Entertainment",  # Hotels / lodging
+    "7832": "Entertainment",  # Motion picture theatres
+    "7922": "Entertainment",  # Theatrical producers
+    "7929": "Entertainment",  # Bands / orchestras
+    "7941": "Entertainment",  # Sports clubs / fields
+    "7991": "Entertainment",  # Tourist attractions
+    "7993": "Entertainment",  # Video game arcades
+    "7996": "Entertainment",  # Amusement parks
+    "7997": "Entertainment",  # Membership clubs (fitness etc.)
+    "7999": "Entertainment",  # Recreation services
+}
+
+
+def categorize_by_purpose_code(tx: dict) -> str | None:
+    """Return category based on ISO 20022 purposeCode, or None if not applicable"""
+    purpose = tx.get("purposeCode") or tx.get("purpose_code") or ""
+    if not purpose:
+        return None
+    mapped = PURPOSE_CODE_MAP.get(purpose.upper())
+    return mapped  # may be None
+
+
+def categorize_by_mcc(tx: dict) -> str | None:
+    """Return category based on MCC code, or None if no MCC present"""
+    mcc = tx.get("merchantCategoryCode") or tx.get("mcc") or ""
+    if not mcc:
+        return None
+    return MCC_CATEGORY_MAP.get(str(mcc).strip())
+
+
 def categorize_transaction(tx: dict) -> str:
-    """Smart category detection based on description with Czech merchants"""
-    # DEFENZIVNÍ OPRAVA ZDE:
-    raw_desc = (tx.get("remittanceInformationUnstructured") or 
-                tx.get("creditorName") or 
-                tx.get("debtorName") or 
+    """Smart category detection: purposeCode → MCC → keyword matching"""
+    # 1. purposeCode
+    by_purpose = categorize_by_purpose_code(tx)
+    if by_purpose:
+        return by_purpose
+
+    # 2. MCC
+    by_mcc = categorize_by_mcc(tx)
+    if by_mcc:
+        return by_mcc
+
+    # 3. Keyword matching
+    raw_desc = (tx.get("remittanceInformationUnstructured") or
+                tx.get("creditorName") or
+                tx.get("debtorName") or
                 "")
     desc = str(raw_desc).lower()
-    
+
     categories = {
         "food": [
             "lidl", "albert", "tesco", "billa", "kaufland", "penny", "globus", "makro", "coop", "norma", "žabka",
             "restaurant", "restaurace", "bistro", "food", "wolt", "dáme jídlo", "damejidlo", "bolt food", "foodora",
-            "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa", 
+            "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa",
             "pizza", "sushi", "kebab", "banh mi", "thai", "vietnam", "čína", "china", "asia", "grill",
             "kavárna", "kavarna", "café", "cafe", "pekárna", "pekarna", "cukrárna", "cukrarna", "bakery",
             "hospoda", "pub", "pivnice", "bar", "pivovar", "brewery",
             "bageterie", "qerko", "rohlik", "rohlík", "košík", "kosik",
             "řeznictví", "reznictvi", "uzeniny", "maso",
-            "luxor", "miners", "cinestar bar"
+            "luxor", "miners", "cinestar bar",
         ],
         "transport": [
             "uber", "bolt", "liftago", "taxi",
@@ -233,7 +366,7 @@ def categorize_transaction(tx: dict) -> str:
             "mhd", "jízdenka", "jizdenka", "prague transport", "dpp", "pid", "litacka", "lítačka",
             "parking", "parkovani", "parkoviště", "parkování",
             "dálnice", "dalnice", "mýto", "myto",
-            "autoservis", "pneuservis", "autopůjčovna"
+            "autoservis", "pneuservis", "autopůjčovna",
         ],
         "utilities": [
             "čez", "cez", "pražské vodovody", "innogy", "eon", "pre", "pražská energetika",
@@ -241,7 +374,7 @@ def categorize_transaction(tx: dict) -> str:
             "upc", "skylink", "digi",
             "pojištění", "pojisteni", "allianz", "generali", "kooperativa", "čpp", "cpp",
             "nájem", "najem", "rent", "svj", "bytové",
-            "plyn", "elektřina", "elektrina", "voda", "teplo"
+            "plyn", "elektřina", "elektrina", "voda", "teplo",
         ],
         "entertainment": [
             "netflix", "spotify", "hbo", "disney", "apple tv", "youtube", "deezer", "tidal",
@@ -249,7 +382,7 @@ def categorize_transaction(tx: dict) -> str:
             "steam", "playstation", "xbox", "nintendo", "epic games", "tipsport", "fortuna", "sazka",
             "fitness", "gym", "posilovna", "bazén", "bazen", "wellness", "sauna", "squash", "tenis",
             "ticketmaster", "ticketportal", "goout", "eventim",
-            "audioteka", "bookbeat"
+            "audioteka", "bookbeat",
         ],
         "shopping": [
             "amazon", "alza", "mall.cz", "czc", "datart", "electro world", "planeo", "okay",
@@ -257,36 +390,33 @@ def categorize_transaction(tx: dict) -> str:
             "ikea", "obi", "hornbach", "bauhaus", "baumax", "jysk", "sconto", "xxxlutz", "asko", "möbelix",
             "tesco", "dm", "rossmann", "douglas", "sephora",
             "heureka", "aliexpress", "wish", "shein", "temu",
-            "decathlon", "sportisimo", "hervis"
+            "decathlon", "sportisimo", "hervis",
         ],
         "salary": [
-            "mzda", "plat", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie"
+            "mzda", "plat", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie",
         ],
         "health": [
             "lékárna", "lekarna", "pharmacy", "doktor", "doctor", "nemocnice", "hospital", "klinika", "clinic",
-            "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni"
+            "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni",
         ],
     }
-    
+
     for category, keywords in categories.items():
         if any(kw in desc for kw in keywords):
             return category.capitalize()
-    
+
     return "Other"
 
 
 async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
-    """Smart category detection with priority: user rules > learned rules > built-in keywords"""
-    # DEFENZIVNÍ OPRAVA ZDE:
-    raw_desc = (tx.get("remittanceInformationUnstructured") or 
-                tx.get("creditorName") or 
-                tx.get("debtorName") or 
+    """Smart category detection with priority: user rules > purposeCode > MCC > keywords"""
+    raw_desc = (tx.get("remittanceInformationUnstructured") or
+                tx.get("creditorName") or
+                tx.get("debtorName") or
                 "")
     desc = str(raw_desc).lower()
-    
-    if not desc:
-        return "Other"
-    
+
+    # 1. User-defined rules (highest priority — explicit user preference)
     user_rules = await db.execute(
         select(CategoryRuleModel)
         .where(CategoryRuleModel.is_user_defined == True)
@@ -296,17 +426,30 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
         if rule.pattern.lower() in desc:
             rule.match_count += 1
             return rule.category
-    
-    learned_rules = await db.execute(
-        select(CategoryRuleModel)
-        .where(CategoryRuleModel.is_user_defined == False)
-        .order_by(CategoryRuleModel.match_count.desc())
-    )
-    for rule in learned_rules.scalars():
-        if rule.pattern.lower() in desc:
-            rule.match_count += 1
-            return rule.category
-    
+
+    # 2. purposeCode (ISO 20022 — very reliable for salary, insurance, tax, rent)
+    by_purpose = categorize_by_purpose_code(tx)
+    if by_purpose:
+        return by_purpose
+
+    # 3. MCC code (merchant category — reliable for card payments)
+    by_mcc = categorize_by_mcc(tx)
+    if by_mcc:
+        return by_mcc
+
+    # 4. Learned rules (from previous categorizations)
+    if desc:
+        learned_rules = await db.execute(
+            select(CategoryRuleModel)
+            .where(CategoryRuleModel.is_user_defined == False)
+            .order_by(CategoryRuleModel.match_count.desc())
+        )
+        for rule in learned_rules.scalars():
+            if rule.pattern.lower() in desc:
+                rule.match_count += 1
+                return rule.category
+
+    # 5. Keyword matching fallback
     return categorize_transaction(tx)
 
 
@@ -472,34 +615,96 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
         try:
             cash = await trading212_service.get_account_info()
             portfolio = await trading212_service.get_portfolio()
-            
+
             eur_total_value = cash.get("free", 0) + sum(
                 p.get("currentPrice", 0) * p.get("quantity", 0) for p in portfolio
             )
             base_currency = cash.get("currency", "EUR")
-            
+
             exchange_rate = 1.0
             target_currency = "CZK"
-            
+
             if base_currency != target_currency:
                 exchange_rate = await get_exchange_rate(base_currency, target_currency)
-            
+
             czk_total_value = eur_total_value * exchange_rate
-            
-            logger.info(f"Trading 212: {eur_total_value} {base_currency} -> {czk_total_value} {target_currency} (Rate: {exchange_rate})")
-            
+
+            # Extract P&L fields from cash endpoint
+            # T212 API uses "ppl" for unrealized P&L; "result" may also be present
+            invested_eur = float(cash.get("invested", 0) or 0)
+            result_eur = float(cash.get("ppl", 0) or cash.get("result", 0) or 0)
+            cash_free_eur = float(cash.get("free", 0) or 0)
+
+            logger.info(f"Trading 212: {eur_total_value} {base_currency} -> {czk_total_value} {target_currency} (Rate: {exchange_rate}), invested={invested_eur}, result={result_eur}")
+
+            # Store simplified positions (only fields we need for display)
+            simplified_positions = [
+                {
+                    "ticker": p.get("ticker", ""),
+                    "quantity": p.get("quantity", 0),
+                    "averagePrice": p.get("averagePrice", 0),
+                    "currentPrice": p.get("currentPrice", 0),
+                    "ppl": p.get("ppl", 0),
+                    "fxPpl": p.get("fxPpl", 0),
+                }
+                for p in portfolio
+            ]
+
+            # Fetch pies with names (detail endpoint needed for name field)
+            pies_data = []
+            try:
+                pies_list = await trading212_service.get_pies()
+                if isinstance(pies_list, list):
+                    for pie_basic in pies_list:
+                        pie_id = pie_basic.get("id")
+                        if not pie_id:
+                            continue
+                        try:
+                            detail = await trading212_service.get_pie_detail(pie_id)
+                            settings_block = detail.get("settings", {})
+                            result_block = pie_basic.get("result", {})
+                            pies_data.append({
+                                "id": pie_id,
+                                "name": settings_block.get("name", f"Pie {pie_id}"),
+                                "icon": settings_block.get("icon", ""),
+                                "goal": settings_block.get("goal"),
+                                "invested_eur": float(result_block.get("priceAvgInvestedValue", 0) or 0),
+                                "value_eur": float(result_block.get("priceAvgValue", 0) or 0),
+                                "result_eur": float(result_block.get("priceAvgResult", 0) or 0),
+                                "result_pct": float(result_block.get("priceAvgResultCoef", 0) or 0) * 100,
+                                "instruments": [
+                                    {
+                                        "ticker": inst.get("ticker", ""),
+                                        "current_share": float(inst.get("currentShare", 0) or 0),
+                                        "expected_share": float(inst.get("expectedShare", 0) or 0),
+                                        "owned_quantity": float(inst.get("ownedQuantity", 0) or 0),
+                                        "value_eur": float((inst.get("result") or {}).get("priceAvgValue", 0) or 0),
+                                        "result_eur": float((inst.get("result") or {}).get("priceAvgResult", 0) or 0),
+                                    }
+                                    for inst in detail.get("instruments", [])
+                                ],
+                            })
+                        except Exception as pie_err:
+                            logger.warning(f"Could not fetch detail for pie {pie_id}: {pie_err}")
+            except Exception as pies_err:
+                logger.warning(f"Pies sync skipped: {pies_err}")
+
+            details_payload = json.dumps({
+                "cash": cash,
+                "positions": simplified_positions,
+                "positions_count": len(portfolio),
+                "original_currency": base_currency,
+                "original_balance": eur_total_value,
+                "exchange_rate": exchange_rate,
+                "pies": pies_data,
+            })
+
             t212_account = await db.get(AccountModel, "trading212")
             if t212_account:
                 t212_account.balance = float(czk_total_value)
                 t212_account.currency = target_currency
                 t212_account.last_synced = datetime.utcnow()
-                t212_account.details_json = json.dumps({
-                    "cash": cash, 
-                    "positions": len(portfolio),
-                    "original_currency": base_currency,
-                    "original_balance": eur_total_value,
-                    "exchange_rate": exchange_rate
-                })
+                t212_account.details_json = details_payload
             else:
                 t212_account = AccountModel(
                     id="trading212",
@@ -508,16 +713,41 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     balance=float(czk_total_value),
                     currency=target_currency,
                     institution="Trading 212",
-                    details_json=json.dumps({
-                        "cash": cash,
-                        "original_currency": base_currency,
-                        "original_balance": eur_total_value,
-                        "exchange_rate": exchange_rate
-                    }),
+                    details_json=details_payload,
                     last_synced=datetime.utcnow()
                 )
                 db.add(t212_account)
-            
+
+            # Save daily portfolio snapshot (upsert by date)
+            try:
+                today = datetime.utcnow().strftime("%Y-%m-%d")
+                snapshot_stmt = pg_insert(PortfolioSnapshotModel).values({
+                    "snapshot_date": today,
+                    "total_value_czk": float(czk_total_value),
+                    "invested_czk": invested_eur * exchange_rate,
+                    "result_czk": result_eur * exchange_rate,
+                    "cash_free_czk": cash_free_eur * exchange_rate,
+                    "total_value_eur": eur_total_value,
+                    "exchange_rate": exchange_rate,
+                    "positions_count": len(portfolio),
+                })
+                snapshot_stmt = snapshot_stmt.on_conflict_do_update(
+                    index_elements=["snapshot_date"],
+                    set_={
+                        "total_value_czk": snapshot_stmt.excluded.total_value_czk,
+                        "invested_czk": snapshot_stmt.excluded.invested_czk,
+                        "result_czk": snapshot_stmt.excluded.result_czk,
+                        "cash_free_czk": snapshot_stmt.excluded.cash_free_czk,
+                        "total_value_eur": snapshot_stmt.excluded.total_value_eur,
+                        "exchange_rate": snapshot_stmt.excluded.exchange_rate,
+                        "positions_count": snapshot_stmt.excluded.positions_count,
+                    }
+                )
+                await db.execute(snapshot_stmt)
+                logger.info(f"Portfolio snapshot saved for {today}: {czk_total_value:.0f} CZK")
+            except Exception as snap_err:
+                logger.warning(f"Portfolio snapshot skipped (table may not exist yet — run migrations): {snap_err}")
+
             accounts_synced += 1
             
             # Sync orders
@@ -647,25 +877,39 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
 @router.get("/status")
 async def get_sync_status(db: AsyncSession = Depends(get_db)):
     """Get the status of the last synchronization"""
+    from sqlalchemy import func
+
     result = await db.execute(
         select(SyncStatusModel).order_by(SyncStatusModel.id.desc()).limit(1)
     )
     sync_status = result.scalar_one_or_none()
-    
+
+    # Count successful syncs today (UTC date)
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    count_result = await db.execute(
+        select(func.count()).select_from(SyncStatusModel).where(
+            SyncStatusModel.status == "completed",
+            SyncStatusModel.started_at >= today_start,
+        )
+    )
+    syncs_today = count_result.scalar() or 0
+
     if not sync_status:
         return {
             "status": "never",
             "last_sync": None,
             "accounts_synced": 0,
-            "transactions_synced": 0
+            "transactions_synced": 0,
+            "syncs_today": syncs_today,
         }
-    
+
     return {
         "status": sync_status.status,
         "last_sync": sync_status.completed_at.isoformat() if sync_status.completed_at else sync_status.started_at.isoformat(),
         "accounts_synced": sync_status.accounts_synced,
         "transactions_synced": sync_status.transactions_synced,
-        "error": sync_status.error_message
+        "error": sync_status.error_message,
+        "syncs_today": syncs_today,
     }
 
 

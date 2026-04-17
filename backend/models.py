@@ -199,7 +199,7 @@ class ManualAccountModel(Base):
 class ManualAccountItemModel(Base):
     """Položky/obálky na manuálním účtu"""
     __tablename__ = "manual_account_items"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     account_id = Column(Integer, ForeignKey("manual_accounts.id"), nullable=False)
     name = Column(String, nullable=False)  # "Peníze od partnera", "Rezerva"
@@ -207,7 +207,23 @@ class ManualAccountItemModel(Base):
     is_mine = Column(Boolean, default=True)  # True = moje peníze, False = cizí/půjčené
     note = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     account = relationship("ManualAccountModel", back_populates="items")
+
+
+class PortfolioSnapshotModel(Base):
+    """Daily snapshot of Trading 212 portfolio value — used for real history chart"""
+    __tablename__ = "portfolio_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    snapshot_date = Column(String, nullable=False, unique=True)  # YYYY-MM-DD, one per day (upsert)
+    total_value_czk = Column(Float, nullable=False)
+    invested_czk = Column(Float, nullable=True)   # cash.invested * rate
+    result_czk = Column(Float, nullable=True)      # cash.result * rate (unrealized P&L)
+    cash_free_czk = Column(Float, nullable=True)   # cash.free * rate
+    total_value_eur = Column(Float, nullable=True)
+    exchange_rate = Column(Float, nullable=True)
+    positions_count = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 

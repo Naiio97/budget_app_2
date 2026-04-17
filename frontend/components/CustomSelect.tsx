@@ -18,7 +18,6 @@ interface CustomSelectProps {
     searchPlaceholder?: string;
     disabled?: boolean;
     style?: React.CSSProperties;
-    compact?: boolean;
 }
 
 export default function CustomSelect({
@@ -29,28 +28,22 @@ export default function CustomSelect({
     searchable = false,
     searchPlaceholder = '🔍 Hledat...',
     disabled = false,
-    style,
-    compact = false,
+    style
 }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
-    const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>(
-        { top: 100, left: 100, width: 200 }
-    );
+    const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 100, left: 100, width: 200 });
     const containerRef = useRef<HTMLDivElement>(null);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
 
-    // useSyncExternalStore: server snapshot = false, client snapshot = true
-    // Avoids calling setState inside an effect (react-hooks/set-state-in-effect)
+    // useSyncExternalStore: server returns false, client returns true — no effect needed
     const mounted = useSyncExternalStore(
         () => () => {},
         () => true,
         () => false,
     );
 
-    // Compute dropdown position after render, not during render
-    // (avoids react-hooks/refs error for reading ref.current in render)
     useLayoutEffect(() => {
         if (!isOpen || !buttonRef.current) return;
         const rect = buttonRef.current.getBoundingClientRect();
@@ -69,13 +62,10 @@ export default function CustomSelect({
         setIsOpen(prev => !prev);
     };
 
-    // Close when clicking outside the trigger button
     useEffect(() => {
         if (!isOpen) return;
         const handleMouseDown = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                close();
-            }
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
         };
         document.addEventListener('mousedown', handleMouseDown);
         return () => document.removeEventListener('mousedown', handleMouseDown);
@@ -171,13 +161,13 @@ export default function CustomSelect({
                 onClick={handleOpen}
                 disabled={disabled}
                 style={{
-                    width: '100%', padding: compact ? '4px 8px' : '10px 16px', display: 'flex', alignItems: 'center',
+                    width: '100%', padding: '10px 16px', display: 'flex', alignItems: 'center',
                     justifyContent: 'space-between', gap: '8px',
                     background: 'rgba(0, 0, 0, 0.25)',
                     border: `1px solid ${isOpen ? 'var(--accent-primary)' : 'var(--glass-border-light)'}`,
                     borderRadius: 'var(--radius-md)',
                     color: selectedOption ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                    fontSize: compact ? '0.875rem' : '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
+                    fontSize: '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
                     backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
                     transition: 'all 0.15s ease-out', outline: 'none',
                     opacity: disabled ? 0.5 : 1,
