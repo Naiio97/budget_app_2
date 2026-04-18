@@ -120,28 +120,47 @@ class CategoryModel(Base):
 # === Monthly Budget Tracker Models ===
 
 class MonthlyBudgetModel(Base):
-    """Měsíční rozpočet - příjmy a přebytek"""
+    """Měsíční rozpočet - investice, přebytek a metadata.
+
+    Příjmy jsou dynamické řádky v MonthlyIncomeItemModel (Výplata,
+    Stravenky, Bokovka…), uživatel si je přidává a maže.
+    """
     __tablename__ = "monthly_budgets"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     year_month = Column(String, nullable=False, unique=True)  # "2025-01"
-    
-    # Příjmy
-    salary = Column(Float, default=0.0)
-    other_income = Column(Float, default=0.0)
-    meal_vouchers = Column(Float, default=0.0)
-    
+
     # Investice (manuální částka tento měsíc)
     investment_amount = Column(Float, default=0.0)
-    
+
     # Přebytek poslaný na spořící účet
     surplus_to_savings = Column(Float, default=0.0)
-    
+
     is_closed = Column(Boolean, default=False)  # Měsíc uzavřen
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     expenses = relationship("MonthlyExpenseModel", back_populates="budget", cascade="all, delete-orphan")
+    income_items = relationship("MonthlyIncomeItemModel", back_populates="budget", cascade="all, delete-orphan", order_by="MonthlyIncomeItemModel.order_index")
+
+
+class MonthlyIncomeItemModel(Base):
+    """Dynamický řádek příjmu v konkrétním měsíci (Výplata, Stravenky, Bokovka…).
+
+    `is_salary=True` označuje řádek, který plní endpoint /sync-income
+    z transakcí kategorie "Salary". V každém měsíci by měl být nejvýš jeden.
+    """
+    __tablename__ = "monthly_income_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    budget_id = Column(Integer, ForeignKey("monthly_budgets.id"), nullable=False)
+    name = Column(String, nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    order_index = Column(Integer, default=0)
+    is_salary = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    budget = relationship("MonthlyBudgetModel", back_populates="income_items")
 
 
 class RecurringExpenseModel(Base):

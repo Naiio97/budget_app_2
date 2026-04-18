@@ -10,7 +10,7 @@ from datetime import datetime
 
 from database import get_db
 from models import (
-    MonthlyBudgetModel, RecurringExpenseModel, MonthlyExpenseModel,
+    MonthlyBudgetModel, MonthlyIncomeItemModel, RecurringExpenseModel, MonthlyExpenseModel,
     ManualAccountModel, ManualAccountItemModel, TransactionModel
 )
 
@@ -21,20 +21,33 @@ router = APIRouter(tags=["Budget & Expenses"])
 
 class MonthlyBudgetCreate(BaseModel):
     year_month: str  # "2025-01"
-    salary: float = 0.0
-    other_income: float = 0.0
-    meal_vouchers: float = 0.0
     investment_amount: float = 0.0
     surplus_to_savings: float = 0.0
 
 
 class MonthlyBudgetUpdate(BaseModel):
-    salary: Optional[float] = None
-    other_income: Optional[float] = None
-    meal_vouchers: Optional[float] = None
     investment_amount: Optional[float] = None
     surplus_to_savings: Optional[float] = None
     is_closed: Optional[bool] = None
+
+
+class IncomeItemResponse(BaseModel):
+    id: int
+    name: str
+    amount: float
+    order_index: int
+    is_salary: bool
+
+
+class IncomeItemCreate(BaseModel):
+    name: str
+    amount: float = 0.0
+    is_salary: bool = False
+
+
+class IncomeItemUpdate(BaseModel):
+    name: Optional[str] = None
+    amount: Optional[float] = None
 
 
 class MonthlyExpenseResponse(BaseModel):
@@ -53,9 +66,7 @@ class MonthlyExpenseResponse(BaseModel):
 class MonthlyBudgetResponse(BaseModel):
     id: int
     year_month: str
-    salary: float
-    other_income: float
-    meal_vouchers: float
+    income_items: List[IncomeItemResponse]
     investment_amount: float
     surplus_to_savings: float
     is_closed: bool
@@ -141,6 +152,30 @@ class ManualAccountResponse(BaseModel):
 
 # === Monthly Budget Endpoints ===
 
+async def _create_default_salary_row(budget: MonthlyBudgetModel, db: AsyncSession) -> None:
+    """Výchozí „Výplata" řádek — vloží se jen při prvním vytvoření rozpočtu.
+
+    Uživatel ho může smazat; do dalších měsíců se ale vygeneruje znovu jako default.
+    """
+    db.add(MonthlyIncomeItemModel(
+        budget_id=budget.id,
+        name="Výplata",
+        amount=0.0,
+        order_index=0,
+        is_salary=True,
+    ))
+    await db.commit()
+
+
+async def _load_income_items(budget_id: int, db: AsyncSession) -> List[MonthlyIncomeItemModel]:
+    result = await db.execute(
+        select(MonthlyIncomeItemModel)
+        .where(MonthlyIncomeItemModel.budget_id == budget_id)
+        .order_by(MonthlyIncomeItemModel.order_index, MonthlyIncomeItemModel.id)
+    )
+    return list(result.scalars().all())
+
+
 @router.get("/monthly-budget/{year_month}", response_model=MonthlyBudgetResponse)
 async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)):
     """Získat rozpočet pro měsíc (vytvoří nový pokud neexistuje)"""
@@ -148,34 +183,44 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
         select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
     )
     budget = result.scalar_one_or_none()
-    
+
+    is_fresh = False
     if not budget:
         # Vytvoř prázdný rozpočet — uživatel si zkopíruje z minula nebo přidá ručně.
         budget = MonthlyBudgetModel(year_month=year_month)
         db.add(budget)
         await db.commit()
         await db.refresh(budget)
-    
-    # Načti výdaje
+        is_fresh = True
+
+    if is_fresh:
+        await _create_default_salary_row(budget, db)
+
+    income_items = await _load_income_items(budget.id, db)
+
     expenses_result = await db.execute(
         select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id)
     )
     expenses = expenses_result.scalars().all()
-    
-    total_income = budget.salary + budget.other_income + budget.meal_vouchers
+
+    total_income = sum(item.amount for item in income_items)
     def effective_my_amount(e) -> float:
         if e.my_amount_override is not None:
             return e.my_amount_override
         return e.amount * (e.my_percentage or 100) / 100
 
     total_expenses = sum(effective_my_amount(e) for e in expenses)
-    
+
     return MonthlyBudgetResponse(
         id=budget.id,
         year_month=budget.year_month,
-        salary=budget.salary,
-        other_income=budget.other_income,
-        meal_vouchers=budget.meal_vouchers,
+        income_items=[IncomeItemResponse(
+            id=i.id,
+            name=i.name,
+            amount=i.amount,
+            order_index=i.order_index,
+            is_salary=i.is_salary,
+        ) for i in income_items],
         investment_amount=budget.investment_amount,
         surplus_to_savings=budget.surplus_to_savings,
         is_closed=budget.is_closed,
@@ -199,30 +244,100 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
 
 @router.put("/monthly-budget/{year_month}")
 async def update_monthly_budget(year_month: str, data: MonthlyBudgetUpdate, db: AsyncSession = Depends(get_db)):
-    """Aktualizovat měsíční rozpočet"""
+    """Aktualizovat měsíční rozpočet (investice, spořící, uzavření)."""
     result = await db.execute(
         select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
     )
     budget = result.scalar_one_or_none()
-    
+
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-    
-    if data.salary is not None:
-        budget.salary = data.salary
-    if data.other_income is not None:
-        budget.other_income = data.other_income
-    if data.meal_vouchers is not None:
-        budget.meal_vouchers = data.meal_vouchers
+
     if data.investment_amount is not None:
         budget.investment_amount = data.investment_amount
     if data.surplus_to_savings is not None:
         budget.surplus_to_savings = data.surplus_to_savings
     if data.is_closed is not None:
         budget.is_closed = data.is_closed
-    
+
     await db.commit()
     return {"status": "updated"}
+
+
+# === Income Items Endpoints ===
+
+@router.post("/monthly-budget/{year_month}/income-items", response_model=IncomeItemResponse)
+async def add_income_item(year_month: str, data: IncomeItemCreate, db: AsyncSession = Depends(get_db)):
+    """Přidat nový řádek příjmu (např. Bokovka, Dividendy)."""
+    result = await db.execute(
+        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
+    )
+    budget = result.scalar_one_or_none()
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    # Pokud je tento řádek označený jako salary, zruš flag z ostatních — jediný salary row v měsíci.
+    if data.is_salary:
+        existing = await db.execute(
+            select(MonthlyIncomeItemModel)
+            .where(MonthlyIncomeItemModel.budget_id == budget.id)
+            .where(MonthlyIncomeItemModel.is_salary.is_(True))
+        )
+        for item in existing.scalars().all():
+            item.is_salary = False
+
+    max_index_result = await db.execute(
+        select(func.max(MonthlyIncomeItemModel.order_index))
+        .where(MonthlyIncomeItemModel.budget_id == budget.id)
+    )
+    max_index = max_index_result.scalar() or -1
+
+    item = MonthlyIncomeItemModel(
+        budget_id=budget.id,
+        name=data.name.strip() or "Nový příjem",
+        amount=data.amount,
+        order_index=max_index + 1,
+        is_salary=data.is_salary,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+
+    return IncomeItemResponse(
+        id=item.id,
+        name=item.name,
+        amount=item.amount,
+        order_index=item.order_index,
+        is_salary=item.is_salary,
+    )
+
+
+@router.put("/monthly-income-items/{item_id}")
+async def update_income_item(item_id: int, data: IncomeItemUpdate, db: AsyncSession = Depends(get_db)):
+    """Přejmenovat / upravit částku řádku příjmu."""
+    item = await db.get(MonthlyIncomeItemModel, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Income item not found")
+    if data.name is not None:
+        name = data.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="Name must not be empty")
+        item.name = name
+    if data.amount is not None:
+        item.amount = data.amount
+    await db.commit()
+    return {"status": "updated"}
+
+
+@router.delete("/monthly-income-items/{item_id}")
+async def delete_income_item(item_id: int, db: AsyncSession = Depends(get_db)):
+    """Smazat řádek příjmu. Výplata při sync-income vznikne, pokud už v daném měsíci neexistuje."""
+    item = await db.get(MonthlyIncomeItemModel, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Income item not found")
+    await db.delete(item)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.delete("/monthly-budget/{year_month}")
@@ -306,9 +421,30 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
         )
         db.add(new_expense)
         copied_count += 1
-    
+
+    # Copy income item structure (names, is_salary), replacing anything existing.
+    # Částky se nekopírují — salary se stejně natahuje ze sync-income, ostatní zadává uživatel znovu.
+    await db.execute(
+        MonthlyIncomeItemModel.__table__.delete().where(MonthlyIncomeItemModel.budget_id == curr_budget.id)
+    )
+    prev_income_result = await db.execute(
+        select(MonthlyIncomeItemModel)
+        .where(MonthlyIncomeItemModel.budget_id == prev_budget.id)
+        .order_by(MonthlyIncomeItemModel.order_index)
+    )
+    income_copied = 0
+    for inc in prev_income_result.scalars().all():
+        db.add(MonthlyIncomeItemModel(
+            budget_id=curr_budget.id,
+            name=inc.name,
+            amount=0.0,
+            order_index=inc.order_index,
+            is_salary=inc.is_salary,
+        ))
+        income_copied += 1
+
     await db.commit()
-    return {"status": "copied", "from": prev_year_month, "expenses_copied": copied_count}
+    return {"status": "copied", "from": prev_year_month, "expenses_copied": copied_count, "income_items_copied": income_copied}
 
 
 @router.post("/monthly-budget/{year_month}/match-transactions")
@@ -478,9 +614,25 @@ async def sync_income_from_transactions(year_month: str, db: AsyncSession = Depe
     )
     salary_total = salary_result.scalar() or 0
 
-    # Update budget - only salary, other_income stays manual
-    old_salary = budget.salary
-    budget.salary = salary_total
+    # Najdi salary řádek; pokud uživatel smazal, vytvoř znovu (default Výplata).
+    existing_result = await db.execute(
+        select(MonthlyIncomeItemModel)
+        .where(MonthlyIncomeItemModel.budget_id == budget.id)
+        .where(MonthlyIncomeItemModel.is_salary.is_(True))
+    )
+    salary_item = existing_result.scalar_one_or_none()
+    old_salary = salary_item.amount if salary_item else 0.0
+    if salary_item is None:
+        salary_item = MonthlyIncomeItemModel(
+            budget_id=budget.id,
+            name="Výplata",
+            amount=salary_total,
+            order_index=0,
+            is_salary=True,
+        )
+        db.add(salary_item)
+    else:
+        salary_item.amount = salary_total
 
     await db.commit()
 
@@ -847,7 +999,11 @@ async def _compute_year_totals(year: int, db: AsyncSession):
             .where(MonthlyExpenseModel.budget_id == budget.id)
         )
         month_expenses = expenses_result.scalar() or 0
-        month_income = budget.salary + budget.other_income + budget.meal_vouchers
+        income_result = await db.execute(
+            select(func.sum(MonthlyIncomeItemModel.amount))
+            .where(MonthlyIncomeItemModel.budget_id == budget.id)
+        )
+        month_income = income_result.scalar() or 0
 
         total_income += month_income
         total_expenses += month_expenses
@@ -887,7 +1043,11 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
             )
             month_expenses = expenses_result.scalar() or 0
 
-            month_income = budget.salary + budget.other_income + budget.meal_vouchers
+            income_result = await db.execute(
+                select(func.sum(MonthlyIncomeItemModel.amount))
+                .where(MonthlyIncomeItemModel.budget_id == budget.id)
+            )
+            month_income = income_result.scalar() or 0
 
             months_data.append({
                 "month": month,
