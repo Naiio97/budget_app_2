@@ -450,10 +450,22 @@ select.input {
   gap: var(--spacing-md);
 }
 
-.grid-col1-wrapper {
+.grid-col1-wrapper,
+.grid-expenses {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+}
+
+/* Hide native number-input spinners (up/down arrows) everywhere */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .section-header-wrap {
