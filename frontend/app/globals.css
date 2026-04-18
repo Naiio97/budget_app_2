@@ -450,18 +450,31 @@ select.input {
   gap: var(--spacing-md);
 }
 
+.grid-col1-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
 .section-header-wrap {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: var(--spacing-md);
+  min-height: 36px;
+}
+
+.section-header-wrap h3 {
+  white-space: nowrap;
 }
 
 .section-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .chart-header-wrap {
