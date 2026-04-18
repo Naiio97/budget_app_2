@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { Transaction, TransactionDetail, getTransactionDetail } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 
@@ -162,6 +163,13 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     const modalTx = selectedTx ? transactions.find(t => t.id === selectedTx.id) || selectedTx : null;
 
+    // useSyncExternalStore: server returns false, client returns true — gate portal until mounted
+    const mounted = useSyncExternalStore(
+        () => () => {},
+        () => true,
+        () => false,
+    );
+
     if (transactions.length === 0) {
         return (
             <div className="glass glass-card" style={{ textAlign: 'center', padding: 'var(--spacing-xl)' }}>
@@ -170,10 +178,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
         );
     }
 
-    return (
-        <>
-        {/* Transaction Detail Modal */}
-        {modalTx && (
+    const modalEl = modalTx ? (
             <div
                 onClick={() => setSelectedTx(null)}
                 className="tx-modal-overlay"
@@ -369,7 +374,11 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     </>)}
                 </div>
             </div>
-        )}
+    ) : null;
+
+    return (
+        <>
+        {mounted && modalEl && createPortal(modalEl, document.body)}
 
         {/* Grouped transaction list */}
         <div className="transaction-list">
