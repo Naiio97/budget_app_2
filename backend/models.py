@@ -212,6 +212,22 @@ class ManualAccountItemModel(Base):
     account = relationship("ManualAccountModel", back_populates="items")
 
 
+class ContactModel(Base):
+    """Address book entry mapping IBAN/account to counterparty name.
+
+    Fills in display names for transactions where the bank doesn't provide
+    creditorName/debtorName (typical for standing orders, utility bills).
+    """
+    __tablename__ = "contacts"
+
+    iban = Column(String, primary_key=True)  # Normalized (uppercase, no spaces)
+    name = Column(String, nullable=False)
+    source = Column(String, default="manual")  # "auto" (learned from bank data) | "manual" (user-entered)
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class PortfolioSnapshotModel(Base):
     """Daily snapshot of Trading 212 portfolio value — used for real history chart"""
     __tablename__ = "portfolio_snapshots"

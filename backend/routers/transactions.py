@@ -5,7 +5,8 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from database import get_db
-from models import TransactionModel, AccountModel, CategoryRuleModel
+from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel
+from routers.contacts import normalize_iban
 
 router = APIRouter()
 
@@ -22,8 +23,11 @@ class Transaction(BaseModel):
     account_name: Optional[str] = None
     transaction_type: str = "normal"  # "normal", "internal_transfer", "family_transfer"
     is_excluded: bool = False
-    creditor_name: Optional[str] = None  # From raw_json creditorName
-    debtor_name: Optional[str] = None  # From raw_json debtorName
+    creditor_name: Optional[str] = None  # From raw_json creditorName (or contacts fallback)
+    debtor_name: Optional[str] = None  # From raw_json debtorName (or contacts fallback)
+    creditor_iban: Optional[str] = None  # Normalized IBAN, used for inline rename in UI
+    debtor_iban: Optional[str] = None
+    counterparty_name_source: Optional[str] = None  # "bank" | "contact_auto" | "contact_manual" | None
 
 
 class PaginatedTransactions(BaseModel):
@@ -87,19 +91,55 @@ async def get_transactions(
     result = await db.execute(query)
     rows = result.all()
 
-    items = []
+    # Pre-parse raw_json once per row so we can bulk-lookup missing names in contacts.
+    parsed = []
+    needed_ibans: set[str] = set()
     for tx, account_name in rows:
-        # Extract creditor/debtor names from raw_json
-        creditor_name = None
-        debtor_name = None
+        raw: dict = {}
         if tx.raw_json:
             try:
-                raw_data = json.loads(tx.raw_json)
-                creditor_name = raw_data.get("creditorName")
-                debtor_name = raw_data.get("debtorName")
-            except:
-                pass
-        
+                raw = json.loads(tx.raw_json) or {}
+            except Exception:
+                raw = {}
+        creditor_name = raw.get("creditorName")
+        debtor_name = raw.get("debtorName")
+        creditor_iban = normalize_iban((raw.get("creditorAccount") or {}).get("iban") or (raw.get("creditorAccount") or {}).get("bban"))
+        debtor_iban = normalize_iban((raw.get("debtorAccount") or {}).get("iban") or (raw.get("debtorAccount") or {}).get("bban"))
+
+        if not creditor_name and creditor_iban:
+            needed_ibans.add(creditor_iban)
+        if not debtor_name and debtor_iban:
+            needed_ibans.add(debtor_iban)
+
+        parsed.append((tx, account_name, creditor_name, debtor_name, creditor_iban, debtor_iban))
+
+    contacts_by_iban: dict[str, ContactModel] = {}
+    if needed_ibans:
+        contact_rows = await db.execute(
+            select(ContactModel).where(ContactModel.iban.in_(list(needed_ibans)))
+        )
+        contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
+
+    items = []
+    for tx, account_name, creditor_name, debtor_name, creditor_iban, debtor_iban in parsed:
+        name_source: Optional[str] = None
+        if tx.amount < 0:
+            # Outgoing — counterparty is creditor
+            if creditor_name:
+                name_source = "bank"
+            elif creditor_iban and creditor_iban in contacts_by_iban:
+                c = contacts_by_iban[creditor_iban]
+                creditor_name = c.name
+                name_source = f"contact_{c.source}"
+        else:
+            # Incoming — counterparty is debtor
+            if debtor_name:
+                name_source = "bank"
+            elif debtor_iban and debtor_iban in contacts_by_iban:
+                c = contacts_by_iban[debtor_iban]
+                debtor_name = c.name
+                name_source = f"contact_{c.source}"
+
         items.append(Transaction(
             id=tx.id,
             date=tx.date,
@@ -113,7 +153,10 @@ async def get_transactions(
             transaction_type=tx.transaction_type or "normal",
             is_excluded=tx.is_excluded or False,
             creditor_name=creditor_name,
-            debtor_name=debtor_name
+            debtor_name=debtor_name,
+            creditor_iban=creditor_iban,
+            debtor_iban=debtor_iban,
+            counterparty_name_source=name_source,
         ))
     
     return PaginatedTransactions(
@@ -282,6 +325,31 @@ async def get_transaction_detail(
     currency_exchange = raw.get("currencyExchange") or []
     fx = currency_exchange[0] if currency_exchange else {}
 
+    creditor_name = raw.get("creditorName")
+    debtor_name = raw.get("debtorName")
+    creditor_iban = normalize_iban(creditor_acc.get("iban") or creditor_acc.get("bban"))
+    debtor_iban = normalize_iban(debtor_acc.get("iban") or debtor_acc.get("bban"))
+
+    # Fallback: look up missing counterparty names in the contacts table.
+    name_source: Optional[str] = None
+    is_outgoing = (tx.amount or 0) < 0
+    if is_outgoing:
+        if creditor_name:
+            name_source = "bank"
+        elif creditor_iban:
+            contact = await db.get(ContactModel, creditor_iban)
+            if contact:
+                creditor_name = contact.name
+                name_source = f"contact_{contact.source}"
+    else:
+        if debtor_name:
+            name_source = "bank"
+        elif debtor_iban:
+            contact = await db.get(ContactModel, debtor_iban)
+            if contact:
+                debtor_name = contact.name
+                name_source = f"contact_{contact.source}"
+
     return {
         "id": tx.id,
         "date": tx.date,
@@ -296,10 +364,11 @@ async def get_transaction_detail(
         "account_type": tx.account_type,
         "transaction_type": tx.transaction_type,
         "is_excluded": tx.is_excluded,
-        "creditor_name": raw.get("creditorName"),
-        "debtor_name": raw.get("debtorName"),
-        "creditor_iban": creditor_acc.get("iban") or creditor_acc.get("bban"),
-        "debtor_iban": debtor_acc.get("iban") or debtor_acc.get("bban"),
+        "creditor_name": creditor_name,
+        "debtor_name": debtor_name,
+        "creditor_iban": creditor_iban,
+        "debtor_iban": debtor_iban,
+        "counterparty_name_source": name_source,
         "remittance_info": raw.get("remittanceInformationUnstructured") or raw.get("remittanceInformationStructured"),
         "end_to_end_id": raw.get("endToEndId"),
         "bank_tx_code": raw.get("proprietaryBankTransactionCode") or raw.get("bankTransactionCode"),
