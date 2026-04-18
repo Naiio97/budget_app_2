@@ -199,7 +199,7 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
     income_items = await _load_income_items(budget.id, db)
 
     expenses_result = await db.execute(
-        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id)
+        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id).order_by(MonthlyExpenseModel.id)
     )
     expenses = expenses_result.scalars().all()
 
@@ -402,7 +402,7 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
     
     # Get previous month expenses
     prev_expenses_result = await db.execute(
-        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == prev_budget.id)
+        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == prev_budget.id).order_by(MonthlyExpenseModel.id)
     )
     prev_expenses = prev_expenses_result.scalars().all()
     
@@ -461,7 +461,7 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
     
     # Get all expenses for this month
     expenses_result = await db.execute(
-        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id)
+        select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id).order_by(MonthlyExpenseModel.id)
     )
     expenses = expenses_result.scalars().all()
     
@@ -1085,7 +1085,7 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
 
         if budget:
             expenses_result = await db.execute(
-                select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id)
+                select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id).order_by(MonthlyExpenseModel.id)
             )
             expenses = expenses_result.scalars().all()
 
