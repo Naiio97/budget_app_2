@@ -149,7 +149,13 @@ export default function RozpocetPage() {
     const { data: annualData } = useQuery<AnnualData>({
         queryKey: queryKeys.annualOverview(selectedYear),
         queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear}`).then(r => r.json()),
-        enabled: viewMode === 'year',
+    });
+
+    // Previous year needed when selected month is January (previous month = December of prev year)
+    const { data: prevYearData } = useQuery<AnnualData>({
+        queryKey: queryKeys.annualOverview(selectedYear - 1),
+        queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear - 1}`).then(r => r.json()),
+        enabled: selectedMonth === 1,
     });
 
     const refreshBudget = useCallback(() =>
@@ -449,6 +455,19 @@ export default function RozpocetPage() {
         if (!budget) return null;
         const isOverBudget = remaining < 0;
 
+        // Previous month income (handles Jan → Dec of prev year)
+        const prevMonthIncome = selectedMonth === 1
+            ? prevYearData?.months.find(m => m.month === 12)?.income ?? 0
+            : annualData?.months.find(m => m.month === selectedMonth - 1)?.income ?? 0;
+        const incomeDelta = totalIncome - prevMonthIncome;
+        const hasPrevMonth = prevMonthIncome > 0;
+
+        // Average income across active months (income > 0) in current year
+        const activeIncomeMonths = annualData?.months.filter(m => m.income > 0 && m.month !== selectedMonth) ?? [];
+        const avgIncome = activeIncomeMonths.length > 0
+            ? activeIncomeMonths.reduce((s, m) => s + m.income, 0) / activeIncomeMonths.length
+            : 0;
+
         return (
             <div style={{
                 display: 'grid',
@@ -460,7 +479,20 @@ export default function RozpocetPage() {
                 <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjmy</div>
                     <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(totalIncome)}</div>
-                    {isAutoSyncing && <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{Icons.action.sync} Načítám...</div>}
+                    {isAutoSyncing ? (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{Icons.action.sync} Načítám...</div>
+                    ) : (
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginTop: '3px', lineHeight: 1.4 }}>
+                            {hasPrevMonth && totalIncome > 0 && (
+                                <div style={{ color: incomeDelta >= 0 ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)' }}>
+                                    {incomeDelta >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(incomeDelta))} vs. minulý měsíc
+                                </div>
+                            )}
+                            {avgIncome > 0 && totalIncome > 0 && (
+                                <div>⌀ {formatCurrency(avgIncome)}/měs letos</div>
+                            )}
+                        </div>
+                    )}
                 </GlassCard>
 
                 {/* Výdaje */}
