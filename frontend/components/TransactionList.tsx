@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Transaction, TransactionDetail, getTransactionDetail } from '@/lib/api';
+import { Transaction, TransactionDetail, getTransactionDetail, saveContact } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 
 interface TransactionListProps {
@@ -36,6 +36,9 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [txDetail, setTxDetail] = useState<TransactionDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [modalPickingCategory, setModalPickingCategory] = useState(false);
+    const [namingIban, setNamingIban] = useState<string | null>(null);
+    const [nameInput, setNameInput] = useState('');
+    const [savingContact, setSavingContact] = useState(false);
 
     // Build icon map from categories
     useEffect(() => {
@@ -68,7 +71,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     // Fetch rich detail when modal opens
     useEffect(() => {
-        if (!selectedTx) { setTxDetail(null); setModalPickingCategory(false); return; }
+        if (!selectedTx) { setTxDetail(null); setModalPickingCategory(false); setNamingIban(null); setNameInput(''); return; }
         setDetailLoading(true);
         getTransactionDetail(selectedTx.id)
             .then(setTxDetail)
@@ -123,6 +126,40 @@ export default function TransactionList({ transactions: initialTransactions, sho
         tx.amount < 0
             ? (tx.creditor_name || tx.description)
             : (tx.debtor_name || tx.creditor_name || tx.description);
+
+    const handleSaveContact = async (iban: string, direction: 'creditor' | 'debtor') => {
+        const trimmed = nameInput.trim();
+        if (!trimmed) return;
+        setSavingContact(true);
+        try {
+            await saveContact(iban, trimmed);
+            // Update detail + list entries locally so the rename propagates without a refetch.
+            setTxDetail(prev => prev && {
+                ...prev,
+                creditor_name: direction === 'creditor' ? trimmed : prev.creditor_name,
+                debtor_name: direction === 'debtor' ? trimmed : prev.debtor_name,
+                counterparty_name_source: 'contact_manual',
+            });
+            setTransactions(prev => prev.map(tx => {
+                const matches = direction === 'creditor'
+                    ? tx.creditor_iban === iban
+                    : tx.debtor_iban === iban;
+                if (!matches) return tx;
+                return {
+                    ...tx,
+                    creditor_name: direction === 'creditor' ? trimmed : tx.creditor_name,
+                    debtor_name: direction === 'debtor' ? trimmed : tx.debtor_name,
+                    counterparty_name_source: 'contact_manual',
+                };
+            }));
+            setNamingIban(null);
+            setNameInput('');
+        } catch (err) {
+            console.error('Failed to save contact:', err);
+        } finally {
+            setSavingContact(false);
+        }
+    };
 
     const handleCategorySelect = async (txId: string, newCategory: string) => {
         setUpdatingId(txId);
@@ -243,45 +280,97 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     )}
 
                     {!detailLoading && (<>
-                        {/* Message / reference */}
-                        {(txDetail?.remittance_info && txDetail.remittance_info !== modalTx.description) && (
-                            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', fontSize: '0.85rem', color: 'var(--text-secondary)', wordBreak: 'break-word', borderLeft: '3px solid rgba(255,255,255,0.15)' }}>
-                                {txDetail.remittance_info}
-                            </div>
-                        )}
-                        {!txDetail?.remittance_info && modalTx.description && modalTx.description !== getDisplayName(modalTx) && (
-                            <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)', padding: '8px 12px', fontSize: '0.85rem', color: 'var(--text-secondary)', wordBreak: 'break-word', borderLeft: '3px solid rgba(255,255,255,0.15)' }}>
-                                {modalTx.description}
-                            </div>
-                        )}
+
 
                         {/* Parties — side by side */}
-                        {((txDetail?.creditor_name || modalTx.creditor_name) || (txDetail?.debtor_name || modalTx.debtor_name)) && (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
-                                {(txDetail?.debtor_name || modalTx.debtor_name) && (
-                                    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Odesílatel</div>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{txDetail?.debtor_name || modalTx.debtor_name}</div>
-                                        {txDetail?.debtor_iban && (
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontFamily: 'monospace' }}>
-                                                {formatAccount(txDetail.debtor_iban)?.display ?? txDetail.debtor_iban}
+                        {(() => {
+                            const debtorName = txDetail?.debtor_name || modalTx.debtor_name;
+                            const creditorName = txDetail?.creditor_name || modalTx.creditor_name;
+                            const debtorIban = txDetail?.debtor_iban || modalTx.debtor_iban || null;
+                            const creditorIban = txDetail?.creditor_iban || modalTx.creditor_iban || null;
+                            const nameSource = txDetail?.counterparty_name_source ?? modalTx.counterparty_name_source ?? null;
+                            const isOutgoing = modalTx.amount < 0;
+                            // User's own account is on the opposite side — only allow rename for counterparty.
+                            const counterpartyDirection: 'creditor' | 'debtor' = isOutgoing ? 'creditor' : 'debtor';
+                            const showDebtor = debtorName || (counterpartyDirection === 'debtor' && debtorIban);
+                            const showCreditor = creditorName || (counterpartyDirection === 'creditor' && creditorIban);
+                            if (!showDebtor && !showCreditor) return null;
+
+                            const renderRenameControls = (iban: string, direction: 'creditor' | 'debtor', currentName?: string | null) => {
+                                const editable = counterpartyDirection === direction;
+                                if (!editable) return null;
+                                if (namingIban === iban) {
+                                    return (
+                                        <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
+                                            <input
+                                                autoFocus
+                                                value={nameInput}
+                                                onChange={e => setNameInput(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleSaveContact(iban, direction);
+                                                    if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
+                                                }}
+                                                placeholder="Např. Táta, Nájem, ČEZ…"
+                                                style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)' }}
+                                            />
+                                            <button
+                                                onClick={() => handleSaveContact(iban, direction)}
+                                                disabled={savingContact || !nameInput.trim()}
+                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(45,212,191,0.4)', borderRadius: 'var(--radius-sm)', background: 'rgba(45,212,191,0.15)', color: 'var(--text-primary)', cursor: savingContact ? 'wait' : 'pointer' }}
+                                            >{savingContact ? '…' : 'OK'}</button>
+                                            <button
+                                                onClick={() => { setNamingIban(null); setNameInput(''); }}
+                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                                            >✕</button>
+                                        </div>
+                                    );
+                                }
+                                // Show "Pojmenovat" when no name yet, or name came from contacts (auto/manual) — user can still edit.
+                                const canEdit = !currentName || nameSource === 'contact_auto' || nameSource === 'contact_manual';
+                                if (!canEdit) return null;
+                                return (
+                                    <button
+                                        onClick={() => { setNamingIban(iban); setNameInput(currentName || ''); }}
+                                        style={{ marginTop: '6px', padding: '3px 8px', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    >
+                                        {currentName ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
+                                    </button>
+                                );
+                            };
+
+                            return (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
+                                    {showDebtor && (
+                                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Odesílatel</div>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: debtorName ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: debtorName ? 'normal' : 'italic' }}>
+                                                {debtorName || 'Nepojmenovaná protistrana'}
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-                                {(txDetail?.creditor_name || modalTx.creditor_name) && (
-                                    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjemce</div>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 500 }}>{txDetail?.creditor_name || modalTx.creditor_name}</div>
-                                        {txDetail?.creditor_iban && (
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontFamily: 'monospace' }}>
-                                                {formatAccount(txDetail.creditor_iban)?.display ?? txDetail.creditor_iban}
+                                            {debtorIban && (
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontFamily: 'monospace' }}>
+                                                    {formatAccount(debtorIban)?.display ?? debtorIban}
+                                                </div>
+                                            )}
+                                            {debtorIban && renderRenameControls(debtorIban, 'debtor', debtorName)}
+                                        </div>
+                                    )}
+                                    {showCreditor && (
+                                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjemce</div>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: creditorName ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: creditorName ? 'normal' : 'italic' }}>
+                                                {creditorName || 'Nepojmenovaná protistrana'}
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                            {creditorIban && (
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontFamily: 'monospace' }}>
+                                                    {formatAccount(creditorIban)?.display ?? creditorIban}
+                                                </div>
+                                            )}
+                                            {creditorIban && renderRenameControls(creditorIban, 'creditor', creditorName)}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         {/* Details grid — 2 columns */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
@@ -324,6 +413,18 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                                     <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Kurz</div>
                                     <div style={{ fontSize: '0.85rem' }}>{txDetail.fx_source_currency} → {txDetail.fx_target_currency} @ {txDetail.fx_rate}</div>
+                                </div>
+                            )}
+                            {txDetail?.remittance_info && (
+                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zpráva pro příjemce</div>
+                                    <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{txDetail.remittance_info}</div>
+                                </div>
+                            )}
+                            {!txDetail?.remittance_info && modalTx.description && modalTx.description !== getDisplayName(modalTx) && (
+                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Popis</div>
+                                    <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{modalTx.description}</div>
                                 </div>
                             )}
                             {txDetail?.additional_info && (

@@ -27,6 +27,9 @@ export interface Transaction {
     is_excluded?: boolean;
     creditor_name?: string;
     debtor_name?: string;
+    creditor_iban?: string | null;
+    debtor_iban?: string | null;
+    counterparty_name_source?: 'bank' | 'contact_auto' | 'contact_manual' | null;
 }
 
 export interface DashboardData {
@@ -395,6 +398,7 @@ export interface TransactionDetail {
     debtor_name: string | null;
     creditor_iban: string | null;
     debtor_iban: string | null;
+    counterparty_name_source: 'bank' | 'contact_auto' | 'contact_manual' | null;
     remittance_info: string | null;
     end_to_end_id: string | null;
     bank_tx_code: string | null;
@@ -408,6 +412,33 @@ export interface TransactionDetail {
 
 export async function getTransactionDetail(id: string): Promise<TransactionDetail> {
     return fetchApi<TransactionDetail>(`/transactions/${id}`);
+}
+
+// === Contacts (IBAN address book) ===
+
+export interface Contact {
+    iban: string;
+    name: string;
+    source: 'auto' | 'manual';
+    note?: string | null;
+}
+
+export async function saveContact(iban: string, name: string, note?: string): Promise<Contact> {
+    const response = await fetch(`${API_BASE}/contacts/${encodeURIComponent(iban)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, note: note ?? null }),
+    });
+    if (!response.ok) throw new Error('Failed to save contact');
+    return response.json();
+}
+
+export async function deleteContact(iban: string): Promise<{ deleted: string }> {
+    const response = await fetch(`${API_BASE}/contacts/${encodeURIComponent(iban)}`, {
+        method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete contact');
+    return response.json();
 }
 
 // === Budgets & Goals ===
