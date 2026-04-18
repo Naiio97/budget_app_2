@@ -132,6 +132,7 @@ export default function RozpocetPage() {
     const [editingBudgetFields, setEditingBudgetFields] = useState<Record<string, string>>({});
     const [editingIncomeAmounts, setEditingIncomeAmounts] = useState<Record<number, string>>({});
     const [editingIncomeNames, setEditingIncomeNames] = useState<Record<number, string>>({});
+    const [editingExpenseNames, setEditingExpenseNames] = useState<Record<number, string>>({});
 
     // Track which months we've already auto-synced so we don't loop
     const autoSyncedMonths = useRef<Set<string>>(new Set());
@@ -325,6 +326,24 @@ export default function RozpocetPage() {
             refreshBudget();
         } catch (err) {
             console.error('Failed to update expense:', err);
+        }
+    };
+
+    const saveExpenseName = async (expense: MonthlyExpense) => {
+        const raw = editingExpenseNames[expense.id];
+        if (raw === undefined) return;
+        const newName = raw.trim();
+        setEditingExpenseNames(prev => { const next = { ...prev }; delete next[expense.id]; return next; });
+        if (!newName || newName === expense.name) return;
+        try {
+            await fetch(`${API_BASE}/monthly-expenses/${expense.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName })
+            });
+            refreshBudget();
+        } catch (err) {
+            console.error('Failed to rename expense:', err);
         }
     };
 
@@ -783,10 +802,27 @@ export default function RozpocetPage() {
                                 onChange={() => toggleExpensePaid(expense.id, expense.is_paid)}
                                 style={{ cursor: 'pointer', flexShrink: 0 }}
                             />
-                            <span style={{ textDecoration: expense.is_paid ? 'line-through' : 'none', opacity: expense.is_paid ? 0.55 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.875rem' }}>
-                                {expense.name}
-                                {expense.matched_transaction_id && <span style={{ marginLeft: '5px', fontSize: '0.7rem', color: 'var(--accent-success)' }}>{Icons.status.ok} spárováno</span>}
-                            </span>
+                            <input
+                                value={editingExpenseNames[expense.id] ?? expense.name}
+                                onChange={(e) => setEditingExpenseNames(prev => ({ ...prev, [expense.id]: e.target.value }))}
+                                onBlur={() => saveExpenseName(expense)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                style={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    padding: '2px 4px',
+                                    background: 'transparent',
+                                    border: '1px solid transparent',
+                                    borderRadius: '4px',
+                                    color: 'inherit',
+                                    fontSize: '0.875rem',
+                                    textDecoration: expense.is_paid ? 'line-through' : 'none',
+                                    opacity: expense.is_paid ? 0.55 : 1,
+                                }}
+                                onFocus={(e) => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.15)'; }}
+                                onBlurCapture={(e) => { e.currentTarget.style.border = '1px solid transparent'; }}
+                            />
+                            {expense.matched_transaction_id && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', flexShrink: 0 }}>{Icons.status.ok} spárováno</span>}
                         </div>
                         <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                             <CustomSelect
