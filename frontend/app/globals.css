@@ -1086,6 +1086,16 @@ select.input {
     grid-template-columns: 1fr;
   }
 
+  /* Transaction modal: anchor to top on mobile so it doesn't jump */
+  .tx-modal-overlay {
+    align-items: flex-start !important;
+    padding-top: 5vh !important;
+  }
+
+  .tx-modal-card {
+    max-height: 85vh !important;
+  }
+
   /* Rozpocet page elements improvements */
   .section-header-wrap {
     flex-direction: column;
