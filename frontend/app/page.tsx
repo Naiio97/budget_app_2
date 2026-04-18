@@ -10,6 +10,7 @@ import GlassCard from '@/components/GlassCard';
 import { getDashboard, getBudgetOverview } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 export default function DashboardPage() {
   const { data, isLoading, isError } = useQuery({
@@ -61,7 +62,7 @@ export default function DashboardPage() {
           <h1>Dashboard</h1>
           {error && (
             <p className="text-tertiary" style={{ fontSize: '0.875rem', marginTop: 'var(--spacing-sm)' }}>
-              ⚠️ {error}
+              {Icons.status.warning} {error}
             </p>
           )}
         </header>
@@ -70,19 +71,19 @@ export default function DashboardPage() {
           {/* Summary Stats */}
           <div className="dashboard-grid">
             <StatCard
-              icon="💰"
+              icon={Icons.section.assetGrowth}
               label="Celkový zůstatek"
               value={data.summary.total_balance}
               currency={data.summary.currency}
             />
             <StatCard
-              icon="🏦"
+              icon={Icons.accountType.bank}
               label="Bankovní účty"
               value={data.summary.bank_balance}
               currency={data.summary.currency}
             />
             <StatCard
-              icon="📈"
+              icon={Icons.accountType.investment}
               label="Investice"
               value={data.summary.investment_balance}
               currency={data.summary.currency}
@@ -143,7 +144,7 @@ export default function DashboardPage() {
           {/* Net Worth Chart */}
           <GlassCard style={{ marginBottom: 'var(--spacing-xl)' }}>
             <h4 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
-              📊 Vývoj majetku
+              {Icons.section.assetGrowth} Vývoj majetku
             </h4>
             <NetWorthChart currency={data.summary.currency} />
           </GlassCard>
@@ -157,7 +158,7 @@ export default function DashboardPage() {
                 alignItems: 'center',
                 marginBottom: 'var(--spacing-md)'
               }}>
-                <h4 style={{ margin: 0 }}>💰 Stav rozpočtu</h4>
+                <h4 style={{ margin: 0 }}>{Icons.nav.budgets} Stav rozpočtu</h4>
                 <a
                   href="/budgets"
                   style={{

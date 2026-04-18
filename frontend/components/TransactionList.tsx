@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Transaction, TransactionDetail, getTransactionDetail } from '@/lib/api';
+import { Icons } from '@/lib/icons';
 
 interface TransactionListProps {
     transactions: Transaction[];
@@ -22,8 +23,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield
 
 // Fallback icons for special categories
 const FALLBACK_ICONS: Record<string, string> = {
-    'Internal Transfer': '🔄',
-    'Family Transfer': '👨‍👩‍👧',
+    'Internal Transfer': Icons.category.internalTransfer,
+    'Family Transfer': Icons.category.familyTransfer,
 };
 
 export default function TransactionList({ transactions: initialTransactions, showAccount = false, onCategoryChange }: TransactionListProps) {
@@ -201,7 +202,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     {/* Header: icon + name + amount */}
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--spacing-md)', paddingRight: 'var(--spacing-xl)' }}>
                         <div className="transaction-icon" style={{ flexShrink: 0, fontSize: '1.5rem' }}>
-                            {categoryIcons[modalTx.category || 'Other'] || '📋'}
+                            {categoryIcons[modalTx.category || 'Other'] || Icons.category.fallback}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontWeight: 600, fontSize: '1rem', wordBreak: 'break-word' }}>
@@ -291,7 +292,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 onMouseOut={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
                             >
                                 <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Kategorie</span><span style={{ opacity: 0.9, fontSize: '0.8rem' }}>✏️</span>
+                                    <span>Kategorie</span><span style={{ opacity: 0.9, fontSize: '0.8rem' }}>{Icons.action.edit}</span>
                                 </div>
                                 <div style={{ fontSize: '0.85rem' }}>
                                     {updatingId === modalTx.id ? 'Ukládám...' : `${categoryIcons[modalTx.category || 'Other'] || ''} ${modalTx.category || 'Other'}`}
@@ -321,8 +322,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         {modalPickingCategory && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
                                 {[...categories.filter(c => c.is_active),
-                                  { id: -1, name: 'Internal Transfer', icon: '🔄', color: '#6b7280', is_income: false, is_active: true },
-                                  { id: -2, name: 'Family Transfer', icon: '👨‍👩‍👧', color: '#6b7280', is_income: false, is_active: true }
+                                  { id: -1, name: 'Internal Transfer', icon: Icons.category.internalTransfer, color: '#6b7280', is_income: false, is_active: true },
+                                  { id: -2, name: 'Family Transfer', icon: Icons.category.familyTransfer, color: '#6b7280', is_income: false, is_active: true }
                                 ].filter((cat, i, self) => i === self.findIndex(c => c.name === cat.name)).map(cat => (
                                     <button
                                         key={cat.name}
@@ -344,10 +345,10 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         {/* Type badges + ID — footer row */}
                         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
                             {modalTx.transaction_type === 'internal_transfer' && (
-                                <span style={{ padding: '2px 8px', background: 'rgba(45,212,191,0.15)', border: '1px solid rgba(45,212,191,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>🔄 Interní převod</span>
+                                <span style={{ padding: '2px 8px', background: 'rgba(45,212,191,0.15)', border: '1px solid rgba(45,212,191,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>{Icons.category.internalTransfer} Interní převod</span>
                             )}
                             {modalTx.transaction_type === 'family_transfer' && (
-                                <span style={{ padding: '2px 8px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>👨‍👩‍👧 Rodinný převod</span>
+                                <span style={{ padding: '2px 8px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>{Icons.category.familyTransfer} Rodinný převod</span>
                             )}
                             {modalTx.is_excluded && (
                                 <span style={{ padding: '2px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Vyloučeno z rozpočtu</span>
@@ -383,7 +384,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         {/* Transactions for this day */}
                         {dayTxs.map((tx) => {
                             const isExcluded = tx.is_excluded || tx.transaction_type !== 'normal';
-                            const catIcon = categoryIcons[tx.category || 'Other'] || '📋';
+                            const catIcon = categoryIcons[tx.category || 'Other'] || Icons.category.fallback;
                             return (
                                 <div
                                     key={tx.id}
@@ -405,7 +406,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                 borderRadius: '50%', width: '14px', height: '14px',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             }}>
-                                                {tx.transaction_type === 'internal_transfer' ? '🔄' : '👨‍👩‍👧'}
+                                                {tx.transaction_type === 'internal_transfer' ? Icons.category.internalTransfer : Icons.category.familyTransfer}
                                             </span>
                                         )}
                                     </div>

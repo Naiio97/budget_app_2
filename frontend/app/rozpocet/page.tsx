@@ -6,6 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import GlassCard from '@/components/GlassCard';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -194,6 +195,8 @@ export default function RozpocetPage() {
         };
 
         runAutoSync();
+        // Záměrně závisíme jen na budget?.id — budget.salary čteme uvnitř, ale nechceme re-fire při jeho změně.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [budget?.id, yearMonth, viewMode, refreshBudget]);
 
     // === Handlers ===
@@ -457,7 +460,7 @@ export default function RozpocetPage() {
                 <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjmy</div>
                     <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(totalIncome)}</div>
-                    {isAutoSyncing && <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>🔄 Načítám...</div>}
+                    {isAutoSyncing && <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{Icons.action.sync} Načítám...</div>}
                 </GlassCard>
 
                 {/* Výdaje */}
@@ -477,7 +480,7 @@ export default function RozpocetPage() {
                         {isOverBudget ? '−' : '+'}{formatCurrency(Math.abs(remaining))}
                     </div>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                        {isOverBudget ? '⚠️ Přečerpáno' : '✓ V pohodě'}
+                        {isOverBudget ? `${Icons.status.overBudget} Přečerpáno` : `${Icons.status.ok} V pohodě`}
                     </div>
                 </GlassCard>
 
@@ -513,7 +516,7 @@ export default function RozpocetPage() {
 
         return (
             <GlassCard>
-                <h3 style={{ margin: '0 0 var(--spacing-md) 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>📊 Výdaje podle položek</h3>
+                <h3 style={{ margin: '0 0 var(--spacing-md) 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{Icons.section.expensesByItem} Výdaje podle položek</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '380px', overflowY: 'auto', overflowX: 'clip', paddingRight: '4px', overscrollBehavior: 'contain' }}>
                     {sorted.map(exp => {
                         const pct = Math.round((exp.my_amount / totalExpenses) * 100);
@@ -542,10 +545,10 @@ export default function RozpocetPage() {
     const renderIncomeSection = () => (
         <GlassCard>
             <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-success)' }}>💰 Příjmy</h3>
+                <h3 style={{ margin: 0, color: 'var(--accent-success)' }}>{Icons.section.income} Příjmy</h3>
                 <div className="section-actions">
                     <button className="btn" onClick={syncIncome} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                        🔄 Načíst z transakcí
+                        {Icons.action.sync} Načíst z transakcí
                     </button>
                 </div>
             </div>
@@ -577,13 +580,13 @@ export default function RozpocetPage() {
     const renderExpensesSection = () => (
         <GlassCard>
             <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-error, #ef4444)' }}>📋 Pravidelné výdaje</h3>
+                <h3 style={{ margin: 0, color: 'var(--accent-error, #ef4444)' }}>{Icons.section.recurringExpenses} Pravidelné výdaje</h3>
                 <div className="section-actions">
                     <button className="btn" onClick={copyFromPrevious} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                        📋 Z minula
+                        {Icons.action.loadFromHistory} Z minula
                     </button>
                     <button className="btn" onClick={matchTransactions} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                        🔄 Spárovat
+                        {Icons.action.match} Spárovat
                     </button>
                     <button className="btn btn-primary" onClick={() => setShowAddExpense(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
                         + Přidat
@@ -647,7 +650,7 @@ export default function RozpocetPage() {
                             />
                             <span style={{ textDecoration: expense.is_paid ? 'line-through' : 'none', opacity: expense.is_paid ? 0.55 : 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.875rem' }}>
                                 {expense.name}
-                                {expense.matched_transaction_id && <span style={{ marginLeft: '5px', fontSize: '0.7rem', color: 'var(--accent-success)' }}>✓ spárováno</span>}
+                                {expense.matched_transaction_id && <span style={{ marginLeft: '5px', fontSize: '0.7rem', color: 'var(--accent-success)' }}>{Icons.status.ok} spárováno</span>}
                             </span>
                         </div>
                         <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
@@ -698,7 +701,7 @@ export default function RozpocetPage() {
                             <button
                                 onClick={() => deleteMonthlyExpense(expense.id, expense.recurring_expense_id)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.4, padding: '4px' }}
-                            >🗑️</button>
+                            >{Icons.action.delete}</button>
                         </div>
                     </div>
                 ))}
@@ -716,7 +719,7 @@ export default function RozpocetPage() {
         const netSavings = investmentAmount + (budget?.surplus_to_savings || 0);
         return (
             <GlassCard>
-                <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>📊 Přebytek & Spoření</h3>
+                <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.surplus} Přebytek & Spoření</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.875rem' }}>Investice tento měsíc</span>
@@ -745,7 +748,7 @@ export default function RozpocetPage() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
                                 <span style={{ color: 'var(--text-secondary)' }}>Spořící sazba</span>
                                 <span style={{ fontWeight: 600, color: savingsRate >= 15 ? 'var(--accent-success)' : savingsRate >= 10 ? '#f59e0b' : 'var(--accent-danger, #ef4444)' }}>
-                                    {savingsRate}% {savingsRate >= 15 ? '✓' : savingsRate >= 10 ? '~' : '↓'}
+                                    {savingsRate}% {savingsRate >= 15 ? Icons.savingsRate.good : savingsRate >= 10 ? Icons.savingsRate.neutral : Icons.savingsRate.bad}
                                 </span>
                             </div>
                             <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
@@ -772,7 +775,7 @@ export default function RozpocetPage() {
                         <div style={{ fontSize: '1.6rem', fontWeight: 700, color: isOverBudget ? 'var(--accent-danger, #ef4444)' : 'var(--accent-success)' }}>
                             {formatCurrency(remaining)}
                         </div>
-                        {isOverBudget && <div style={{ fontSize: '0.78rem', color: 'var(--accent-danger, #ef4444)', marginTop: '2px' }}>⚠️ Přečerpáno!</div>}
+                        {isOverBudget && <div style={{ fontSize: '0.78rem', color: 'var(--accent-danger, #ef4444)', marginTop: '2px' }}>{Icons.status.overBudget} Přečerpáno!</div>}
                     </div>
                 </div>
             </GlassCard>
@@ -782,7 +785,7 @@ export default function RozpocetPage() {
     const renderManualAccounts = () => (
         <GlassCard>
             <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-primary)' }}>🏦 Spořící účty</h3>
+                <h3 style={{ margin: 0, color: 'var(--accent-primary)' }}>{Icons.section.savingsAccounts} Spořící účty</h3>
                 <div className="section-actions">
                     <button className="btn btn-primary" onClick={() => setShowAddAccount(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
                         + Přidat
@@ -806,12 +809,12 @@ export default function RozpocetPage() {
                         {editingAccountId === account.id ? (
                             <div style={{ display: 'flex', gap: '4px' }}>
                                 <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: '100px', padding: '4px 8px' }} />
-                                <button className="btn btn-primary" onClick={() => updateManualAccountBalance(account.id)} style={{ padding: '4px 8px' }}>✓</button>
+                                <button className="btn btn-primary" onClick={() => updateManualAccountBalance(account.id)} style={{ padding: '4px 8px' }}>{Icons.action.confirm}</button>
                                 <button className="btn" onClick={() => setEditingAccountId(null)} style={{ padding: '4px 8px' }}>×</button>
                             </div>
                         ) : (
                             <span onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }} style={{ cursor: 'pointer', color: 'var(--accent-primary)', fontWeight: 600 }}>
-                                {formatCurrency(account.balance)} ✏️
+                                {formatCurrency(account.balance)} {Icons.action.edit}
                             </span>
                         )}
                     </div>
@@ -822,13 +825,13 @@ export default function RozpocetPage() {
                             {account.envelopes.map(env => (
                                 <div key={env.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.83rem', marginBottom: '2px' }}>
                                     <span style={{ color: 'var(--text-secondary)' }}>
-                                        {env.is_mine ? '💚' : '📌'} {env.name}
+                                        {env.is_mine ? Icons.envelope.mine : Icons.envelope.shared} {env.name}
                                     </span>
                                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                         <span style={{ color: env.is_mine ? 'var(--accent-success)' : '#f59e0b' }}>
                                             {env.is_mine ? '' : '−'}{formatCurrency(env.amount)}
                                         </span>
-                                        <button onClick={() => deleteAccountItem(account.id, env.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', opacity: 0.4 }}>🗑️</button>
+                                        <button onClick={() => deleteAccountItem(account.id, env.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', opacity: 0.4 }}>{Icons.action.delete}</button>
                                     </div>
                                 </div>
                             ))}
@@ -840,7 +843,7 @@ export default function RozpocetPage() {
                             <div style={{ display: 'flex', gap: '4px' }}>
                                 <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
                                 <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: '80px', padding: '4px 8px' }} />
-                                <button className="btn btn-primary" onClick={() => addAccountItem(account.id)} style={{ padding: '4px 8px' }}>✓</button>
+                                <button className="btn btn-primary" onClick={() => addAccountItem(account.id)} style={{ padding: '4px 8px' }}>{Icons.action.confirm}</button>
                                 <button className="btn" onClick={() => setShowAddItem(null)} style={{ padding: '4px 8px' }}>×</button>
                             </div>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'pointer', paddingLeft: '2px' }}>
@@ -982,7 +985,7 @@ export default function RozpocetPage() {
 
                 {/* Monthly chart with cumulative net overlay */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>📈 Měsíční přehled {selectedYear}</h3>
+                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.monthlyOverview} Měsíční přehled {selectedYear}</h3>
                     <div style={{ position: 'relative', height: '180px' }}>
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', height: '180px' }}>
                             {annualData.months.map((month, idx) => (
@@ -1034,7 +1037,7 @@ export default function RozpocetPage() {
                 {/* Best/Worst month + savings rate sparkline */}
                 {activeMonths.length > 0 && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>🏆 Nejlepší &amp; nejhorší měsíc</h3>
+                        <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.bestWorst} Nejlepší &amp; nejhorší měsíc</h3>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
                             {bestMonth && (
                                 <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.08)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
@@ -1052,7 +1055,7 @@ export default function RozpocetPage() {
                             )}
                             {worstMonth && worstMonth.month !== bestMonth?.month && (
                                 <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>📉 Nejhorší měsíc</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{Icons.section.trend} Nejhorší měsíc</div>
                                     <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-danger, #ef4444)', marginTop: '2px' }}>
                                         {MONTH_NAMES[worstMonth.month - 1]}
                                     </div>
@@ -1065,7 +1068,7 @@ export default function RozpocetPage() {
                                 </div>
                             )}
                             <div style={{ padding: '12px', background: 'rgba(0, 122, 255, 0.06)', borderRadius: '8px', border: '1px solid rgba(0, 122, 255, 0.2)' }}>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>📊 Trend úspor. sazby</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{Icons.section.trend} Trend úspor. sazby</div>
                                 <svg width="100%" height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`} preserveAspectRatio="none" style={{ marginTop: '6px' }}>
                                     {sparkPath && (
                                         <path d={sparkPath} fill="none" stroke="var(--accent-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
@@ -1084,7 +1087,7 @@ export default function RozpocetPage() {
 
                 {/* Expense breakdown */}
                 <GlassCard>
-                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>🍕 Výdaje podle položek</h3>
+                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.expensesByItem} Výdaje podle položek</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                         {Object.entries(annualData.expense_breakdown)
                             .sort(([, a], [, b]) => b - a)
@@ -1116,7 +1119,7 @@ export default function RozpocetPage() {
                 {/* Header */}
                 <div style={{ marginBottom: 'var(--spacing-md)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>📅 Měsíční rozpočet</h1>
+                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{Icons.nav.monthlyBudget} Měsíční rozpočet</h1>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             {isAutoSyncing && (
                                 <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1129,11 +1132,11 @@ export default function RozpocetPage() {
                                 className="btn"
                                 style={{ background: viewMode === 'year' ? 'var(--accent-warning, #f59e0b)' : 'rgba(255,255,255,0.05)', color: viewMode === 'year' ? '#000' : 'var(--text-primary)', padding: '6px 12px', fontSize: '0.85rem', fontWeight: viewMode === 'year' ? 600 : 400 }}
                             >
-                                {viewMode === 'year' ? '← Na měsíc' : '📊 Roční přehled'}
+                                {viewMode === 'year' ? '← Na měsíc' : `${Icons.nav.reports} Roční přehled`}
                             </button>
                             {viewMode === 'month' && (
                                 <button className="btn" onClick={deleteBudget} style={{ fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger, #ef4444)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '6px 12px' }}>
-                                    🗑️ Smazat
+                                    {Icons.action.delete} Smazat
                                 </button>
                             )}
                         </div>

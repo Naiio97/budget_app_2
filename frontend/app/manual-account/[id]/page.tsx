@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 interface Envelope {
     id: number;
@@ -193,19 +194,19 @@ export default function ManualAccountDetailPage() {
                                 });
                                 setEditingName(false);
                                 invalidate();
-                            }} style={{ padding: '4px 12px' }}>✓</button>
-                            <button className="btn" onClick={() => setEditingName(false)} style={{ padding: '4px 12px' }}>✕</button>
+                            }} style={{ padding: '4px 12px' }}>{Icons.action.confirm}</button>
+                            <button className="btn" onClick={() => setEditingName(false)} style={{ padding: '4px 12px' }}>{Icons.action.cancel}</button>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                             <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                💼 {account.name}
+                                {Icons.accountType.manual} {account.name}
                             </h1>
                             <button
                                 onClick={() => { setAccountName(account.name); setEditingName(true); }}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.2rem', padding: '0 4px' }}
                                 title="Přejmenovat"
-                            >✏️</button>
+                            >{Icons.action.edit}</button>
                         </div>
                     )}
                     <button
@@ -223,7 +224,7 @@ export default function ManualAccountDetailPage() {
                 {/* 1. Celkem na účtu */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>💰</span>
+                        <span style={{ fontSize: '1.25rem' }}>{Icons.section.assetGrowth}</span>
                         <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Celkem na účtu</div>
                     </div>
                     {editingBalance ? (
@@ -236,14 +237,14 @@ export default function ManualAccountDetailPage() {
                                 style={{ width: '100%' }}
                             />
                             <button className="btn btn-primary" onClick={updateBalance} style={{ padding: '4px 8px' }}>✓</button>
-                            <button className="btn" onClick={() => setEditingBalance(false)} style={{ padding: '4px 8px' }}>✕</button>
+                            <button className="btn" onClick={() => setEditingBalance(false)} style={{ padding: '4px 8px' }}>{Icons.action.cancel}</button>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto' }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                                 {formatCurrency(account.balance)}
                             </div>
-                            <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>✏️</button>
+                            <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>{Icons.action.edit}</button>
                         </div>
                     )}
                 </div>
@@ -251,7 +252,7 @@ export default function ManualAccountDetailPage() {
                 {/* 2. Číslo účtu */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>🏦</span>
+                        <span style={{ fontSize: '1.25rem' }}>{Icons.accountType.bank}</span>
                         <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Číslo účtu (pro detekci)</div>
                     </div>
                     {editingAccountNumber ? (
@@ -269,14 +270,14 @@ export default function ManualAccountDetailPage() {
                                 setEditingAccountNumber(false);
                                 invalidate();
                             }} style={{ padding: '4px 8px' }}>✓</button>
-                            <button className="btn" onClick={() => setEditingAccountNumber(false)} style={{ padding: '4px 8px' }}>✕</button>
+                            <button className="btn" onClick={() => setEditingAccountNumber(false)} style={{ padding: '4px 8px' }}>{Icons.action.cancel}</button>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto' }}>
                             <div style={{ fontSize: '1.1rem', fontWeight: 500, color: accountNumber ? 'inherit' : 'var(--text-tertiary)', wordBreak: 'break-all' }}>
                                 {accountNumber || 'Nenastaveno'}
                             </div>
-                            <button onClick={() => setEditingAccountNumber(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>✏️</button>
+                            <button onClick={() => setEditingAccountNumber(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>{Icons.action.edit}</button>
                         </div>
                     )}
                 </div>
@@ -284,7 +285,7 @@ export default function ManualAccountDetailPage() {
                 {/* 3. Volné k utracení */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>💚</span>
+                        <span style={{ fontSize: '1.25rem' }}>{Icons.envelope.mine}</span>
                         <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Volné k utracení</div>
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent-success)', marginTop: 'auto' }}>
@@ -295,7 +296,7 @@ export default function ManualAccountDetailPage() {
                 {/* 4. Rezervované */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>📌</span>
+                        <span style={{ fontSize: '1.25rem' }}>{Icons.envelope.shared}</span>
                         <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Rezervované</div>
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent-warning)', marginTop: 'auto' }}>
@@ -306,7 +307,7 @@ export default function ManualAccountDetailPage() {
                 {/* 5. Nerozděleno */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>📦</span>
+                        <span style={{ fontSize: '1.25rem' }}>{Icons.category.other}</span>
                         <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Nerozděleno</div>
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: unallocated !== 0 ? 'var(--accent-primary)' : 'var(--text-tertiary)', marginTop: 'auto' }}>
@@ -318,7 +319,7 @@ export default function ManualAccountDetailPage() {
             {/* Envelopes */}
             <GlassCard>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-lg)' }}>
-                    <h2 style={{ fontSize: '1.25rem' }}>📨 Obálky</h2>
+                    <h2 style={{ fontSize: '1.25rem' }}>{Icons.section.envelopes} Obálky</h2>
                     <button
                         className="btn btn-primary"
                         onClick={() => setShowAddEnvelope(true)}
@@ -429,7 +430,7 @@ export default function ManualAccountDetailPage() {
                                     <div style={{ display: 'flex', alignItems: 'center' }}>
                                         <div style={{ flex: 1 }}>
                                             <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                {envelope.is_mine ? '💚' : '📌'} {envelope.name}
+                                                {envelope.is_mine ? Icons.envelope.mine : Icons.envelope.shared} {envelope.name}
                                                 <span style={{
                                                     fontSize: '0.7rem',
                                                     padding: '2px 6px',
@@ -454,20 +455,20 @@ export default function ManualAccountDetailPage() {
                                             style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '8px' }}
                                             title="Upravit obálku"
                                         >
-                                            ✏️
+                                            {Icons.action.edit}
                                         </button>
                                         <button
                                             onClick={() => updateEnvelope(envelope.id, { is_mine: !envelope.is_mine })}
                                             style={{ background: 'none', border: 'none', cursor: 'pointer', marginRight: '8px' }}
                                             title={envelope.is_mine ? 'Označit jako rezervované' : 'Označit jako volné'}
                                         >
-                                            🔄
+                                            {Icons.action.sync}
                                         </button>
                                         <button
                                             onClick={() => deleteEnvelope(envelope.id)}
                                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff6b6b' }}
                                         >
-                                            🗑️
+                                            {Icons.action.delete}
                                         </button>
                                     </div>
                                 )}

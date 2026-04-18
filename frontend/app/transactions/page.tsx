@@ -8,6 +8,7 @@ import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
 import { Transaction, getTransactions, getDashboard } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 interface Category {
     id: number;
@@ -184,7 +185,7 @@ export default function TransactionsPage() {
                             <input
                                 type="text"
                                 className="input"
-                                placeholder="🔍 Hledat..."
+                                placeholder={`${Icons.action.search} Hledat...`}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 style={{ padding: '10px 16px', fontSize: '0.9rem' }}
@@ -204,7 +205,7 @@ export default function TransactionsPage() {
                         <div style={{ width: '150px' }}>
                             <CustomSelect
                                 options={[
-                                    { value: 'income', label: 'Příjmy', icon: '💰' },
+                                    { value: 'income', label: 'Příjmy', icon: Icons.section.income },
                                     { value: 'expense', label: 'Výdaje', icon: '💸' },
                                 ]}
                                 value={amountType}
@@ -223,7 +224,7 @@ export default function TransactionsPage() {
                                 onChange={(val) => { setSelectedCategory(val); setPage(1); setMobileVisible(10); }}
                                 placeholder="Všechny kategorie"
                                 searchable={true}
-                                searchPlaceholder="🔍 Hledat kategorii..."
+                                searchPlaceholder={`${Icons.action.search} Hledat kategorii...`}
                             />
                         </div>
                         <div style={{ width: '180px' }}>

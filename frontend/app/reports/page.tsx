@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
+import { Icons } from '@/lib/icons';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     AreaChart, Area
@@ -121,7 +122,7 @@ export default function ReportsPage() {
             <div className="page-container">
                 <header className="reports-header">
                     <div>
-                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>📊 Měsíční přehledy</h1>
+                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{Icons.nav.reports} Měsíční přehledy</h1>
                         <p className="text-secondary" style={{ marginTop: '4px', fontSize: '0.875rem' }}>
                             Porovnání příjmů a výdajů
                         </p>
@@ -173,7 +174,7 @@ export default function ReportsPage() {
 
                 {/* Income vs Expenses Chart */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>📈 Příjmy vs Výdaje</h3>
+                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>{Icons.section.incomeVsExpenses} Příjmy vs Výdaje</h3>
                     <div style={{ height: '280px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={report?.monthly_totals.map(m => ({
@@ -202,7 +203,7 @@ export default function ReportsPage() {
 
                 {/* Category Breakdown Chart */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>🏷️ Výdaje podle kategorií</h3>
+                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>{Icons.section.categories} Výdaje podle kategorií</h3>
                     <div style={{ height: '280px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={categoryData}>
@@ -237,7 +238,7 @@ export default function ReportsPage() {
 
                 {/* Monthly Table */}
                 <GlassCard style={{ paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
-                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>📋 Detaily po měsících</h3>
+                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>{Icons.section.monthlyOverview} Detaily po měsících</h3>
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
