@@ -10,6 +10,7 @@ import TransactionList from '@/components/TransactionList';
 import StatCard from '@/components/StatCard';
 import { getAccountDetail, AccountDetail } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 export default function AccountDetailPage() {
     const params = useParams();
@@ -65,7 +66,7 @@ export default function AccountDetailPage() {
             <MainLayout>
                 <div style={{ padding: 'var(--spacing-lg)' }}>
                     <GlassCard>
-                        <h2>❌ Chyba</h2>
+                        <h2>{Icons.status.error} Chyba</h2>
                         <p className="text-secondary">{error || 'Účet nenalezen'}</p>
                         <Link href="/" className="btn btn-primary" style={{ marginTop: 'var(--spacing-md)' }}>
                             Zpět na dashboard
@@ -122,12 +123,12 @@ export default function AccountDetailPage() {
                         label="ZŮSTATEK"
                         value={account.balance}
                         currency={account.currency}
-                        icon="💰"
+                        icon={Icons.section.assetGrowth}
                     />
 
                     <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontSize: '1.25rem' }}>🏦</span>
+                            <span style={{ fontSize: '1.25rem' }}>{Icons.accountType.bank}</span>
                             <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Instituce</div>
                         </div>
                         <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-word', marginTop: 'auto' }}>
@@ -137,7 +138,7 @@ export default function AccountDetailPage() {
 
                     <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontSize: '1.25rem' }}>🔄</span>
+                            <span style={{ fontSize: '1.25rem' }}>{Icons.action.sync}</span>
                             <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Poslední synchronizace</div>
                         </div>
                         <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: 'auto' }}>
@@ -159,7 +160,7 @@ export default function AccountDetailPage() {
                             gap: 'var(--spacing-sm)'
                         }}>
                             <h3 style={{ margin: 0, display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                                📋 Transakce <span style={{ opacity: 0.5, fontSize: '0.9rem', fontWeight: 500 }}>({totalItems})</span>
+                                {Icons.nav.transactions} Transakce <span style={{ opacity: 0.5, fontSize: '0.9rem', fontWeight: 500 }}>({totalItems})</span>
                             </h3>
                             <Link
                                 href={`/transactions?account_id=${accountId}`}

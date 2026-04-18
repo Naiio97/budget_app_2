@@ -11,18 +11,19 @@ import {
     getGoals, createGoal, updateGoal, deleteGoal
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 const CATEGORIES = [
-    { value: 'Food', label: '🍕 Jídlo', icon: '🍕' },
-    { value: 'Transport', label: '🚗 Doprava', icon: '🚗' },
-    { value: 'Utilities', label: '💡 Energie & Služby', icon: '💡' },
-    { value: 'Entertainment', label: '🎬 Zábava', icon: '🎬' },
-    { value: 'Shopping', label: '🛒 Nákupy', icon: '🛒' },
-    { value: 'Other', label: '📦 Ostatní', icon: '📦' },
+    { value: 'Food', label: `${Icons.category.food} Jídlo`, icon: Icons.category.food },
+    { value: 'Transport', label: `${Icons.category.transport} Doprava`, icon: Icons.category.transport },
+    { value: 'Utilities', label: `${Icons.category.utilities} Energie & Služby`, icon: Icons.category.utilities },
+    { value: 'Entertainment', label: `${Icons.category.entertainment} Zábava`, icon: Icons.category.entertainment },
+    { value: 'Shopping', label: `${Icons.category.shopping} Nákupy`, icon: Icons.category.shopping },
+    { value: 'Other', label: `${Icons.category.other} Ostatní`, icon: Icons.category.other },
 ];
 
 function getCategoryIcon(category: string): string {
-    return CATEGORIES.find(c => c.value === category)?.icon || '📦';
+    return CATEGORIES.find(c => c.value === category)?.icon || Icons.category.other;
 }
 
 function getProgressColor(percentage: number): string {
@@ -140,7 +141,7 @@ export default function BudgetsPage() {
                 {/* Header */}
                 <div style={{ marginBottom: 'var(--spacing-lg)' }}>
                     <h1 style={{ fontSize: '1.5rem', margin: 0 }}>
-                        📊 Rozpočty - {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
+                        {Icons.nav.budgets} Rozpočty - {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
                     </h1>
                 </div>
 
@@ -176,7 +177,7 @@ export default function BudgetsPage() {
                 {/* Budget Categories */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <h3 style={{ margin: 0 }}>💰 Rozpočty podle kategorií</h3>
+                        <h3 style={{ margin: 0 }}>{Icons.nav.budgets} Rozpočty podle kategorií</h3>
                         <button
                             className="btn btn-primary"
                             onClick={() => setShowBudgetForm(!showBudgetForm)}
@@ -255,7 +256,7 @@ export default function BudgetsPage() {
                                                     fontSize: '0.85rem'
                                                 }}
                                             >
-                                                🗑️
+                                                {Icons.action.delete}
                                             </button>
                                         </div>
                                     </div>
@@ -282,8 +283,8 @@ export default function BudgetsPage() {
                                             }}
                                         >
                                             {budget.percentage.toFixed(0)}%
-                                            {budget.percentage >= 100 && ' ⚠️ Překročeno!'}
-                                            {budget.percentage >= 80 && budget.percentage < 100 && ' ⚡ Blízko limitu'}
+                                            {budget.percentage >= 100 && ` ${Icons.status.overBudget} Překročeno!`}
+                                            {budget.percentage >= 80 && budget.percentage < 100 && ` ${Icons.status.nearLimit} Blízko limitu`}
                                         </span>
                                     </div>
                                 </div>
@@ -295,7 +296,7 @@ export default function BudgetsPage() {
                 {/* Savings Goals */}
                 <GlassCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <h3 style={{ margin: 0 }}>🎯 Spořící cíle</h3>
+                        <h3 style={{ margin: 0 }}>{Icons.section.savingsGoals} Spořící cíle</h3>
                         <button
                             className="btn btn-primary"
                             onClick={() => setShowGoalForm(!showGoalForm)}
@@ -362,7 +363,7 @@ export default function BudgetsPage() {
                                 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                                         <span style={{ fontSize: '1rem' }}>
-                                            {goal.is_completed ? '✅' : '🎯'} {goal.name}
+                                            {goal.is_completed ? Icons.section.goalCompleted : Icons.section.savingsGoals} {goal.name}
                                             {goal.deadline && (
                                                 <span className="text-secondary" style={{ fontSize: '0.8rem', marginLeft: '8px' }}>
                                                     do {new Date(goal.deadline).toLocaleDateString('cs-CZ')}
@@ -393,7 +394,7 @@ export default function BudgetsPage() {
                                                     fontSize: '0.85rem'
                                                 }}
                                             >
-                                                🗑️
+                                                {Icons.action.delete}
                                             </button>
                                         </div>
                                     </div>
@@ -444,7 +445,7 @@ export default function BudgetsPage() {
                                     <div style={{ textAlign: 'right', marginTop: '4px' }}>
                                         <span className="text-secondary" style={{ fontSize: '0.8rem' }}>
                                             {goal.percentage.toFixed(0)}%
-                                            {goal.is_completed && ' 🎉 Splněno!'}
+                                            {goal.is_completed && ` ${Icons.status.done} Splněno!`}
                                         </span>
                                     </div>
                                 </div>

@@ -20,6 +20,7 @@ import {
     Pie as PieData,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 import {
     XAxis,
     YAxis,
@@ -139,7 +140,7 @@ export default function InvestmentsPage() {
             <MainLayout>
                 <div style={{ padding: 'var(--spacing-lg)' }}>
                     <GlassCard>
-                        <h2>❌ Chyba</h2>
+                        <h2>{Icons.status.error} Chyba</h2>
                         <p className="text-secondary">{error}</p>
                         <Link href="/" className="btn btn-primary" style={{ marginTop: 'var(--spacing-md)' }}>
                             Zpět na dashboard
@@ -156,7 +157,7 @@ export default function InvestmentsPage() {
                 {/* Header */}
                 <header className="section-header-wrap" style={{ marginBottom: 'var(--spacing-xl)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
-                        <h1 style={{ margin: 0, fontSize: '1.75rem' }}>📈 Investice</h1>
+                        <h1 style={{ margin: 0, fontSize: '1.75rem' }}>{Icons.nav.investments} Investice</h1>
                     </div>
                     {portfolio?.last_synced && (
                         <div className="text-tertiary" style={{ fontSize: '0.8rem', marginTop: '4px' }}>
@@ -214,7 +215,7 @@ export default function InvestmentsPage() {
 
                 {/* Chart */}
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ margin: '0 0 var(--spacing-md)' }}>📊 Vývoj hodnoty</h3>
+                    <h3 style={{ margin: '0 0 var(--spacing-md)' }}>{Icons.section.valueGrowth} Vývoj hodnoty</h3>
 
                     {history && history.history.length >= 2 ? (
                         <div style={{ height: '300px' }}>
@@ -438,7 +439,7 @@ export default function InvestmentsPage() {
                     {/* Transactions — only when data exists */}
                     {portfolio && portfolio.transactions.length > 0 && (
                         <GlassCard>
-                            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>📋 Poslední transakce</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{Icons.section.lastTransactions} Poslední transakce</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {portfolio.transactions.slice(0, 10).map((tx) => (
                                         <div
@@ -473,7 +474,7 @@ export default function InvestmentsPage() {
                     {/* Dividends — only when data exists */}
                     {dividends.length > 0 && (
                         <GlassCard>
-                            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💰 Dividendy</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{Icons.section.dividends} Dividendy</h3>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                 {dividends.slice(0, 10).map((div, i) => (
                                     <div

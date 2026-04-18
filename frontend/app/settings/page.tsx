@@ -8,6 +8,7 @@ import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -160,7 +161,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
                 </div>
             ) : (
                 <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ marginBottom: 'var(--spacing-md)', width: '100%' }}>
-                    ➕ Přidat kategorii
+                    {Icons.action.add} Přidat kategorii
                 </button>
             )}
 
@@ -197,8 +198,8 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
                                     onChange={(e) => setEditData({ ...editData, color: e.target.value })}
                                     style={{ width: '30px', height: '28px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                                 />
-                                <button className="btn" onClick={() => handleUpdate(cat.id)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>✓</button>
-                                <button className="btn" onClick={() => setEditingId(null)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>✕</button>
+                                <button className="btn" onClick={() => handleUpdate(cat.id)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>{Icons.action.confirm}</button>
+                                <button className="btn" onClick={() => setEditingId(null)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>{Icons.action.cancel}</button>
                             </>
                         ) : (
                             <>
@@ -210,11 +211,11 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
                                 <button
                                     onClick={() => { setEditingId(cat.id); setEditData({ name: cat.name, icon: cat.icon, color: cat.color, is_income: cat.is_income }); }}
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '0.8rem' }}
-                                >✏️</button>
+                                >{Icons.action.edit}</button>
                                 <button
                                     onClick={() => handleDelete(cat.id)}
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff6b6b', fontSize: '0.8rem' }}
-                                >🗑️</button>
+                                >{Icons.action.delete}</button>
                             </>
                         )}
                     </div>
@@ -302,7 +303,7 @@ function FamilyAccountSettings() {
 
     return (
         <GlassCard>
-            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>👨‍👩‍👧 Rodinný účet</h3>
+            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.familyAccount} Rodinný účet</h3>
             <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
                 Transakce obsahující tento text budou automaticky vyloučeny z příjmů a výdajů.
             </p>
@@ -341,7 +342,7 @@ function FamilyAccountSettings() {
                         disabled={saving || !familyPattern.trim()}
                         style={{ flex: 1 }}
                     >
-                        {saving ? '⏳ Ukládám...' : saved ? '✅ Uloženo' : '💾 Uložit'}
+                        {saving ? `${Icons.status.loading} Ukládám...` : saved ? `${Icons.status.success} Uloženo` : `${Icons.action.save} Uložit`}
                     </button>
                     {existingAccount && (
                         <button
@@ -349,7 +350,7 @@ function FamilyAccountSettings() {
                             onClick={handleDelete}
                             style={{ color: '#ff6b6b', borderColor: 'rgba(255,100,100,0.3)' }}
                         >
-                            🗑️
+                            {Icons.action.delete}
                         </button>
                     )}
                 </div>
@@ -362,7 +363,7 @@ function FamilyAccountSettings() {
                     disabled={detecting}
                     style={{ width: '100%' }}
                 >
-                    {detecting ? '⏳ Detekuji...' : '🔍 Detekovat převody'}
+                    {detecting ? `${Icons.status.loading} Detekuji...` : `${Icons.action.search} Detekovat převody`}
                 </button>
                 <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
                     Automaticky najde interní převody mezi vlastními účty a transakce s rodinným účtem.
@@ -442,7 +443,7 @@ function MyAccountPatterns() {
 
     return (
         <GlassCard>
-            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>💼 Moje účty (spořící, atd.)</h3>
+            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.myAccounts} Moje účty (spořící, atd.)</h3>
             <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
                 Transakce obsahující tyto texty budou označeny jako interní převody a nebudou se počítat do příjmů/výdajů.
             </p>
@@ -468,7 +469,7 @@ function MyAccountPatterns() {
                             <button
                                 onClick={() => handleRemovePattern(pattern)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.7, padding: 0 }}
-                            >✕</button>
+                            >{Icons.action.cancel}</button>
                         </span>
                     ))}
                 </div>
@@ -486,7 +487,7 @@ function MyAccountPatterns() {
                     style={{ flex: 1 }}
                 />
                 <button className="btn" onClick={handleAddPattern} disabled={!newPattern.trim()}>
-                    ➕
+                    {Icons.action.add}
                 </button>
             </div>
 
@@ -497,7 +498,7 @@ function MyAccountPatterns() {
                 disabled={saving}
                 style={{ width: '100%' }}
             >
-                {saving ? '⏳ Ukládám...' : saved ? '✅ Uloženo' : '💾 Uložit vzory'}
+                {saving ? `${Icons.status.loading} Ukládám...` : saved ? `${Icons.status.success} Uloženo` : `${Icons.action.save} Uložit vzory`}
             </button>
 
             {/* Detect transfers */}
@@ -508,7 +509,7 @@ function MyAccountPatterns() {
                     disabled={detecting}
                     style={{ width: '100%' }}
                 >
-                    {detecting ? '⏳ Detekuji...' : '🔍 Detekovat převody'}
+                    {detecting ? `${Icons.status.loading} Detekuji...` : `${Icons.action.search} Detekovat převody`}
                 </button>
                 <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
                     Automaticky označí transakce odpovídající těmto vzorům jako interní převody.
@@ -944,28 +945,28 @@ export default function SettingsPage() {
                         style={{ background: activeTab === 'accounts' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'accounts' ? 1 : 0.6 }}
                         onClick={() => setActiveTab('accounts')}
                     >
-                        💳 Účty
+                        {Icons.nav.transactions} Účty
                     </button>
                     <button
                         className={`btn ${activeTab === 'connections' ? 'btn-primary' : ''}`}
                         style={{ background: activeTab === 'connections' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'connections' ? 1 : 0.6 }}
                         onClick={() => setActiveTab('connections')}
                     >
-                        🔗 Propojení
+                        {Icons.section.apiKeys} Propojení
                     </button>
                     <button
                         className={`btn ${activeTab === 'preferences' ? 'btn-primary' : ''}`}
                         style={{ background: activeTab === 'preferences' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'preferences' ? 1 : 0.6 }}
                         onClick={() => setActiveTab('preferences')}
                     >
-                        ⚙️ Preference
+                        {Icons.section.preferences} Preference
                     </button>
                     <button
                         className={`btn ${activeTab === 'categories' ? 'btn-primary' : ''}`}
                         style={{ background: activeTab === 'categories' ? undefined : 'transparent', border: 'none', opacity: activeTab === 'categories' ? 1 : 0.6 }}
                         onClick={() => setActiveTab('categories')}
                     >
-                        🏷️ Kategorie
+                        {Icons.section.categories} Kategorie
                     </button>
                 </div>
 
@@ -975,7 +976,7 @@ export default function SettingsPage() {
                         {/* My Accounts Management */}
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <GlassCard style={{ flex: 1 }}>
-                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💳 Moje účty</h3>
+                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{Icons.nav.transactions} Moje účty</h3>
 
                                 {accounts.length === 0 ? (
                                     <p className="text-secondary">Zatím nemáte připojené žádné účty.</p>
@@ -997,7 +998,7 @@ export default function SettingsPage() {
                                                         return logoUrl ? (
                                                             <Image src={logoUrl} alt={account.name} width={32} height={32} style={{ objectFit: 'contain', borderRadius: '4px' }} />
                                                         ) : (
-                                                            <span style={{ fontSize: '1.25rem' }}>{account.type === 'bank' ? '🏦' : '📈'}</span>
+                                                            <span style={{ fontSize: '1.25rem' }}>{account.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment}</span>
                                                         );
                                                     })()}
 
@@ -1012,7 +1013,7 @@ export default function SettingsPage() {
                                                                 style={{ padding: '4px 8px', fontSize: '0.9rem' }}
                                                             />
                                                             <button className="btn btn-sm" onClick={() => handleRename(account.id)}>OK</button>
-                                                            <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>❌</button>
+                                                            <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>{Icons.action.cancel}</button>
                                                         </div>
                                                     ) : (
                                                         <div>
@@ -1026,7 +1027,7 @@ export default function SettingsPage() {
                                                                     style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '0.8rem' }}
                                                                     title="Přejmenovat"
                                                                 >
-                                                                    ✏️
+                                                                    {Icons.action.edit}
                                                                 </button>
                                                             </div>
                                                             <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
@@ -1044,7 +1045,7 @@ export default function SettingsPage() {
                                                         onClick={() => handleToggleVisibility(account.id, account.is_visible ?? true)}
                                                         title={account.is_visible !== false ? "Skrýt z přehledů" : "Zobrazit v přehledech"}
                                                     >
-                                                        {account.is_visible !== false ? '👁️' : '🙈'}
+                                                        {account.is_visible !== false ? Icons.action.visible : Icons.action.hidden}
                                                     </button>
                                                     <button
                                                         className="btn"
@@ -1052,7 +1053,7 @@ export default function SettingsPage() {
                                                         onClick={() => handleDelete(account.id)}
                                                         title="Odstranit účet"
                                                     >
-                                                        🗑️
+                                                        {Icons.action.delete}
                                                     </button>
                                                 </div>
                                             </div>
@@ -1065,7 +1066,7 @@ export default function SettingsPage() {
                         {/* Connect Bank */}
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             <GlassCard style={{ flex: 1 }}>
-                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>➕ Připojit banku</h3>
+                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{Icons.section.connectBank} Připojit banku</h3>
 
                                 {!apiKeysLoaded?.has_gocardless ? (
                                     <p className="text-tertiary" style={{ fontSize: '0.875rem' }}>
@@ -1079,7 +1080,7 @@ export default function SettingsPage() {
                                             Žádné banky nenačteny.
                                         </p>
                                         <button className="btn" onClick={loadBanks}>
-                                            🔄 Načíst banky
+                                            {Icons.action.sync} Načíst banky
                                         </button>
                                     </div>
                                 ) : (
@@ -1089,13 +1090,13 @@ export default function SettingsPage() {
                                                 options={institutions.map((bank) => ({
                                                     value: bank.id,
                                                     label: bank.name,
-                                                    icon: '🏦',
+                                                    icon: Icons.accountType.bank,
                                                 }))}
                                                 value={connectingBank || ''}
                                                 onChange={(val) => setConnectingBank(val)}
                                                 placeholder="Vyberte banku..."
                                                 searchable={true}
-                                                searchPlaceholder="🔍 Hledat banku..."
+                                                searchPlaceholder={`${Icons.action.search} Hledat banku...`}
                                             />
                                             <button
                                                 className="btn btn-primary"
@@ -1114,7 +1115,7 @@ export default function SettingsPage() {
 
                             {/* Add Manual Account */}
                             <GlassCard style={{ marginTop: 'var(--spacing-lg)' }}>
-                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>💼 Přidat manuální účet</h3>
+                                <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{Icons.accountType.manual} Přidat manuální účet</h3>
                                 <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
                                     Pro účty bez API (spořící účet, hotovost, atd.). Zadáním čísla účtu se automaticky detekují interní převody.
                                 </p>
@@ -1141,7 +1142,7 @@ export default function SettingsPage() {
                                             onKeyDown={(e) => e.key === 'Enter' && handleCreateManualAccount()}
                                         />
                                         <p className="text-tertiary" style={{ fontSize: '0.75rem', margin: '-4px 0 0 0' }}>
-                                            🔄 Převody na/z tohoto čísla se automaticky označí jako interní.
+                                            {Icons.action.sync} Převody na/z tohoto čísla se automaticky označí jako interní.
                                         </p>
                                         <input
                                             type="number"
@@ -1158,7 +1159,7 @@ export default function SettingsPage() {
                                                 disabled={savingManual || !newManualName.trim()}
                                                 style={{ flex: 1 }}
                                             >
-                                                {savingManual ? '⏳ Vytvářím...' : '✅ Vytvořit účet'}
+                                                {savingManual ? `${Icons.status.loading} Vytvářím...` : `${Icons.status.success} Vytvořit účet`}
                                             </button>
                                             <button
                                                 className="btn"
@@ -1174,7 +1175,7 @@ export default function SettingsPage() {
                                         onClick={() => setShowAddManual(true)}
                                         style={{ width: '100%' }}
                                     >
-                                        ➕ Nový manuální účet
+                                        {Icons.action.add} Nový manuální účet
                                     </button>
                                 )}
                             </GlassCard>
@@ -1187,7 +1188,7 @@ export default function SettingsPage() {
                     <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
                         {/* Sync Section */}
                         <GlassCard style={{ height: '100%' }}>
-                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔄 Synchronizace</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.sync} Synchronizace</h3>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
                                 <button
@@ -1216,7 +1217,7 @@ export default function SettingsPage() {
                                             Synchronizuji...
                                         </>
                                     ) : (
-                                        '🔄 Synchronizovat data'
+                                        `${Icons.action.sync} Synchronizovat data`
                                     )}
                                 </button>
 
@@ -1242,7 +1243,7 @@ export default function SettingsPage() {
                                         color: '#ff6b6b',
                                         fontSize: '0.875rem'
                                     }}>
-                                        ⚠️ {syncError}
+                                        {Icons.status.warning} {syncError}
                                     </div>
                                 )}
                             </div>
@@ -1250,7 +1251,7 @@ export default function SettingsPage() {
 
                         {/* API Connections */}
                         <GlassCard style={{ height: '100%' }}>
-                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🔗 API Klíče</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.apiKeys} API Klíče</h3>
 
                             <div style={{ display: 'grid', gap: 'var(--spacing-lg)' }}>
                                 <div style={{
@@ -1260,7 +1261,7 @@ export default function SettingsPage() {
                                     background: apiKeysLoaded?.has_gocardless ? 'rgba(52, 199, 89, 0.05)' : 'transparent'
                                 }}>
                                     <h4 style={{ marginBottom: 'var(--spacing-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span>🏦</span> GoCardless
+                                        <span>{Icons.accountType.bank}</span> GoCardless
                                         {apiKeysLoaded?.has_gocardless && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', marginLeft: 'auto' }}>PŘIPOJENO</span>}
                                     </h4>
                                     <div style={{ display: 'grid', gap: '8px' }}>
@@ -1291,7 +1292,7 @@ export default function SettingsPage() {
                                     background: apiKeysLoaded?.has_trading212 ? 'rgba(52, 199, 89, 0.05)' : 'transparent'
                                 }}>
                                     <h4 style={{ marginBottom: 'var(--spacing-sm)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span>📈</span> Trading 212
+                                        <span>{Icons.accountType.investment}</span> Trading 212
                                         {apiKeysLoaded?.has_trading212 && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', marginLeft: 'auto' }}>PŘIPOJENO</span>}
                                     </h4>
                                     <div>
@@ -1315,7 +1316,7 @@ export default function SettingsPage() {
                                     disabled={saving}
                                     style={{ opacity: saving ? 0.7 : 1, width: '100%' }}
                                 >
-                                    {saving ? '⏳ Ukládám...' : '💾 Uložit klíče'}
+                                    {saving ? `${Icons.status.loading} Ukládám...` : `${Icons.action.save} Uložit klíče`}
                                 </button>
                             </div>
                         </GlassCard>
@@ -1326,7 +1327,7 @@ export default function SettingsPage() {
                 {activeTab === 'preferences' && (
                     <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
                         <GlassCard>
-                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>⚙️ Preference</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.preferences} Preference</h3>
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1384,7 +1385,7 @@ export default function SettingsPage() {
                     <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 'var(--spacing-lg)' }}>
                         {/* Manage Categories */}
                         <GlassCard>
-                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>🏷️ Správa kategorií</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.categories} Správa kategorií</h3>
                             <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
                                 Přidejte, upravte nebo skryjte kategorie pro transakce.
                             </p>
@@ -1394,7 +1395,7 @@ export default function SettingsPage() {
 
                         {/* Add New Rule */}
                         <GlassCard>
-                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>➕ Přidat pravidlo</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.action.add} Přidat pravidlo</h3>
                             <p className="text-tertiary" style={{ fontSize: '0.85rem', marginBottom: 'var(--spacing-md)' }}>
                                 Když popis transakce obsahuje zadaný text, automaticky se přiřadí vybraná kategorie.
                             </p>
@@ -1421,7 +1422,7 @@ export default function SettingsPage() {
                                     onClick={handleAddRule}
                                     disabled={savingRule || !newPattern.trim()}
                                 >
-                                    {savingRule ? 'Ukládám...' : '➕ Přidat pravidlo'}
+                                    {savingRule ? 'Ukládám...' : `${Icons.action.add} Přidat pravidlo`}
                                 </button>
                             </div>
 
@@ -1432,7 +1433,7 @@ export default function SettingsPage() {
                                     disabled={isSyncing}
                                     style={{ width: '100%' }}
                                 >
-                                    {isSyncing ? '⏳ Překategorizovávám...' : '🔄 Překategorizovat všechny transakce'}
+                                    {isSyncing ? `${Icons.status.loading} Překategorizovávám...` : `${Icons.action.sync} Překategorizovat všechny transakce`}
                                 </button>
                                 <p className="text-tertiary" style={{ fontSize: '0.75rem', marginTop: '8px' }}>
                                     Aplikuje aktuální pravidla na všechny existující transakce.
@@ -1442,7 +1443,7 @@ export default function SettingsPage() {
 
                         {/* Rules List */}
                         <GlassCard>
-                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>📋 Pravidla kategorií</h3>
+                            <h3 style={{ marginBottom: 'var(--spacing-lg)' }}>{Icons.section.categoryRules} Pravidla kategorií</h3>
 
                             {categoryRules.length === 0 ? (
                                 <p className="text-secondary">Zatím nemáte žádná vlastní pravidla. Přidejte nové pravidlo nebo změňte kategorii u transakce.</p>
@@ -1463,7 +1464,7 @@ export default function SettingsPage() {
                                                     &apos;{rule.pattern}&apos; → {rule.category}
                                                 </div>
                                                 <div className="text-tertiary" style={{ fontSize: '0.75rem' }}>
-                                                    {rule.is_user_defined ? '👤 Vlastní pravidlo' : '🤖 Naučené'} • {rule.match_count}× použito
+                                                    {rule.is_user_defined ? `${Icons.rule.userDefined} Vlastní pravidlo` : `${Icons.rule.learned} Naučené`} • {rule.match_count}× použito
                                                 </div>
                                             </div>
                                             <button
@@ -1478,7 +1479,7 @@ export default function SettingsPage() {
                                                 }}
                                                 title="Smazat pravidlo"
                                             >
-                                                🗑️
+                                                {Icons.action.delete}
                                             </button>
                                         </div>
                                     ))}

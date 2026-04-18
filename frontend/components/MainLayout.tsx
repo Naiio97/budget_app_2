@@ -9,6 +9,7 @@ import { syncData, getSyncStatus, SyncStatus } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { queryKeys } from '@/lib/queryKeys';
+import { Icons } from '@/lib/icons';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -32,22 +33,22 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
     // All navigation items
     const navItems = [
-        { href: '/', label: 'Dashboard', icon: '📊' },
-        { href: '/transactions', label: 'Transakce', icon: '💳' },
-        { href: '/rozpocet', label: 'Měs. rozpočet', icon: '📅' },
-        { href: '/budgets', label: 'Rozpočty', icon: '💰' },
-        { href: '/reports', label: 'Přehledy', icon: '📊' },
-        { href: '/investments', label: 'Investice', icon: '📈' },
-        { href: '/settings', label: 'Nastavení', icon: '⚙️' },
+        { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
+        { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
+        { href: '/rozpocet', label: 'Měs. rozpočet', icon: Icons.nav.monthlyBudget },
+        { href: '/budgets', label: 'Rozpočty', icon: Icons.nav.budgets },
+        { href: '/reports', label: 'Přehledy', icon: Icons.nav.reports },
+        { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
+        { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 
     // Bottom nav shows max 5 items (most important ones)
     const bottomNavItems = [
-        { href: '/', label: 'Dashboard', icon: '📊' },
-        { href: '/transactions', label: 'Transakce', icon: '💳' },
-        { href: '/rozpocet', label: 'Rozpočet', icon: '📅' },
-        { href: '/budgets', label: 'Rozpočty', icon: '💰' },
-        { href: '/settings', label: 'Více', icon: '☰' },
+        { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
+        { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
+        { href: '/rozpocet', label: 'Rozpočet', icon: Icons.nav.monthlyBudget },
+        { href: '/budgets', label: 'Rozpočty', icon: Icons.nav.budgets },
+        { href: '/settings', label: 'Více', icon: Icons.nav.more },
     ];
 
     useEffect(() => {
@@ -149,7 +150,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 </div>
                             ) : (
                                 <div className={`account-icon ${account.type}`}>
-                                    {account.type === 'bank' ? '🏦' : account.type === 'manual' ? '💼' : '📈'}
+                                    {account.type === 'bank' ? Icons.accountType.bank : account.type === 'manual' ? Icons.accountType.manual : Icons.accountType.investment}
                                 </div>
                             )}
                             <div className="account-info">
@@ -191,7 +192,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 </h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
                     <Link href="/settings" className="btn" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                        <span>➕</span>
+                        <span>{Icons.action.add}</span>
                         <span>Přidat účet</span>
                     </Link>
                     <button
@@ -216,7 +217,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             </>
                         ) : (
                             <>
-                                <span>🔄</span>
+                                <span>{Icons.action.sync}</span>
                                 <span>Synchronizovat</span>
                             </>
                         )}
