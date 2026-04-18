@@ -150,30 +150,9 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
     budget = result.scalar_one_or_none()
     
     if not budget:
-        # Vytvoř nový rozpočet pro tento měsíc
+        # Vytvoř prázdný rozpočet — uživatel si zkopíruje z minula nebo přidá ručně.
         budget = MonthlyBudgetModel(year_month=year_month)
         db.add(budget)
-        await db.commit()
-        await db.refresh(budget)
-        
-        # Zkopíruj pravidelné výdaje jako instance pro tento měsíc
-        recurring_result = await db.execute(
-            select(RecurringExpenseModel).where(RecurringExpenseModel.is_active == True).order_by(RecurringExpenseModel.order_index)
-        )
-        recurring_expenses = recurring_result.scalars().all()
-        
-        for rec in recurring_expenses:
-            monthly_exp = MonthlyExpenseModel(
-                budget_id=budget.id,
-                recurring_expense_id=rec.id,
-                name=rec.name,
-                amount=rec.default_amount,
-                my_percentage=rec.my_percentage or 100,
-                is_auto_paid=rec.is_auto_paid,
-                is_paid=False
-            )
-            db.add(monthly_exp)
-        
         await db.commit()
         await db.refresh(budget)
     

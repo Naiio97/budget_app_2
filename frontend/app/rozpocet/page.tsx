@@ -325,14 +325,9 @@ export default function RozpocetPage() {
         }
     };
 
-    const deleteMonthlyExpense = async (expenseId: number, recurringExpenseId: number | null) => {
-        const deleteRecurring = recurringExpenseId && confirm('Smazat také šablonu pravidelného výdaje?\n\nANO = smazat ze všech budoucích měsíců\nNE = smazat jen z tohoto měsíce');
+    const deleteMonthlyExpense = async (expenseId: number) => {
         try {
             await fetch(`${API_BASE}/monthly-expenses/${expenseId}`, { method: 'DELETE' });
-            if (deleteRecurring && recurringExpenseId) {
-                await fetch(`${API_BASE}/recurring-expenses/${recurringExpenseId}`, { method: 'DELETE' });
-                queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses });
-            }
             refreshBudget();
         } catch (err) {
             console.error('Failed to delete expense:', err);
@@ -731,7 +726,7 @@ export default function RozpocetPage() {
                                 />
                             )}
                             <button
-                                onClick={() => deleteMonthlyExpense(expense.id, expense.recurring_expense_id)}
+                                onClick={() => deleteMonthlyExpense(expense.id)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.4, padding: '4px' }}
                             >{Icons.action.delete}</button>
                         </div>
