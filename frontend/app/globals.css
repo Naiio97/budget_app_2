@@ -450,18 +450,43 @@ select.input {
   gap: var(--spacing-md);
 }
 
+.grid-col1-wrapper,
+.grid-expenses {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* Hide native number-input spinners (up/down arrows) everywhere */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .section-header-wrap {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: var(--spacing-md);
+  min-height: 36px;
+}
+
+.section-header-wrap h3 {
+  white-space: nowrap;
 }
 
 .section-actions {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .chart-header-wrap {
@@ -1071,6 +1096,16 @@ select.input {
 
   .rozpocet-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Transaction modal: anchor to top on mobile so it doesn't jump */
+  .tx-modal-overlay {
+    align-items: flex-start !important;
+    padding-top: 5vh !important;
+  }
+
+  .tx-modal-card {
+    max-height: 85vh !important;
   }
 
   /* Rozpocet page elements improvements */

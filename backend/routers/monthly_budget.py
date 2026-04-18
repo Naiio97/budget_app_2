@@ -150,30 +150,9 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
     budget = result.scalar_one_or_none()
     
     if not budget:
-        # Vytvoř nový rozpočet pro tento měsíc
+        # Vytvoř prázdný rozpočet — uživatel si zkopíruje z minula nebo přidá ručně.
         budget = MonthlyBudgetModel(year_month=year_month)
         db.add(budget)
-        await db.commit()
-        await db.refresh(budget)
-        
-        # Zkopíruj pravidelné výdaje jako instance pro tento měsíc
-        recurring_result = await db.execute(
-            select(RecurringExpenseModel).where(RecurringExpenseModel.is_active == True).order_by(RecurringExpenseModel.order_index)
-        )
-        recurring_expenses = recurring_result.scalars().all()
-        
-        for rec in recurring_expenses:
-            monthly_exp = MonthlyExpenseModel(
-                budget_id=budget.id,
-                recurring_expense_id=rec.id,
-                name=rec.name,
-                amount=rec.default_amount,
-                my_percentage=rec.my_percentage or 100,
-                is_auto_paid=rec.is_auto_paid,
-                is_paid=False
-            )
-            db.add(monthly_exp)
-        
         await db.commit()
         await db.refresh(budget)
     
@@ -483,39 +462,32 @@ async def sync_income_from_transactions(year_month: str, db: AsyncSession = Depe
         await db.commit()
         await db.refresh(budget)
     
-    # Get date ranges
-    year, month = map(int, year_month.split("-"))
     start_date = f"{year_month}-01"
-    
-    # End of current month
-    if month == 12:
-        next_year, next_month = year + 1, 1
-    else:
-        next_year, next_month = year, month + 1
-    
-    # For salary, also check first 15 days of NEXT month (salary for Dec comes in Jan)
-    salary_extended_end = f"{next_year:04d}-{next_month:02d}-16"
-    
-    # Find salary transactions - in current month OR first 15 days of next month
+
+    # Výplata pravidelně přichází mezi 5.–8. dnem měsíce (posouvá se podle víkendů/svátků).
+    # Hledáme jen v prvních 10 dnech, aby se tatáž transakce nezapočítala do dvou měsíců.
+    salary_window_end = f"{year_month}-11"  # exclusive: do 10. včetně
+
+    # Find salary transactions in first 10 days of the month
     salary_result = await db.execute(
         select(func.sum(TransactionModel.amount))
         .where(TransactionModel.date >= start_date)
-        .where(TransactionModel.date < salary_extended_end)
+        .where(TransactionModel.date < salary_window_end)
         .where(TransactionModel.category == "Salary")
         .where(TransactionModel.amount > 0)  # Only positive (income)
     )
     salary_total = salary_result.scalar() or 0
-    
+
     # Update budget - only salary, other_income stays manual
     old_salary = budget.salary
     budget.salary = salary_total
-    
+
     await db.commit()
-    
+
     return {
         "status": "synced",
         "salary": salary_total,
-        "note": f"Výplata nalezena v období {start_date} až {salary_extended_end}",
+        "note": f"Výplata nalezena v období {start_date} až {salary_window_end}",
         "change": {"from": old_salary, "to": salary_total}
     }
 

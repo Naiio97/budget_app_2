@@ -52,12 +52,17 @@ export default function TransactionList({ transactions: initialTransactions, sho
         [categories]
     );
 
-    // Close modal on Escape
+    // Close modal on Escape + lock body scroll while open
     useEffect(() => {
         if (!selectedTx) return;
         const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedTx(null); };
         document.addEventListener('keydown', handleKey);
-        return () => document.removeEventListener('keydown', handleKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', handleKey);
+            document.body.style.overflow = prevOverflow;
+        };
     }, [selectedTx]);
 
     // Fetch rich detail when modal opens
@@ -171,22 +176,28 @@ export default function TransactionList({ transactions: initialTransactions, sho
         {modalTx && (
             <div
                 onClick={() => setSelectedTx(null)}
+                className="tx-modal-overlay"
                 style={{
                     position: 'fixed', inset: 0, zIndex: 1000,
-                    background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+                    background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     padding: 'var(--spacing-md)',
+                    overscrollBehavior: 'contain',
                 }}
             >
                 <div
                     onClick={(e) => e.stopPropagation()}
-                    className="glass glass-card"
+                    className="tx-modal-card"
                     style={{
                         width: '100%', maxWidth: '480px',
                         maxHeight: '90vh', overflowY: 'auto',
                         padding: 'var(--spacing-xl)',
                         display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)',
                         position: 'relative',
+                        background: '#1e293b',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        borderRadius: 'var(--radius-lg)',
+                        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.7)',
                     }}
                 >
                     {/* Close button */}
