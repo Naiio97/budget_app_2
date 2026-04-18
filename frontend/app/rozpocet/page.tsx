@@ -23,12 +23,18 @@ interface MonthlyExpense {
     recurring_expense_id: number | null;
 }
 
+interface IncomeItem {
+    id: number;
+    name: string;
+    amount: number;
+    order_index: number;
+    is_salary: boolean;
+}
+
 interface MonthlyBudget {
     id: number;
     year_month: string;
-    salary: number;
-    other_income: number;
-    meal_vouchers: number;
+    income_items: IncomeItem[];
     investment_amount: number;
     surplus_to_savings: number;
     is_closed: boolean;
@@ -123,6 +129,9 @@ export default function RozpocetPage() {
     const [isAutoSyncing, setIsAutoSyncing] = useState(false);
     const [editingMyAmounts, setEditingMyAmounts] = useState<Record<number, string>>({});
     const [editingAmounts, setEditingAmounts] = useState<Record<number, string>>({});
+    const [editingBudgetFields, setEditingBudgetFields] = useState<Record<string, string>>({});
+    const [editingIncomeAmounts, setEditingIncomeAmounts] = useState<Record<number, string>>({});
+    const [editingIncomeNames, setEditingIncomeNames] = useState<Record<number, string>>({});
 
     // Track which months we've already auto-synced so we don't loop
     const autoSyncedMonths = useRef<Set<string>>(new Set());
@@ -180,7 +189,7 @@ export default function RozpocetPage() {
     };
 
     // === Auto-sync on month open ===
-    // - Income sync: only when salary is 0 (don't overwrite manually set values)
+    // - Income sync: only when the salary row is missing or zero (don't overwrite manually set values)
     // - Match transactions: always (idempotent, just marks expenses as paid)
     useEffect(() => {
         if (!budget || viewMode !== 'month') return;
@@ -190,7 +199,8 @@ export default function RozpocetPage() {
         const runAutoSync = async () => {
             setIsAutoSyncing(true);
             try {
-                if (budget.salary === 0) {
+                const salaryRow = budget.income_items.find(i => i.is_salary);
+                if (!salaryRow || salaryRow.amount === 0) {
                     await fetch(`${API_BASE}/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
                 }
                 await fetch(`${API_BASE}/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
@@ -201,7 +211,7 @@ export default function RozpocetPage() {
         };
 
         runAutoSync();
-        // Záměrně závisíme jen na budget?.id — budget.salary čteme uvnitř, ale nechceme re-fire při jeho změně.
+        // Záměrně závisíme jen na budget?.id — salary hodnotu čteme uvnitř, ale nechceme re-fire při její změně.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [budget?.id, yearMonth, viewMode, refreshBudget]);
 
@@ -217,6 +227,73 @@ export default function RozpocetPage() {
             refreshBudget();
         } catch (err) {
             console.error('Failed to update budget:', err);
+        }
+    };
+
+    const commitBudgetField = (field: string, currentValue: number) => {
+        const raw = editingBudgetFields[field];
+        setEditingBudgetFields(prev => { const next = { ...prev }; delete next[field]; return next; });
+        if (raw === undefined) return;
+        const newValue = parseFloat(raw) || 0;
+        if (newValue === currentValue) return;
+        updateBudget(field, newValue);
+    };
+
+    const commitIncomeAmount = async (item: IncomeItem) => {
+        const raw = editingIncomeAmounts[item.id];
+        setEditingIncomeAmounts(prev => { const next = { ...prev }; delete next[item.id]; return next; });
+        if (raw === undefined) return;
+        const newValue = parseFloat(raw) || 0;
+        if (newValue === item.amount) return;
+        try {
+            await fetch(`${API_BASE}/monthly-income-items/${item.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: newValue }),
+            });
+            refreshBudget();
+        } catch (err) {
+            console.error('Failed to update income amount:', err);
+        }
+    };
+
+    const commitIncomeName = async (item: IncomeItem) => {
+        const raw = editingIncomeNames[item.id];
+        setEditingIncomeNames(prev => { const next = { ...prev }; delete next[item.id]; return next; });
+        if (raw === undefined) return;
+        const newName = raw.trim();
+        if (!newName || newName === item.name) return;
+        try {
+            await fetch(`${API_BASE}/monthly-income-items/${item.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName }),
+            });
+            refreshBudget();
+        } catch (err) {
+            console.error('Failed to rename income item:', err);
+        }
+    };
+
+    const addIncomeItem = async () => {
+        try {
+            await fetch(`${API_BASE}/monthly-budget/${yearMonth}/income-items`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: 'Nový příjem', amount: 0, is_salary: false }),
+            });
+            refreshBudget();
+        } catch (err) {
+            console.error('Failed to add income item:', err);
+        }
+    };
+
+    const deleteIncomeItem = async (itemId: number) => {
+        try {
+            await fetch(`${API_BASE}/monthly-income-items/${itemId}`, { method: 'DELETE' });
+            refreshBudget();
+        } catch (err) {
+            console.error('Failed to delete income item:', err);
         }
     };
 
@@ -457,11 +534,14 @@ export default function RozpocetPage() {
         const incomeDelta = totalIncome - prevMonthIncome;
         const hasPrevMonth = prevMonthIncome > 0;
 
-        // Average income across active months (income > 0) in current year
-        const activeIncomeMonths = annualData?.months.filter(m => m.income > 0 && m.month !== selectedMonth) ?? [];
-        const avgIncome = activeIncomeMonths.length > 0
-            ? activeIncomeMonths.reduce((s, m) => s + m.income, 0) / activeIncomeMonths.length
+        // Average income across active months (income > 0) in current year — excludes
+        // the selected month so the delta is a real comparison, not self-comparison.
+        const otherActiveIncomeMonths = annualData?.months.filter(m => m.income > 0 && m.month !== selectedMonth) ?? [];
+        const avgIncome = otherActiveIncomeMonths.length > 0
+            ? otherActiveIncomeMonths.reduce((s, m) => s + m.income, 0) / otherActiveIncomeMonths.length
             : 0;
+        const avgDelta = totalIncome - avgIncome;
+        const hasAvgComparison = avgIncome > 0 && totalIncome > 0;
 
         return (
             <div style={{
@@ -484,7 +564,14 @@ export default function RozpocetPage() {
                                 </div>
                             )}
                             {avgIncome > 0 && totalIncome > 0 && (
-                                <div>⌀ {formatCurrency(avgIncome)}/měs letos</div>
+                                <div>
+                                    ⌀ {formatCurrency(avgIncome)}/měs letos
+                                    {hasAvgComparison && (
+                                        <span style={{ color: avgDelta >= 0 ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)', marginLeft: '4px' }}>
+                                            ({avgDelta >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(avgDelta))})
+                                        </span>
+                                    )}
+                                </div>
                             )}
                         </div>
                     )}
@@ -580,22 +667,43 @@ export default function RozpocetPage() {
                 </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                    { label: 'Výplata', field: 'salary', value: budget?.salary || 0 },
-                    { label: 'Další příjem', field: 'other_income', value: budget?.other_income || 0 },
-                    { label: 'Stravenky', field: 'meal_vouchers', value: budget?.meal_vouchers || 0 },
-                ].map(item => (
-                    <div key={item.field} className="income-input-row">
-                        <span>{item.label}</span>
+                {(budget?.income_items || []).map(item => (
+                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <input
+                            className="input"
+                            value={editingIncomeNames[item.id] ?? item.name}
+                            onChange={(e) => setEditingIncomeNames(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onBlur={() => commitIncomeName(item)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                            style={{ flex: 1, padding: '4px 8px' }}
+                        />
                         <input
                             type="number"
                             className="input"
-                            value={item.value}
-                            onChange={(e) => updateBudget(item.field, parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            value={editingIncomeAmounts[item.id] ?? (item.amount === 0 ? '' : String(item.amount))}
+                            onChange={(e) => setEditingIncomeAmounts(prev => ({ ...prev, [item.id]: e.target.value }))}
+                            onBlur={() => commitIncomeAmount(item)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                             style={{ width: '120px', textAlign: 'right', padding: '4px 8px' }}
                         />
+                        <button
+                            className="btn"
+                            onClick={() => deleteIncomeItem(item.id)}
+                            title="Smazat řádek"
+                            style={{ fontSize: '0.85rem', padding: '4px 8px', background: 'transparent', border: 'none', opacity: 0.5, cursor: 'pointer' }}
+                        >
+                            {Icons.action.delete}
+                        </button>
                     </div>
                 ))}
+                <button
+                    className="btn"
+                    onClick={addIncomeItem}
+                    style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)', alignSelf: 'flex-start' }}
+                >
+                    + Přidat příjem
+                </button>
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--accent-success)' }}>
                     <span>Příjmy celkem</span>
                     <span>{formatCurrency(totalIncome)}</span>
@@ -753,8 +861,10 @@ export default function RozpocetPage() {
                         <input
                             type="number"
                             className="input"
-                            value={budget?.investment_amount || 0}
-                            onChange={(e) => updateBudget('investment_amount', parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            value={editingBudgetFields['investment_amount'] ?? ((budget?.investment_amount || 0) === 0 ? '' : String(budget?.investment_amount))}
+                            onChange={(e) => setEditingBudgetFields(prev => ({ ...prev, investment_amount: e.target.value }))}
+                            onBlur={() => commitBudgetField('investment_amount', budget?.investment_amount || 0)}
                             style={{ width: '110px', textAlign: 'right', padding: '4px 8px' }}
                         />
                     </div>
@@ -763,8 +873,10 @@ export default function RozpocetPage() {
                         <input
                             type="number"
                             className="input"
-                            value={budget?.surplus_to_savings || 0}
-                            onChange={(e) => updateBudget('surplus_to_savings', parseFloat(e.target.value) || 0)}
+                            placeholder="0"
+                            value={editingBudgetFields['surplus_to_savings'] ?? ((budget?.surplus_to_savings || 0) === 0 ? '' : String(budget?.surplus_to_savings))}
+                            onChange={(e) => setEditingBudgetFields(prev => ({ ...prev, surplus_to_savings: e.target.value }))}
+                            onBlur={() => commitBudgetField('surplus_to_savings', budget?.surplus_to_savings || 0)}
                             style={{ width: '110px', textAlign: 'right', padding: '4px 8px' }}
                         />
                     </div>
