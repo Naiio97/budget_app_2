@@ -401,6 +401,8 @@ select.input {
   overflow-y: auto;
   overscroll-behavior: contain;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Navigation */
