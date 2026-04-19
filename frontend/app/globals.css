@@ -487,6 +487,45 @@ input[type='number'] {
   appearance: textfield;
 }
 
+/* Custom checkbox used on expense rows */
+.expense-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--glass-border-light);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease-out;
+  display: inline-block;
+  vertical-align: middle;
+}
+.expense-check:hover {
+  border-color: var(--accent-primary);
+}
+.expense-check:checked {
+  background: var(--accent-success);
+  border-color: var(--accent-success);
+}
+.expense-check:checked::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.expense-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+}
+
 .section-header-wrap {
   display: flex;
   justify-content: space-between;
