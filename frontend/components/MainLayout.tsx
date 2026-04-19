@@ -115,6 +115,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
     const renderSidebarContent = () => (
         <>
+            <div style={{ flex: '1 1 auto' }}>
             <h4 style={{ marginBottom: 'var(--spacing-lg)', color: 'var(--text-secondary)' }}>
                 Napojené účty
             </h4>
@@ -246,6 +247,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                         </div>
                     )}
                 </div>
+            </div>
             </div>
             <BuildVersionBadge />
         </>

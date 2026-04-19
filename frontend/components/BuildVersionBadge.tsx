@@ -11,7 +11,6 @@ export default function BuildVersionBadge() {
         <div
             title={tooltip}
             style={{
-                marginTop: 'auto',
                 paddingTop: 'var(--spacing-md)',
                 borderTop: '1px solid rgba(255,255,255,0.06)',
                 fontSize: '0.7rem',
