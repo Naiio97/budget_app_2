@@ -13,6 +13,10 @@ ENV NEXT_PUBLIC_BUILD_SHA=$NEXT_PUBLIC_BUILD_SHA
 ARG NEXT_PUBLIC_BUILD_TIME
 ENV NEXT_PUBLIC_BUILD_TIME=$NEXT_PUBLIC_BUILD_TIME
 
+# Stamp the SW cache name with the build SHA so a new deploy invalidates
+# all cached assets (icons, logos, precache) for returning clients.
+RUN sed -i "s/__BUILD_SHA__/${NEXT_PUBLIC_BUILD_SHA}/g" public/sw.js
+
 RUN npm run build
 
 # 2. Runner fáze (čistý a malý obraz)
