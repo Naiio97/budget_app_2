@@ -292,7 +292,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 {disableScroll ? (
                     children
                 ) : (
-                    <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, marginRight: '-12px', paddingRight: '12px', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+                    <div className="main-scroll-area" style={{ flex: 1, overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
                         {children}
                     </div>
                 )}

@@ -798,9 +798,9 @@ export default function RozpocetPage() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
                             <input
                                 type="checkbox"
+                                className="expense-check"
                                 checked={expense.is_paid}
                                 onChange={() => toggleExpensePaid(expense.id, expense.is_paid)}
-                                style={{ cursor: 'pointer', flexShrink: 0 }}
                             />
                             <input
                                 value={editingExpenseNames[expense.id] ?? expense.name}
@@ -822,7 +822,6 @@ export default function RozpocetPage() {
                                 onFocus={(e) => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.15)'; }}
                                 onBlurCapture={(e) => { e.currentTarget.style.border = '1px solid transparent'; }}
                             />
-                            {expense.matched_transaction_id && <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)', flexShrink: 0 }}>{Icons.status.ok} spárováno</span>}
                         </div>
                         <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                             <CustomSelect
@@ -855,7 +854,7 @@ export default function RozpocetPage() {
                                 value={editingAmounts[expense.id] ?? expense.amount}
                                 onChange={(e) => setEditingAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
                                 onBlur={() => saveExpenseAmount(expense)}
-                                style={{ width: '95px', textAlign: 'right', padding: '4px 8px' }}
+                                style={{ width: '95px', textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem' }}
                                 title="Celková částka"
                             />
                             {(expense.my_percentage < 100 || expense.my_amount_override !== null) && (
@@ -865,7 +864,7 @@ export default function RozpocetPage() {
                                     value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
                                     onChange={(e) => setEditingMyAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
                                     onBlur={() => saveMyAmount(expense)}
-                                    style={{ width: '85px', textAlign: 'right', padding: '4px 8px', color: 'var(--accent-primary)', borderColor: 'rgba(0,122,255,0.3)' }}
+                                    style={{ width: '85px', textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem', color: 'var(--accent-primary)', borderColor: 'rgba(0,122,255,0.3)' }}
                                     title="Moje část (Kč)"
                                 />
                             )}
