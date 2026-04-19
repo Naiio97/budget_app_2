@@ -491,11 +491,12 @@ input[type='number'] {
 .expense-check {
   appearance: none;
   -webkit-appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
   flex-shrink: 0;
   border: 1.5px solid var(--glass-border-light);
-  border-radius: 6px;
+  border-radius: 5px;
   background: rgba(0, 0, 0, 0.25);
   cursor: pointer;
   position: relative;
@@ -513,10 +514,10 @@ input[type='number'] {
 .expense-check:checked::after {
   content: '';
   position: absolute;
-  left: 6px;
-  top: 2px;
-  width: 5px;
-  height: 10px;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
@@ -524,6 +525,21 @@ input[type='number'] {
 .expense-check:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3);
+}
+/* Mobile: keep checkbox compact (the touch-friendly min-height:44px rule
+   already excludes type=checkbox via the selector above, but lock size) */
+@media (max-width: 768px) {
+  .expense-check {
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+  }
+  .expense-check:checked::after {
+    left: 5px;
+    top: 1px;
+    width: 4px;
+    height: 9px;
+  }
 }
 
 .section-header-wrap {
@@ -1145,11 +1161,16 @@ input[type='number'] {
   }
 
   .input,
-  input,
+  input:not([type="checkbox"]):not([type="radio"]),
   select,
   textarea {
     font-size: 16px !important;
     /* Prevents iOS auto-zoom */
+    min-height: 44px;
+  }
+
+  /* Match CustomSelect (button) height to the 44px inputs on mobile */
+  .expense-actions > :first-child > button {
     min-height: 44px;
   }
 
