@@ -10,6 +10,7 @@ import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import BuildVersionBadge from '@/components/BuildVersionBadge';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -246,6 +247,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     )}
                 </div>
             </div>
+            <BuildVersionBadge />
         </>
     );
 
