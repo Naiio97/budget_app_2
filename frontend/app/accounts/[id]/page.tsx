@@ -80,8 +80,8 @@ export default function AccountDetailPage() {
     const { account, transactions } = data;
 
     return (
-        <MainLayout disableScroll={true}>
-            <div className="page-container" style={{ minHeight: 0 }}>
+        <MainLayout>
+            <div className="page-container">
                 {/* Header */}
                 <div style={{
                     display: 'flex',
@@ -137,8 +137,8 @@ export default function AccountDetailPage() {
                 </div>
 
                 {/* Transactions with Pagination */}
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                    <GlassCard hover={false} style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
+                    <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
                         <div style={{
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -166,7 +166,7 @@ export default function AccountDetailPage() {
                             </div>
                         ) : (
                             <>
-                                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px', paddingBottom: 'var(--spacing-md)' }}>
+                                <div style={{ paddingBottom: 'var(--spacing-md)' }}>
                                     <TransactionList transactions={transactions} />
                                 </div>
 
@@ -177,9 +177,7 @@ export default function AccountDetailPage() {
                                         justifyContent: 'space-between',
                                         alignItems: 'center',
                                         paddingTop: 'var(--spacing-md)',
-                                        marginTop: 'auto',
                                         borderTop: '1px solid rgba(255,255,255,0.05)',
-                                        flexShrink: 0,
                                         gap: '8px'
                                     }}>
                                         <button

@@ -1195,10 +1195,10 @@ input[type='number'] {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  /* Transaction modal: anchor to top on mobile so it doesn't jump */
+  /* Transaction modal: keep centered on mobile, respect safe areas */
   .tx-modal-overlay {
-    align-items: flex-start !important;
-    padding-top: 5vh !important;
+    padding-top: calc(var(--spacing-md) + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom)) !important;
   }
 
   .tx-modal-card {
