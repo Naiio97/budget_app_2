@@ -1169,8 +1169,23 @@ input[type='number'] {
 
   .expense-actions {
     width: 100%;
-    justify-content: space-between;
+    gap: 8px;
+    justify-content: flex-start;
     margin-top: 4px;
+  }
+  /* Percentage select: give "Vlastní" room to breathe */
+  .expense-actions > :first-child {
+    flex: 0 0 auto;
+    width: 95px !important;
+  }
+  /* Amount inputs flex-fill the remaining row; ditch the desktop fixed widths */
+  .expense-actions input[type="number"] {
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0;
+  }
+  .expense-actions > button {
+    flex: 0 0 auto;
   }
 
   /* Adjust stat values for mobile */
