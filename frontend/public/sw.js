@@ -1,4 +1,5 @@
-const CACHE_NAME = 'budget-tracker-v3';
+// __BUILD_SHA__ is replaced at docker build time; falls back to 'dev' for local.
+const CACHE_NAME = 'budget-tracker-__BUILD_SHA__';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_ASSETS = [
