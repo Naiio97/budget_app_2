@@ -85,28 +85,37 @@ export default function AccountDetailPage() {
                 {/* Header */}
                 <div style={{
                     display: 'flex',
-                    alignItems: 'center',
+                    alignItems: 'flex-start',
                     justifyContent: 'space-between',
                     gap: 'var(--spacing-md)',
                     marginBottom: 'var(--spacing-lg)',
                     flexShrink: 0
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                        <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {account.name}
-                        </h1>
-                        {!account.is_visible && (
-                            <span style={{
-                                fontSize: '0.75rem',
-                                background: 'rgba(255,255,255,0.1)',
-                                padding: '4px 8px',
-                                borderRadius: '4px',
-                                fontWeight: 500,
-                                flexShrink: 0
-                            }}>
-                                Skrytý
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {account.name}
+                            </h1>
+                            {!account.is_visible && (
+                                <span style={{
+                                    fontSize: '0.7rem',
+                                    background: 'rgba(255,255,255,0.1)',
+                                    padding: '3px 8px',
+                                    borderRadius: '4px',
+                                    fontWeight: 500,
+                                    flexShrink: 0
+                                }}>
+                                    Skrytý
+                                </span>
+                            )}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            {account.institution && <span>{account.institution.replace(/_/g, ' ')}</span>}
+                            {account.institution && <span style={{ opacity: 0.5 }}>·</span>}
+                            <span>
+                                {Icons.action.sync} {account.last_synced ? formatDate(account.last_synced) : 'nikdy'}
                             </span>
-                        )}
+                        </div>
                     </div>
                     <button
                         onClick={() => router.back()}
@@ -117,34 +126,14 @@ export default function AccountDetailPage() {
                     </button>
                 </div>
 
-                {/* Account Info - Dashboard match */}
-                <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-xl)', flexShrink: 0 }}>
+                {/* Balance hero */}
+                <div style={{ marginBottom: 'var(--spacing-lg)', flexShrink: 0 }}>
                     <StatCard
                         label="ZŮSTATEK"
                         value={account.balance}
                         currency={account.currency}
                         icon={Icons.section.assetGrowth}
                     />
-
-                    <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontSize: '1.25rem' }}>{Icons.accountType.bank}</span>
-                            <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Instituce</div>
-                        </div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', wordBreak: 'break-word', marginTop: 'auto' }}>
-                            {account.institution ? account.institution.replace(/_/g, ' ') : 'Neznámá'}
-                        </div>
-                    </div>
-
-                    <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontSize: '1.25rem' }}>{Icons.action.sync}</span>
-                            <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Poslední synchronizace</div>
-                        </div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: 'auto' }}>
-                            {account.last_synced ? formatDate(account.last_synced) : 'Nikdy'}
-                        </div>
-                    </div>
                 </div>
 
                 {/* Transactions with Pagination */}
