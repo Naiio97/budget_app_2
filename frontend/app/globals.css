@@ -401,6 +401,8 @@ select.input {
   overflow-y: auto;
   overscroll-behavior: contain;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Navigation */
@@ -1020,6 +1022,24 @@ input[type='number'] {
 
   .page-container {
     padding: var(--spacing-md);
+  }
+
+  /* Month nav: let the month select shrink so arrows + selects stay on one row */
+  .month-nav-row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .month-nav-row > .month-nav-arrow {
+    flex-shrink: 0;
+  }
+  .month-nav-row > :nth-child(2) {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto !important;
+  }
+  .month-nav-row > :nth-child(3) {
+    width: 95px !important;
+    flex-shrink: 0;
   }
 
   /* Hide desktop nav on mobile */
