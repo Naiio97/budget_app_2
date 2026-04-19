@@ -1320,21 +1320,21 @@ export default function RozpocetPage() {
                     {/* Month navigation */}
                     {viewMode === 'month' && (
                         <div className="month-nav" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 auto', minWidth: 0 }}>
-                                <button className="btn month-nav-arrow" onClick={goToPrevMonth} style={{ padding: '8px 12px', fontSize: '1rem', flexShrink: 0 }}>←</button>
+                            <div className="month-nav-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <button className="btn month-nav-arrow" onClick={goToPrevMonth} style={{ padding: '8px 12px', fontSize: '1rem' }}>←</button>
                                 <CustomSelect
                                     value={selectedMonth.toString()}
                                     onChange={(val) => setSelectedMonth(Number(val))}
-                                    style={{ flex: '1 1 0', minWidth: 0 }}
+                                    style={{ width: '150px' }}
                                     options={MONTH_NAMES.map((name, idx) => ({ value: (idx + 1).toString(), label: name }))}
                                 />
                                 <CustomSelect
                                     value={selectedYear.toString()}
                                     onChange={(val) => setSelectedYear(Number(val))}
-                                    style={{ width: '95px', flexShrink: 0 }}
+                                    style={{ width: '110px' }}
                                     options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))}
                                 />
-                                <button className="btn month-nav-arrow" onClick={goToNextMonth} style={{ padding: '8px 12px', fontSize: '1rem', flexShrink: 0 }}>→</button>
+                                <button className="btn month-nav-arrow" onClick={goToNextMonth} style={{ padding: '8px 12px', fontSize: '1rem' }}>→</button>
                             </div>
                             {!isCurrentMonth && (
                                 <button className="btn" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }} style={{ fontSize: '0.8rem', padding: '6px 10px', background: 'rgba(255,255,255,0.05)' }}>
