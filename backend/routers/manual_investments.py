@@ -158,8 +158,19 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
     db.add(acc)
     await db.commit()
     await db.refresh(acc)
-    acc.positions = []
-    return _build_account(acc)
+    # Nový účet nemá žádné pozice — nevstupujeme do lazy relationship
+    return ManualInvestmentAccount(
+        id=acc.id,
+        name=acc.name,
+        currency=acc.currency,
+        note=acc.note,
+        is_visible=acc.is_visible if acc.is_visible is not None else True,
+        total_value=0.0,
+        invested=0.0,
+        pnl=0.0,
+        pnl_pct=0.0,
+        positions=[],
+    )
 
 
 @router.get("/{account_id}", response_model=ManualInvestmentAccount)
