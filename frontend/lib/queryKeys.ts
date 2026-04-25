@@ -25,4 +25,7 @@ export const queryKeys = {
   apiKeys: ['api-keys'] as const,
   syncStatus: ['sync-status'] as const,
   pies: ['pies'] as const,
+  manualInvestments: ['manual-investments'] as const,
+  manualInvestment: (id: number) => ['manual-investment', id] as const,
+  manualInvestmentHistory: (id: number) => ['manual-investment-history', id] as const,
 };

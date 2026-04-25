@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -68,7 +68,15 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         .where(ManualAccountModel.is_visible == True)
     )
     manual_accounts = manual_result.scalars().all()
-    
+
+    # Get manual investment accounts with positions
+    manual_inv_result = await db.execute(
+        select(ManualInvestmentAccountModel)
+        .options(selectinload(ManualInvestmentAccountModel.positions))
+        .where(ManualInvestmentAccountModel.is_visible == True)
+    )
+    manual_investment_accounts = manual_inv_result.scalars().all()
+
     # Calculate investment balance — re-convert if sync stored wrong rate (fallback 1.0)
     investment_balance = 0
     for acc in accounts:
@@ -100,6 +108,14 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         manual_balance += macc.balance - borrowed
     
     total_balance += manual_balance
+
+    # Add manual investment account values to total
+    manual_investment_balance = sum(
+        sum(p.current_value for p in acc.positions)
+        for acc in manual_investment_accounts
+    )
+    total_balance += manual_investment_balance
+    investment_balance += manual_investment_balance
     
     # Get recent transactions from DB with account name
     tx_result = await db.execute(
@@ -192,11 +208,23 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             "id": f"manual-{macc.id}",
             "name": macc.name,
             "type": "manual",
-            "balance": macc.balance - borrowed,  # Only show my money
+            "balance": macc.balance - borrowed,
             "currency": macc.currency,
             "institution": "Manuální"
         })
-    
+
+    # Add manual investment accounts to the list
+    for macc in manual_investment_accounts:
+        total = sum(p.current_value for p in macc.positions)
+        accounts_list.append({
+            "id": f"manual-inv-{macc.id}",
+            "name": macc.name,
+            "type": "manual_investment",
+            "balance": total,
+            "currency": macc.currency,
+            "institution": "Manuální investice"
+        })
+
     return {
         "summary": {
             "total_balance": total_balance,
@@ -204,7 +232,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             "investment_balance": investment_balance,
             "manual_balance": manual_balance,
             "currency": "CZK",
-            "accounts_count": len(accounts) + len(manual_accounts)
+            "accounts_count": len(accounts) + len(manual_accounts) + len(manual_investment_accounts)
         },
         "monthly": {
             "income": income,
