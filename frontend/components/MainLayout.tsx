@@ -135,6 +135,9 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     let href = `/accounts/${account.id}`;
                     if (account.type === 'investment') {
                         href = '/investments';
+                    } else if (account.type === 'manual_investment' || account.id.startsWith('manual-inv-')) {
+                        const manualInvId = account.id.replace('manual-inv-', '');
+                        href = `/investments/manual/${manualInvId}`;
                     } else if (account.type === 'manual' || account.id.startsWith('manual-')) {
                         const manualId = account.id.replace('manual-', '');
                         href = `/manual-account/${manualId}`;
@@ -152,7 +155,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 </div>
                             ) : (
                                 <div className={`account-icon ${account.type}`}>
-                                    {account.type === 'bank' ? Icons.accountType.bank : account.type === 'manual' ? Icons.accountType.manual : Icons.accountType.investment}
+                                    {account.type === 'bank' ? Icons.accountType.bank : account.type === 'manual' ? Icons.accountType.manual : Icons.accountType.investment /* manual_investment also uses investment icon */}
                                 </div>
                             )}
                             <div className="account-info">

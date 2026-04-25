@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from config import get_settings
-from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts, contacts
+from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts, contacts, manual_investments
 from database import get_db
 
 # Centrální konfigurace logování — 12-Factor: logy jdou striktně na stdout (event stream)
@@ -61,6 +61,7 @@ app.include_router(monthly_budget.router)
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(manual_accounts.router, prefix="/manual-accounts", tags=["Manual Accounts"])
 app.include_router(contacts.router, prefix="/contacts", tags=["Contacts"])
+app.include_router(manual_investments.router, prefix="/manual-investments", tags=["Manual Investments"])
 
 @app.get("/")
 async def root():

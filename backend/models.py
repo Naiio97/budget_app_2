@@ -262,3 +262,50 @@ class PortfolioSnapshotModel(Base):
     positions_count = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class ManualInvestmentAccountModel(Base):
+    """Manuálně sledovaný investiční účet (bez API)"""
+    __tablename__ = "manual_investment_accounts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    currency = Column(String, default="CZK")
+    note = Column(String, nullable=True)
+    is_visible = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    positions = relationship("ManualInvestmentPositionModel", back_populates="account", cascade="all, delete-orphan")
+    snapshots = relationship("ManualInvestmentSnapshotModel", back_populates="account", cascade="all, delete-orphan")
+
+
+class ManualInvestmentPositionModel(Base):
+    """Pozice na manuálním investičním účtu"""
+    __tablename__ = "manual_investment_positions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, ForeignKey("manual_investment_accounts.id"), nullable=False)
+    name = Column(String, nullable=False)           # "VWCE", "Bitcoin", "Realitní fond"
+    quantity = Column(Float, nullable=True)          # počet kusů (volitelné)
+    avg_buy_price = Column(Float, nullable=True)     # průměrná nákupní cena (volitelné)
+    current_value = Column(Float, nullable=False)   # aktuální hodnota (uživatel zadává)
+    currency = Column(String, default="CZK")
+    note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    account = relationship("ManualInvestmentAccountModel", back_populates="positions")
+
+
+class ManualInvestmentSnapshotModel(Base):
+    """Snapshot celkové hodnoty manuálního investičního účtu — pro graf vývoje"""
+    __tablename__ = "manual_investment_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    account_id = Column(Integer, ForeignKey("manual_investment_accounts.id"), nullable=False)
+    snapshot_date = Column(String, nullable=False)  # YYYY-MM-DD
+    total_value = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    account = relationship("ManualInvestmentAccountModel", back_populates="snapshots")
+

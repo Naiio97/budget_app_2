@@ -546,3 +546,104 @@ export async function deleteGoal(id: number): Promise<{ status: string; id: numb
     if (!response.ok) throw new Error('Failed to delete goal');
     return response.json();
 }
+
+// === Manual Investments ===
+
+export interface ManualInvestmentPosition {
+    id: number;
+    name: string;
+    quantity: number | null;
+    avg_buy_price: number | null;
+    current_value: number;
+    currency: string;
+    note: string | null;
+    invested: number | null;
+    pnl: number | null;
+    pnl_pct: number | null;
+}
+
+export interface ManualInvestmentAccount {
+    id: number;
+    name: string;
+    currency: string;
+    note: string | null;
+    is_visible: boolean;
+    total_value: number;
+    invested: number;
+    pnl: number;
+    pnl_pct: number;
+    positions: ManualInvestmentPosition[];
+}
+
+export interface ManualInvestmentHistoryPoint {
+    date: string;
+    value: number;
+}
+
+export async function getManualInvestments(): Promise<ManualInvestmentAccount[]> {
+    const r = await fetch(`${API_BASE}/manual-investments/`);
+    if (!r.ok) throw new Error('Failed to fetch manual investments');
+    return r.json();
+}
+
+export async function getManualInvestment(id: number): Promise<ManualInvestmentAccount> {
+    const r = await fetch(`${API_BASE}/manual-investments/${id}`);
+    if (!r.ok) throw new Error('Failed to fetch manual investment');
+    return r.json();
+}
+
+export async function createManualInvestment(data: { name: string; currency?: string; note?: string }): Promise<ManualInvestmentAccount> {
+    const r = await fetch(`${API_BASE}/manual-investments/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) throw new Error('Failed to create manual investment');
+    return r.json();
+}
+
+export async function updateManualInvestment(id: number, data: { name?: string; currency?: string; note?: string; is_visible?: boolean }): Promise<ManualInvestmentAccount> {
+    const r = await fetch(`${API_BASE}/manual-investments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) throw new Error('Failed to update manual investment');
+    return r.json();
+}
+
+export async function deleteManualInvestment(id: number): Promise<void> {
+    const r = await fetch(`${API_BASE}/manual-investments/${id}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed to delete manual investment');
+}
+
+export async function getManualInvestmentHistory(id: number): Promise<ManualInvestmentHistoryPoint[]> {
+    const r = await fetch(`${API_BASE}/manual-investments/${id}/history`);
+    if (!r.ok) throw new Error('Failed to fetch history');
+    return r.json();
+}
+
+export async function createManualInvestmentPosition(accountId: number, data: { name: string; quantity?: number | null; avg_buy_price?: number | null; current_value: number; currency?: string; note?: string | null }): Promise<ManualInvestmentPosition> {
+    const r = await fetch(`${API_BASE}/manual-investments/${accountId}/positions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) throw new Error('Failed to create position');
+    return r.json();
+}
+
+export async function updateManualInvestmentPosition(accountId: number, positionId: number, data: { name?: string; quantity?: number | null; avg_buy_price?: number | null; current_value?: number; currency?: string; note?: string | null }): Promise<ManualInvestmentPosition> {
+    const r = await fetch(`${API_BASE}/manual-investments/${accountId}/positions/${positionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!r.ok) throw new Error('Failed to update position');
+    return r.json();
+}
+
+export async function deleteManualInvestmentPosition(accountId: number, positionId: number): Promise<void> {
+    const r = await fetch(`${API_BASE}/manual-investments/${accountId}/positions/${positionId}`, { method: 'DELETE' });
+    if (!r.ok) throw new Error('Failed to delete position');
+}

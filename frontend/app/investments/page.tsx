@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
@@ -12,12 +12,15 @@ import {
     getPortfolioDetail,
     getPositions,
     getPies,
+    getManualInvestments,
+    createManualInvestment,
     InvestmentPortfolio,
     InvestmentPortfolioDetail,
     PortfolioHistory,
     PortfolioPosition,
     Dividend,
     Pie as PieData,
+    ManualInvestmentAccount,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
@@ -36,6 +39,10 @@ import {
 
 export default function InvestmentsPage() {
     const [period, setPeriod] = useState('1M');
+    const [showNewAccountForm, setShowNewAccountForm] = useState(false);
+    const [newAccountName, setNewAccountName] = useState('');
+    const [newAccountCurrency, setNewAccountCurrency] = useState('CZK');
+    const qc = useQueryClient();
 
     const { data: portfolio, isLoading: loadingPortfolio, isError } = useQuery<InvestmentPortfolio>({
         queryKey: queryKeys.investmentPortfolio,
@@ -69,9 +76,27 @@ export default function InvestmentsPage() {
     });
     const pies = piesData?.pies ?? [];
 
+    const { data: manualInvestments = [] } = useQuery<ManualInvestmentAccount[]>({
+        queryKey: queryKeys.manualInvestments,
+        queryFn: getManualInvestments,
+    });
+
+    const createAccountMutation = useMutation({
+        mutationFn: () => createManualInvestment({ name: newAccountName.trim(), currency: newAccountCurrency }),
+        onSuccess: (acc) => {
+            qc.invalidateQueries({ queryKey: queryKeys.manualInvestments });
+            qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+            setShowNewAccountForm(false);
+            setNewAccountName('');
+        },
+    });
+
     const dividends: Dividend[] = dividendsData?.dividends || [];
     const loading = loadingPortfolio || loadingHistory;
     const error = isError ? 'Nepodařilo se načíst investice' : null;
+
+    const manualTotal = manualInvestments.reduce((s, a) => s + a.total_value, 0);
+    const combinedTotal = (portfolio?.total_value ?? 0) + manualTotal;
 
     const PIE_ICON_MAP: Record<string, string> = {
         Umbrella: '☂️', Home: '🏠', Savings: '🏦', Vacation: '🌴', Health: '🏥',
@@ -167,14 +192,21 @@ export default function InvestmentsPage() {
                 </header>
 
                 {/* Summary Card */}
-                {portfolio && (
+                {(portfolio || manualInvestments.length > 0) && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 'var(--spacing-lg)' }}>
                             <div>
-                                <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Celková hodnota</div>
-                                <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>
-                                    {formatCurrency(portfolio.total_value, portfolio.currency)}
+                                <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>
+                                    {manualInvestments.length > 0 && portfolio ? 'Celkem (T212 + manuální)' : 'Celková hodnota'}
                                 </div>
+                                <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>
+                                    {formatCurrency(combinedTotal, 'CZK')}
+                                </div>
+                                {manualInvestments.length > 0 && portfolio && (
+                                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginTop: '4px' }}>
+                                        T212: {formatCurrency(portfolio.total_value, 'CZK')} · Manuální: {formatCurrency(manualTotal, 'CZK')}
+                                    </div>
+                                )}
                             </div>
                             {detail && detail.invested > 0 && (
                                 <>
@@ -503,6 +535,64 @@ export default function InvestmentsPage() {
                         </GlassCard>
                     )}
                 </div>
+
+                {/* Manual investment accounts */}
+                <GlassCard style={{ marginTop: 'var(--spacing-lg)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                        <h3 style={{ margin: 0 }}>{Icons.accountType.investment} Manuální investiční účty</h3>
+                        <button className="btn btn-primary" onClick={() => setShowNewAccountForm(v => !v)} style={{ fontSize: '0.85rem' }}>
+                            {showNewAccountForm ? 'Zrušit' : '+ Nový účet'}
+                        </button>
+                    </div>
+
+                    {showNewAccountForm && (
+                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                            <div style={{ flex: '1 1 180px' }}>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Název</label>
+                                <input className="input" autoFocus value={newAccountName} onChange={e => setNewAccountName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newAccountName.trim()) createAccountMutation.mutate(); }} placeholder="Degiro, Fond XY…" style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ flex: '0 1 100px' }}>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Měna</label>
+                                <input className="input" value={newAccountCurrency} onChange={e => setNewAccountCurrency(e.target.value)} placeholder="CZK" style={{ width: '100%' }} />
+                            </div>
+                            <button className="btn btn-primary" disabled={!newAccountName.trim() || createAccountMutation.isPending} onClick={() => createAccountMutation.mutate()} style={{ fontSize: '0.85rem' }}>
+                                {createAccountMutation.isPending ? 'Vytvářím…' : 'Vytvořit'}
+                            </button>
+                        </div>
+                    )}
+
+                    {manualInvestments.length === 0 && !showNewAccountForm && (
+                        <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-secondary)' }}>
+                            Zatím žádné manuální investiční účty.
+                        </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {manualInvestments.map(acc => (
+                            <Link key={acc.id} href={`/investments/manual/${acc.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center', padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'background 0.15s' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                                >
+                                    <div>
+                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{acc.name}</div>
+                                        <div className="text-secondary" style={{ fontSize: '0.75rem', marginTop: '2px' }}>
+                                            {acc.positions.length} pozic{acc.positions.length === 1 ? 'e' : acc.positions.length < 5 ? 'e' : ''}
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: 600, fontSize: '1.05rem' }}>{formatCurrency(acc.total_value, acc.currency)}</div>
+                                        {acc.pnl !== 0 && acc.invested > 0 && (
+                                            <div style={{ fontSize: '0.78rem', color: acc.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                {acc.pnl >= 0 ? '+' : ''}{formatCurrency(acc.pnl, acc.currency)} ({acc.pnl_pct.toFixed(2)} %)
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </GlassCard>
             </div>
         </MainLayout>
     );
