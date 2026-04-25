@@ -5,12 +5,52 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
+from routers.contacts import normalize_iban
 import json
 
 router = APIRouter()
+
+
+def _build_recent_tx(parsed, contacts_by_iban):
+    result = []
+    for tx, account_name, creditor_name, debtor_name, creditor_iban, debtor_iban in parsed:
+        name_source = None
+        if (tx.amount or 0) < 0:
+            if creditor_name:
+                name_source = "bank"
+            elif creditor_iban and creditor_iban in contacts_by_iban:
+                c = contacts_by_iban[creditor_iban]
+                creditor_name = c.name
+                name_source = f"contact_{c.source}"
+        else:
+            if debtor_name:
+                name_source = "bank"
+            elif debtor_iban and debtor_iban in contacts_by_iban:
+                c = contacts_by_iban[debtor_iban]
+                debtor_name = c.name
+                name_source = f"contact_{c.source}"
+        result.append({
+            "id": tx.id,
+            "date": tx.date,
+            "description": tx.description,
+            "amount": tx.amount,
+            "currency": tx.currency,
+            "category": tx.category,
+            "account_id": tx.account_id,
+            "account_type": tx.account_type or "bank",
+            "account_name": account_name,
+            "transaction_type": tx.transaction_type or "normal",
+            "is_excluded": tx.is_excluded or False,
+            "creditor_name": creditor_name,
+            "debtor_name": debtor_name,
+            "creditor_iban": creditor_iban,
+            "debtor_iban": debtor_iban,
+            "counterparty_name_source": name_source,
+        })
+    return result
 
 
 @router.get("/")
@@ -69,6 +109,33 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         .limit(5)
     )
     recent_tx_rows = tx_result.all()
+
+    # Parse raw_json for counterparty fields and bulk-lookup missing names in contacts
+    recent_tx_parsed = []
+    needed_ibans: set[str] = set()
+    for tx, account_name in recent_tx_rows:
+        raw: dict = {}
+        if tx.raw_json:
+            try:
+                raw = json.loads(tx.raw_json) or {}
+            except Exception:
+                pass
+        creditor_name = raw.get("creditorName")
+        debtor_name = raw.get("debtorName")
+        creditor_iban = normalize_iban((raw.get("creditorAccount") or {}).get("iban") or (raw.get("creditorAccount") or {}).get("bban"))
+        debtor_iban = normalize_iban((raw.get("debtorAccount") or {}).get("iban") or (raw.get("debtorAccount") or {}).get("bban"))
+        if not creditor_name and creditor_iban:
+            needed_ibans.add(creditor_iban)
+        if not debtor_name and debtor_iban:
+            needed_ibans.add(debtor_iban)
+        recent_tx_parsed.append((tx, account_name, creditor_name, debtor_name, creditor_iban, debtor_iban))
+
+    contacts_by_iban: dict[str, ContactModel] = {}
+    if needed_ibans:
+        contact_rows = await db.execute(
+            select(ContactModel).where(ContactModel.iban.in_(list(needed_ibans)))
+        )
+        contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
     
     # Get transactions for last 30 days for calculations
     date_30_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -145,20 +212,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             "savings": income - expenses
         },
         "categories": categories,
-        "recent_transactions": [
-            {
-                "id": tx.id,
-                "date": tx.date,
-                "description": tx.description,
-                "amount": tx.amount,
-                "currency": tx.currency,
-                "category": tx.category,
-                "account_name": account_name,
-                "transaction_type": tx.transaction_type,
-                "is_excluded": tx.is_excluded
-            }
-            for tx, account_name in recent_tx_rows
-        ],
+        "recent_transactions": _build_recent_tx(recent_tx_parsed, contacts_by_iban),
         "accounts": accounts_list
     }
 

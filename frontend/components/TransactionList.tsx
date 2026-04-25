@@ -122,10 +122,34 @@ export default function TransactionList({ transactions: initialTransactions, sho
         return { income, expense };
     };
 
-    const getDisplayName = (tx: Transaction) =>
-        tx.amount < 0
-            ? (tx.creditor_name || tx.description)
-            : (tx.debtor_name || tx.creditor_name || tx.description);
+    // Convert Czech IBAN to human-readable account number
+    const ibanToCzAccount = (iban: string): string | null => {
+        if (!iban || !iban.startsWith('CZ') || iban.length !== 24) return null;
+        const bankCode = iban.slice(4, 8);
+        const prefix = parseInt(iban.slice(8, 14), 10);
+        const account = iban.slice(14).replace(/^0+/, '') || '0';
+        return prefix > 0 ? `${prefix}-${account}/${bankCode}` : `${account}/${bankCode}`;
+    };
+
+    const formatAccount = (iban: string | null | undefined): { display: string } | null => {
+        if (!iban) return null;
+        const czAccount = ibanToCzAccount(iban);
+        if (czAccount) return { display: czAccount };
+        if (iban.includes('/')) return { display: iban };
+        return { display: iban.replace(/(.{4})/g, '$1 ').trim() };
+    };
+
+    const getDisplayName = (tx: Transaction): string => {
+        if (tx.amount < 0) {
+            return tx.creditor_name
+                || formatAccount(tx.creditor_iban)?.display
+                || tx.description;
+        }
+        return tx.debtor_name
+            || formatAccount(tx.debtor_iban)?.display
+            || tx.creditor_name
+            || tx.description;
+    };
 
     const handleSaveContact = async (iban: string, direction: 'creditor' | 'debtor') => {
         const trimmed = nameInput.trim();
@@ -180,22 +204,6 @@ export default function TransactionList({ transactions: initialTransactions, sho
         } finally {
             setUpdatingId(null);
         }
-    };
-
-    // Convert Czech IBAN to human-readable account number
-    const ibanToCzAccount = (iban: string): string | null => {
-        if (!iban || !iban.startsWith('CZ') || iban.length !== 24) return null;
-        const bankCode = iban.slice(4, 8);
-        const prefix = parseInt(iban.slice(8, 14), 10);
-        const account = iban.slice(14).replace(/^0+/, '') || '0';
-        return prefix > 0 ? `${prefix}-${account}/${bankCode}` : `${account}/${bankCode}`;
-    };
-
-    const formatAccount = (iban: string | null | undefined): { display: string } | null => {
-        if (!iban) return null;
-        const czAccount = ibanToCzAccount(iban);
-        if (czAccount) return { display: czAccount };
-        return { display: iban.replace(/(.{4})/g, '$1 ').trim() };
     };
 
     const modalTx = selectedTx ? transactions.find(t => t.id === selectedTx.id) || selectedTx : null;
