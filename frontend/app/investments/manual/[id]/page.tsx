@@ -195,68 +195,35 @@ export default function ManualInvestmentDetailPage() {
                     </div>
                 </header>
 
-                {/* Summary */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--spacing-lg)' }}>
-                        <div>
-                            <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Celková hodnota</div>
-                            <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>{fmt(account.total_value, account.currency)}</div>
-                        </div>
-                        {account.invested > 0 && (
-                            <>
-                                <div>
-                                    <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Investováno</div>
-                                    <div style={{ fontSize: '1.4rem', fontWeight: 500 }}>{fmt(account.invested, account.currency)}</div>
-                                </div>
-                                <div>
-                                    <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Zisk / Ztráta</div>
-                                    <div style={{ fontSize: '1.4rem', fontWeight: 600, color: account.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                                        {account.pnl >= 0 ? '+' : ''}{fmt(account.pnl, account.currency)}
-                                        <span style={{ fontSize: '0.85rem', marginLeft: '6px', opacity: 0.8 }}>
-                                            ({account.pnl_pct >= 0 ? '+' : ''}{account.pnl_pct.toFixed(2)} %)
-                                        </span>
+                {/* Top row: Summary | Allocation | Positions */}
+                <div style={{ display: 'grid', gridTemplateColumns: `auto${pieData.length > 0 ? ' 280px' : ''} 1fr`, gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
+
+                    {/* Summary */}
+                    <GlassCard>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                            <div>
+                                <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Celková hodnota</div>
+                                <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>{fmt(account.total_value, account.currency)}</div>
+                            </div>
+                            {account.invested > 0 && (
+                                <>
+                                    <div>
+                                        <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Investováno</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: 500 }}>{fmt(account.invested, account.currency)}</div>
                                     </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </GlassCard>
-
-                {/* Value history — full width */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ margin: '0 0 var(--spacing-md)' }}>{Icons.section.valueGrowth} Vývoj hodnoty</h3>
-                    {history.length >= 2 ? (
-                        <div style={{ height: '220px' }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={history}>
-                                    <defs>
-                                        <linearGradient id="miGrad" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                                    <XAxis dataKey="date" stroke="rgba(255,255,255,0.4)" fontSize={11} tickFormatter={fmtDate} />
-                                    <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} width={40} />
-                                    <Tooltip
-                                        contentStyle={{ background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px' }}
-                                        labelFormatter={v => new Date(v).toLocaleDateString('cs-CZ')}
-                                        formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
-                                    />
-                                    <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#miGrad)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                                    <div>
+                                        <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Zisk / Ztráta</div>
+                                        <div style={{ fontSize: '1.2rem', fontWeight: 600, color: account.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                            {account.pnl >= 0 ? '+' : ''}{fmt(account.pnl, account.currency)}
+                                            <div style={{ fontSize: '0.85rem', opacity: 0.8, fontWeight: 400 }}>
+                                                {account.pnl_pct >= 0 ? '+' : ''}{account.pnl_pct.toFixed(2)} %
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
-                    ) : (
-                        <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
-                            <span style={{ fontSize: '1.5rem' }}>📈</span>
-                            <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Graf se plní při každé aktualizaci hodnot</span>
-                        </div>
-                    )}
-                </GlassCard>
-
-                {/* Allocation + Positions side by side */}
-                <div style={{ display: 'grid', gridTemplateColumns: pieData.length > 0 ? '280px 1fr' : '1fr', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
+                    </GlassCard>
 
                     {/* Allocation pie */}
                     {pieData.length > 0 && (
@@ -357,6 +324,32 @@ export default function ManualInvestmentDetailPage() {
                 </GlassCard>
 
                 </div>{/* end allocation + positions grid */}
+
+                {/* Value history chart */}
+                {history.length > 1 && (
+                    <GlassCard>
+                        <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Vývoj hodnoty</h3>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <AreaChart data={history} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="manualInvGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                <YAxis tickFormatter={v => fmt(v, account.currency)} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
+                                <Tooltip
+                                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                    formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
+                                    labelFormatter={(l: string) => fmtDate(l)}
+                                />
+                                <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </GlassCard>
+                )}
 
             </div>
         </MainLayout>
