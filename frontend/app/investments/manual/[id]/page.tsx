@@ -14,6 +14,7 @@ import {
     updateManualInvestment,
     deleteManualInvestment,
     ManualInvestmentPosition,
+    ManualInvestmentAccount,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
@@ -110,7 +111,11 @@ export default function ManualInvestmentDetailPage() {
 
     const deleteAccountMutation = useMutation({
         mutationFn: () => deleteManualInvestment(id),
-        onSuccess: () => { qc.invalidateQueries({ queryKey: queryKeys.dashboard }); router.push('/investments'); },
+        onSuccess: () => {
+            qc.setQueryData<ManualInvestmentAccount[]>(queryKeys.manualInvestments, (old = []) => old.filter(a => a.id !== id));
+            qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+            router.push('/investments');
+        },
     });
 
     const fmt = (v: number, cur = 'CZK') => new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: cur, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
@@ -179,6 +184,9 @@ export default function ManualInvestmentDetailPage() {
                             <>
                                 <h1 style={{ margin: 0, fontSize: '1.75rem' }}>{Icons.accountType.investment} {account.name}</h1>
                                 <button className="btn" onClick={() => { setNameInput(account.name); setEditingName(true); }} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>{Icons.action.edit} Přejmenovat</button>
+                                <button className="btn" onClick={() => { if (confirm(`Opravdu smazat účet "${account.name}" i se všemi pozicemi?`)) deleteAccountMutation.mutate(); }} style={{ fontSize: '0.8rem', padding: '4px 10px', color: 'var(--accent-danger)', borderColor: 'rgba(239,68,68,0.4)', marginLeft: 'auto' }}>
+                                    Smazat účet
+                                </button>
                             </>
                         )}
                     </div>
@@ -345,13 +353,6 @@ export default function ManualInvestmentDetailPage() {
                     </div>
                 </GlassCard>
 
-                {/* Danger zone */}
-                <GlassCard>
-                    <h3 style={{ margin: '0 0 var(--spacing-md)', color: 'var(--accent-danger)' }}>Nebezpečná zóna</h3>
-                    <button className="btn" onClick={() => { if (confirm(`Opravdu smazat účet "${account.name}" i se všemi pozicemi?`)) deleteAccountMutation.mutate(); }} style={{ color: 'var(--accent-danger)', borderColor: 'var(--accent-danger)', fontSize: '0.85rem' }}>
-                        Smazat účet
-                    </button>
-                </GlassCard>
             </div>
         </MainLayout>
     );
