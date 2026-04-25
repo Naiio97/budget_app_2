@@ -83,8 +83,8 @@ export default function InvestmentsPage() {
 
     const createAccountMutation = useMutation({
         mutationFn: () => createManualInvestment({ name: newAccountName.trim(), currency: newAccountCurrency }),
-        onSuccess: (acc) => {
-            qc.invalidateQueries({ queryKey: queryKeys.manualInvestments });
+        onSuccess: (newAcc) => {
+            qc.setQueryData<ManualInvestmentAccount[]>(queryKeys.manualInvestments, (old = []) => [...old, newAcc]);
             qc.invalidateQueries({ queryKey: queryKeys.dashboard });
             setShowNewAccountForm(false);
             setNewAccountName('');
