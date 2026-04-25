@@ -195,6 +195,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
         if (!iban) return null;
         const czAccount = ibanToCzAccount(iban);
         if (czAccount) return { display: czAccount };
+        if (iban.includes('/')) return { display: iban };
         return { display: iban.replace(/(.{4})/g, '$1 ').trim() };
     };
 

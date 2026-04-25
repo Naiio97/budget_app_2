@@ -46,7 +46,7 @@ async def list_contacts(db: AsyncSession = Depends(get_db)):
     return list(result.scalars().all())
 
 
-@router.get("/{iban}", response_model=Contact)
+@router.get("/{iban:path}", response_model=Contact)
 async def get_contact(iban: str, db: AsyncSession = Depends(get_db)):
     normalized = normalize_iban(iban)
     if not normalized:
@@ -57,7 +57,7 @@ async def get_contact(iban: str, db: AsyncSession = Depends(get_db)):
     return contact
 
 
-@router.put("/{iban}", response_model=Contact)
+@router.put("/{iban:path}", response_model=Contact)
 async def upsert_contact(
     iban: str,
     data: ContactUpsert,
@@ -90,7 +90,7 @@ async def upsert_contact(
     return contact
 
 
-@router.delete("/{iban}")
+@router.delete("/{iban:path}")
 async def delete_contact(iban: str, db: AsyncSession = Depends(get_db)):
     normalized = normalize_iban(iban)
     if not normalized:
