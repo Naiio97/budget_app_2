@@ -222,40 +222,41 @@ export default function ManualInvestmentDetailPage() {
                     </div>
                 </GlassCard>
 
-                {/* Charts row */}
-                <div style={{ display: 'grid', gridTemplateColumns: history.length >= 2 ? '1fr 280px' : '1fr', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
-                    {/* Value history */}
-                    <GlassCard>
-                        <h3 style={{ margin: '0 0 var(--spacing-md)' }}>{Icons.section.valueGrowth} Vývoj hodnoty</h3>
-                        {history.length >= 2 ? (
-                            <div style={{ height: '220px' }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={history}>
-                                        <defs>
-                                            <linearGradient id="miGrad" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                                        <XAxis dataKey="date" stroke="rgba(255,255,255,0.4)" fontSize={11} tickFormatter={fmtDate} />
-                                        <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} width={40} />
-                                        <Tooltip
-                                            contentStyle={{ background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px' }}
-                                            labelFormatter={v => new Date(v).toLocaleDateString('cs-CZ')}
-                                            formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
-                                        />
-                                        <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#miGrad)" />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                        ) : (
-                            <div style={{ height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
-                                <span style={{ fontSize: '1.5rem' }}>📈</span>
-                                <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Graf se plní při každé aktualizaci hodnot</span>
-                            </div>
-                        )}
-                    </GlassCard>
+                {/* Value history — full width */}
+                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                    <h3 style={{ margin: '0 0 var(--spacing-md)' }}>{Icons.section.valueGrowth} Vývoj hodnoty</h3>
+                    {history.length >= 2 ? (
+                        <div style={{ height: '220px' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={history}>
+                                    <defs>
+                                        <linearGradient id="miGrad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                                    <XAxis dataKey="date" stroke="rgba(255,255,255,0.4)" fontSize={11} tickFormatter={fmtDate} />
+                                    <YAxis stroke="rgba(255,255,255,0.4)" fontSize={11} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} width={40} />
+                                    <Tooltip
+                                        contentStyle={{ background: 'rgba(30,30,40,0.95)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px' }}
+                                        labelFormatter={v => new Date(v).toLocaleDateString('cs-CZ')}
+                                        formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
+                                    />
+                                    <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#miGrad)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
+                            <span style={{ fontSize: '1.5rem' }}>📈</span>
+                            <span className="text-secondary" style={{ fontSize: '0.85rem' }}>Graf se plní při každé aktualizaci hodnot</span>
+                        </div>
+                    )}
+                </GlassCard>
+
+                {/* Allocation + Positions side by side */}
+                <div style={{ display: 'grid', gridTemplateColumns: pieData.length > 0 ? '280px 1fr' : '1fr', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
 
                     {/* Allocation pie */}
                     {pieData.length > 0 && (
@@ -281,10 +282,9 @@ export default function ManualInvestmentDetailPage() {
                             </div>
                         </GlassCard>
                     )}
-                </div>
 
                 {/* Positions */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
+                <GlassCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
                         <h3 style={{ margin: 0 }}>Pozice</h3>
                         <button className="btn btn-primary" onClick={() => setShowAddForm(v => !v)} style={{ fontSize: '0.85rem' }}>
@@ -355,6 +355,8 @@ export default function ManualInvestmentDetailPage() {
                         ))}
                     </div>
                 </GlassCard>
+
+                </div>{/* end allocation + positions grid */}
 
             </div>
         </MainLayout>
