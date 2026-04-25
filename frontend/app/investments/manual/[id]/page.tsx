@@ -195,137 +195,144 @@ export default function ManualInvestmentDetailPage() {
                     </div>
                 </header>
 
-                {/* Top row: Summary | Allocation | Positions */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
+                {/* Two-column layout: left = summary + pie, right = positions */}
+                <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
 
-                    {/* Summary */}
-                    <GlassCard>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-                            <div>
-                                <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Celková hodnota</div>
-                                <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>{fmt(account.total_value, account.currency)}</div>
-                            </div>
-                            {account.invested > 0 && (
-                                <>
-                                    <div>
-                                        <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Investováno</div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 500 }}>{fmt(account.invested, account.currency)}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-secondary" style={{ fontSize: '0.8rem', marginBottom: '4px' }}>Zisk / Ztráta</div>
-                                        <div style={{ fontSize: '1.2rem', fontWeight: 600, color: account.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                                            {account.pnl >= 0 ? '+' : ''}{fmt(account.pnl, account.currency)}
-                                            <div style={{ fontSize: '0.85rem', opacity: 0.8, fontWeight: 400 }}>
-                                                {account.pnl_pct >= 0 ? '+' : ''}{account.pnl_pct.toFixed(2)} %
+                    {/* Left column */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+
+                        {/* Summary */}
+                        <GlassCard>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                                <div>
+                                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Celková hodnota</div>
+                                    <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>{fmt(account.total_value, account.currency)}</div>
+                                </div>
+                                {account.invested > 0 && (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', paddingTop: 'var(--spacing-sm)', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                                            <div>
+                                                <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '2px' }}>Investováno</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: 500 }}>{fmt(account.invested, account.currency)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '2px' }}>Zisk / Ztráta</div>
+                                                <div style={{ fontSize: '1rem', fontWeight: 600, color: account.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                    {account.pnl >= 0 ? '+' : ''}{fmt(account.pnl, account.currency)}
+                                                    <span style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: 400, marginLeft: '4px' }}>
+                                                        ({account.pnl_pct >= 0 ? '+' : ''}{account.pnl_pct.toFixed(2)} %)
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </>
-                            )}
+                                    </>
+                                )}
+                            </div>
+                        </GlassCard>
+
+                        {/* Allocation pie */}
+                        {pieData.length > 0 && (
+                            <GlassCard>
+                                <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Alokace</h3>
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <PieChart>
+                                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} dataKey="value" strokeWidth={0}>
+                                            {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                            formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+                                    {pieData.map((p, i) => (
+                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: COLORS[i % COLORS.length], flexShrink: 0 }} />
+                                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                                            <span className="text-secondary">{account.total_value ? ((p.value / account.total_value) * 100).toFixed(1) : 0} %</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </GlassCard>
+                        )}
+
+                    </div>{/* end left column */}
+
+                    {/* Right column: Positions */}
+                    <GlassCard>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
+                            <h3 style={{ margin: 0 }}>Pozice</h3>
+                            <button className="btn btn-primary" onClick={() => setShowAddForm(v => !v)} style={{ fontSize: '0.85rem' }}>
+                                {showAddForm ? 'Zrušit' : '+ Přidat pozici'}
+                            </button>
+                        </div>
+
+                        {/* Add form */}
+                        {showAddForm && (
+                            <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
+                                <PositionFormFields form={addForm} onChange={setAddForm} />
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                    <button className="btn btn-primary" disabled={!addForm.name || !addForm.current_value || addMutation.isPending} onClick={() => addMutation.mutate(addForm)} style={{ fontSize: '0.85rem' }}>
+                                        {addMutation.isPending ? 'Ukládám…' : 'Přidat'}
+                                    </button>
+                                    <button className="btn" onClick={() => { setShowAddForm(false); setAddForm(emptyForm); }} style={{ fontSize: '0.85rem' }}>Zrušit</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Position list */}
+                        {account.positions.length === 0 && !showAddForm && (
+                            <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-secondary)' }}>
+                                Zatím žádné pozice. Klikni na + Přidat pozici.
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {account.positions.map(pos => (
+                                <div key={pos.id}>
+                                    {editingId === pos.id ? (
+                                        <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: 'var(--spacing-md)' }}>
+                                            <PositionFormFields form={editForm} onChange={setEditForm} />
+                                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                                                <button className="btn btn-primary" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ posId: pos.id, data: editForm })} style={{ fontSize: '0.85rem' }}>
+                                                    {updateMutation.isPending ? 'Ukládám…' : 'Uložit'}
+                                                </button>
+                                                <button className="btn" onClick={() => setEditingId(null)} style={{ fontSize: '0.85rem' }}>Zrušit</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{pos.name}</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                                    {pos.quantity != null && <span>{pos.quantity} ks</span>}
+                                                    {pos.quantity != null && pos.avg_buy_price != null && <span> · nákup {fmt(pos.avg_buy_price, pos.currency)}/ks</span>}
+                                                    {pos.note && <span> · {pos.note}</span>}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontWeight: 600 }}>{fmt(pos.current_value, pos.currency)}</div>
+                                                    {pos.pnl != null && (
+                                                        <div style={{ fontSize: '0.78rem', color: pos.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                            {pos.pnl >= 0 ? '+' : ''}{fmt(pos.pnl, pos.currency)} ({pos.pnl_pct?.toFixed(2)} %)
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                    <button className="btn" onClick={() => startEdit(pos)} style={{ padding: '4px 8px', fontSize: '0.78rem' }}>{Icons.action.edit}</button>
+                                                    <button className="btn" onClick={() => { if (confirm(`Smazat pozici "${pos.name}"?`)) deleteMutation.mutate(pos.id); }} style={{ padding: '4px 8px', fontSize: '0.78rem', color: 'var(--accent-danger)' }}>✕</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     </GlassCard>
 
-                    {/* Allocation pie */}
-                    {pieData.length > 0 && (
-                        <GlassCard>
-                            <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Alokace</h3>
-                            <ResponsiveContainer width="100%" height={200}>
-                            <PieChart>
-                                <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" strokeWidth={0}>
-                                    {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                </Pie>
-                                <Tooltip
-                                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
-                                    formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
-                                />
-                            </PieChart>
-                            </ResponsiveContainer>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                                {pieData.map((p, i) => (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                                        <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: COLORS[i % COLORS.length], flexShrink: 0 }} />
-                                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                                        <span className="text-secondary">{account.total_value ? ((p.value / account.total_value) * 100).toFixed(1) : 0} %</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </GlassCard>
-                    )}
-
-                {/* Positions */}
-                <GlassCard>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <h3 style={{ margin: 0 }}>Pozice</h3>
-                        <button className="btn btn-primary" onClick={() => setShowAddForm(v => !v)} style={{ fontSize: '0.85rem' }}>
-                            {showAddForm ? 'Zrušit' : '+ Přidat pozici'}
-                        </button>
-                    </div>
-
-                    {/* Add form */}
-                    {showAddForm && (
-                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
-                            <PositionFormFields form={addForm} onChange={setAddForm} />
-                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                                <button className="btn btn-primary" disabled={!addForm.name || !addForm.current_value || addMutation.isPending} onClick={() => addMutation.mutate(addForm)} style={{ fontSize: '0.85rem' }}>
-                                    {addMutation.isPending ? 'Ukládám…' : 'Přidat'}
-                                </button>
-                                <button className="btn" onClick={() => { setShowAddForm(false); setAddForm(emptyForm); }} style={{ fontSize: '0.85rem' }}>Zrušit</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Position list */}
-                    {account.positions.length === 0 && !showAddForm && (
-                        <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-secondary)' }}>
-                            Zatím žádné pozice. Klikni na + Přidat pozici.
-                        </div>
-                    )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {account.positions.map(pos => (
-                            <div key={pos.id}>
-                                {editingId === pos.id ? (
-                                    <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: 'var(--spacing-md)' }}>
-                                        <PositionFormFields form={editForm} onChange={setEditForm} />
-                                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                                            <button className="btn btn-primary" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ posId: pos.id, data: editForm })} style={{ fontSize: '0.85rem' }}>
-                                                {updateMutation.isPending ? 'Ukládám…' : 'Uložit'}
-                                            </button>
-                                            <button className="btn" onClick={() => setEditingId(null)} style={{ fontSize: '0.85rem' }}>Zrušit</button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{pos.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                                                {pos.quantity != null && <span>{pos.quantity} ks</span>}
-                                                {pos.quantity != null && pos.avg_buy_price != null && <span> · nákup {fmt(pos.avg_buy_price, pos.currency)}/ks</span>}
-                                                {pos.note && <span> · {pos.note}</span>}
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div style={{ fontWeight: 600 }}>{fmt(pos.current_value, pos.currency)}</div>
-                                                {pos.pnl != null && (
-                                                    <div style={{ fontSize: '0.78rem', color: pos.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                                                        {pos.pnl >= 0 ? '+' : ''}{fmt(pos.pnl, pos.currency)} ({pos.pnl_pct?.toFixed(2)} %)
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div style={{ display: 'flex', gap: '4px' }}>
-                                                <button className="btn" onClick={() => startEdit(pos)} style={{ padding: '4px 8px', fontSize: '0.78rem' }}>{Icons.action.edit}</button>
-                                                <button className="btn" onClick={() => { if (confirm(`Smazat pozici "${pos.name}"?`)) deleteMutation.mutate(pos.id); }} style={{ padding: '4px 8px', fontSize: '0.78rem', color: 'var(--accent-danger)' }}>✕</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </GlassCard>
-
-                </div>{/* end allocation + positions grid */}
+                </div>{/* end two-column layout */}
 
                 {/* Value history chart */}
                 {history.length > 1 && (
