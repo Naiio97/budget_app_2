@@ -196,7 +196,7 @@ export default function ManualInvestmentDetailPage() {
                 </header>
 
                 {/* Top row: Summary | Allocation | Positions */}
-                <div style={{ display: 'grid', gridTemplateColumns: `auto${pieData.length > 0 ? ' 280px' : ''} 1fr`, gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
 
                     {/* Summary */}
                     <GlassCard>
@@ -229,8 +229,9 @@ export default function ManualInvestmentDetailPage() {
                     {pieData.length > 0 && (
                         <GlassCard>
                             <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Alokace</h3>
-                            <PieChart width={240} height={200}>
-                                <Pie data={pieData} cx={115} cy={95} innerRadius={55} outerRadius={85} dataKey="value" strokeWidth={0}>
+                            <ResponsiveContainer width="100%" height={200}>
+                            <PieChart>
+                                <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} dataKey="value" strokeWidth={0}>
                                     {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                 </Pie>
                                 <Tooltip
@@ -238,6 +239,7 @@ export default function ManualInvestmentDetailPage() {
                                     formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
                                 />
                             </PieChart>
+                            </ResponsiveContainer>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                                 {pieData.map((p, i) => (
                                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
