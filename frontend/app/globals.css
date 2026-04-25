@@ -1068,6 +1068,21 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   border-radius: var(--radius-sm);
 }
 
+/* ══ PAGE HEADER ═════════════════════════════════════════════ */
+.page-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex-wrap: wrap; gap: 12px 20px;
+  padding: var(--spacing-lg) 0 var(--spacing-md);
+}
+.page-head h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.1; }
+.page-head .sub { font-size: 13px; color: var(--text-3); margin-top: 4px; letter-spacing: -0.01em; }
+
+/* ══ SURFACE SUNKEN standalone ════════════════════════════════ */
+.surface-sunken {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-md);
+}
+
 /* ══ UTILITY ═════════════════════════════════════════════════ */
 .hstack  { display: flex; align-items: center; gap: var(--spacing-sm); }
 .vstack  { display: flex; flex-direction: column; }

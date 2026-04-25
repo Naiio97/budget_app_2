@@ -168,13 +168,18 @@ export default function TransactionsPage() {
 
     return (
         <MainLayout>
-            <div className="page-container">
-                <div style={{ marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
-                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transakce</h1>
+            <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
+
+                {/* Page header */}
+                <div className="page-head">
+                    <div>
+                        <h1>Transakce</h1>
+                        <div className="sub">{totalItems} položek</div>
+                    </div>
                 </div>
 
-                {/* Compact Filters */}
-                <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', flexShrink: 0, zIndex: 10, position: 'relative' }}>
+                {/* Filters */}
+                <div className="surface" style={{ padding: 'var(--spacing-md)', flexShrink: 0, zIndex: 10, position: 'relative' }}>
                     <div style={{
                         display: 'flex',
                         flexWrap: 'wrap',
@@ -239,10 +244,10 @@ export default function TransactionsPage() {
                             />
                         </div>
                     </div>
-                </GlassCard>
+                </div>
 
                 {/* Summary Stats Bar */}
-                <div className="tx-summary-bar animate-fade-in">
+                <div className="tx-summary-bar">
                     <div className="tx-summary-item">
                         <span className="tx-summary-label">Položek</span>
                         <span className="tx-summary-value">{totalItems}</span>
@@ -250,20 +255,19 @@ export default function TransactionsPage() {
                     <div className="tx-summary-divider" />
                     <div className="tx-summary-item">
                         <span className="tx-summary-label">Příjmy</span>
-                        <span className="tx-summary-value" style={{ color: 'var(--accent-success)' }}>+{formatCurrency(monthlyStats.income)}</span>
+                        <span className="tx-summary-value" style={{ color: 'var(--pos)' }}>+{formatCurrency(monthlyStats.income)}</span>
                     </div>
                     <div className="tx-summary-divider" />
                     <div className="tx-summary-item">
                         <span className="tx-summary-label">Výdaje</span>
-                        <span className="tx-summary-value" style={{ color: 'var(--accent-danger)' }}>{formatCurrency(monthlyStats.expenses)}</span>
+                        <span className="tx-summary-value" style={{ color: 'var(--neg)' }}>{formatCurrency(monthlyStats.expenses)}</span>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
-                    <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
-                        <div style={{ paddingBottom: 'var(--spacing-md)' }}>
-                            <TransactionList transactions={finalDisplayTransactions} showAccount />
-                        </div>
+                <div className="surface" style={{ display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
+                    <div className="card-body-nopad">
+                        <TransactionList transactions={finalDisplayTransactions} showAccount />
+                    </div>
 
                         {/* Mobile: Infinite scroll sentinel + loading */}
                         {isMobile && !loading && (
@@ -290,9 +294,8 @@ export default function TransactionsPage() {
                                 justifyContent: 'center',
                                 alignItems: 'center',
                                 gap: 'var(--spacing-lg)',
-                                paddingTop: 'var(--spacing-md)',
-                                marginTop: 'auto',
-                                borderTop: '1px solid rgba(255,255,255,0.1)',
+                                padding: 'var(--spacing-md) var(--spacing-lg)',
+                                borderTop: '0.5px solid var(--border)',
                                 flexShrink: 0
                             }}>
                                 <button
@@ -316,7 +319,6 @@ export default function TransactionsPage() {
                                 </button>
                             </div>
                         )}
-                    </GlassCard>
                 </div>
             </div>
         </MainLayout>

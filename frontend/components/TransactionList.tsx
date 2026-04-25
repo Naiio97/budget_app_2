@@ -217,8 +217,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     if (transactions.length === 0) {
         return (
-            <div className="glass glass-card" style={{ textAlign: 'center', padding: 'var(--spacing-xl)' }}>
-                <p className="text-secondary">Žádné transakce k zobrazení</p>
+            <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-3)' }}>
+                Žádné transakce k zobrazení
             </div>
         );
     }
@@ -244,10 +244,10 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         padding: 'var(--spacing-xl)',
                         display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)',
                         position: 'relative',
-                        background: '#1e293b',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        borderRadius: 'var(--radius-lg)',
-                        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.7)',
+                        background: 'var(--surface-strong)',
+                        border: '0.5px solid var(--border-strong)',
+                        borderRadius: 'var(--radius-xl)',
+                        boxShadow: 'var(--shadow-lg)',
                     }}
                 >
                     {/* Close button */}
@@ -256,7 +256,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         style={{
                             position: 'absolute', top: 'var(--spacing-md)', right: 'var(--spacing-md)',
                             background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'var(--text-secondary)', fontSize: '1.2rem', lineHeight: 1,
+                            color: 'var(--text-2)', fontSize: '1.2rem', lineHeight: 1,
                         }}
                     >✕</button>
 
@@ -269,7 +269,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             <div style={{ fontWeight: 600, fontSize: '1rem', wordBreak: 'break-word' }}>
                                 {getDisplayName(modalTx)}
                             </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-2)', marginTop: '2px' }}>
                                 {formatDateFull(modalTx.date)}
                             </div>
                         </div>
@@ -282,7 +282,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     </div>
 
                     {detailLoading && (
-                        <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', padding: 'var(--spacing-md) 0' }}>
+                        <div style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: '0.85rem', padding: 'var(--spacing-md) 0' }}>
                             Načítám...
                         </div>
                     )}
@@ -319,16 +319,16 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                     if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
                                                 }}
                                                 placeholder="Např. Táta, Nájem, ČEZ…"
-                                                style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.25)', color: 'var(--text-primary)' }}
+                                                style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.25)', color: 'var(--text)' }}
                                             />
                                             <button
                                                 onClick={() => handleSaveContact(iban, direction)}
                                                 disabled={savingContact || !nameInput.trim()}
-                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(45,212,191,0.4)', borderRadius: 'var(--radius-sm)', background: 'rgba(45,212,191,0.15)', color: 'var(--text-primary)', cursor: savingContact ? 'wait' : 'pointer' }}
+                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(45,212,191,0.4)', borderRadius: 'var(--radius-sm)', background: 'rgba(45,212,191,0.15)', color: 'var(--text)', cursor: savingContact ? 'wait' : 'pointer' }}
                                             >{savingContact ? '…' : 'OK'}</button>
                                             <button
                                                 onClick={() => { setNamingIban(null); setNameInput(''); }}
-                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer' }}
                                             >✕</button>
                                         </div>
                                     );
@@ -339,7 +339,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 return (
                                     <button
                                         onClick={() => { setNamingIban(iban); setNameInput(currentName || ''); }}
-                                        style={{ marginTop: '6px', padding: '3px 8px', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                        style={{ marginTop: '6px', padding: '3px 8px', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                     >
                                         {currentName ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
                                     </button>
@@ -349,13 +349,13 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             return (
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
                                     {showDebtor && (
-                                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Odesílatel</div>
+                                        <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Odesílatel</div>
                                             <div style={{ fontSize: '0.85rem', fontWeight: 500, color: debtorName ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: debtorName ? 'normal' : 'italic' }}>
                                                 {debtorName || 'Nepojmenovaná protistrana'}
                                             </div>
                                             {debtorIban && (
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontFamily: 'monospace' }}>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '3px', fontFamily: 'monospace' }}>
                                                     {formatAccount(debtorIban)?.display ?? debtorIban}
                                                 </div>
                                             )}
@@ -363,13 +363,13 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                         </div>
                                     )}
                                     {showCreditor && (
-                                        <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjemce</div>
+                                        <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjemce</div>
                                             <div style={{ fontSize: '0.85rem', fontWeight: 500, color: creditorName ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: creditorName ? 'normal' : 'italic' }}>
                                                 {creditorName || 'Nepojmenovaná protistrana'}
                                             </div>
                                             {creditorIban && (
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '3px', fontFamily: 'monospace' }}>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '3px', fontFamily: 'monospace' }}>
                                                     {formatAccount(creditorIban)?.display ?? creditorIban}
                                                 </div>
                                             )}
@@ -382,29 +382,29 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
                         {/* Details grid — 2 columns */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
-                            <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Datum zaúčtování</div>
+                            <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Datum zaúčtování</div>
                                 <div style={{ fontSize: '0.85rem' }}>{formatDateFull(modalTx.date)}</div>
                             </div>
                             {txDetail?.balance_after != null ? (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zůstatek po transakci</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zůstatek po transakci</div>
                                     <div style={{ fontSize: '0.85rem' }}>{formatCurrency(txDetail.balance_after, txDetail.balance_after_currency || modalTx.currency)}</div>
                                 </div>
                             ) : txDetail?.value_date && txDetail.value_date !== modalTx.date ? (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Datum valuta</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Datum valuta</div>
                                     <div style={{ fontSize: '0.85rem' }}>{formatDateFull(txDetail.value_date)}</div>
                                 </div>
                             ) : null}
                             {/* Category — clickable, opens picker */}
                             <div
                                 onClick={() => setModalPickingCategory(p => !p)}
-                                style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', cursor: 'pointer', transition: 'background 0.15s' }}
+                                style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', cursor: 'pointer', transition: 'background 0.15s' }}
                                 onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
                                 onMouseOut={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
                             >
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
                                     <span>Kategorie</span><span style={{ opacity: 0.9, fontSize: '0.8rem' }}>{Icons.action.edit}</span>
                                 </div>
                                 <div style={{ fontSize: '0.85rem' }}>
@@ -412,32 +412,32 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 </div>
                             </div>
                             {(txDetail?.account_name || modalTx.account_name) && (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Účet</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Účet</div>
                                     <div style={{ fontSize: '0.85rem' }}>{txDetail?.account_name || modalTx.account_name}</div>
                                 </div>
                             )}
                             {txDetail?.fx_rate && (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Kurz</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Kurz</div>
                                     <div style={{ fontSize: '0.85rem' }}>{txDetail.fx_source_currency} → {txDetail.fx_target_currency} @ {txDetail.fx_rate}</div>
                                 </div>
                             )}
                             {txDetail?.remittance_info && (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zpráva pro příjemce</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zpráva pro příjemce</div>
                                     <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{txDetail.remittance_info}</div>
                                 </div>
                             )}
                             {!txDetail?.remittance_info && modalTx.description && modalTx.description !== getDisplayName(modalTx) && (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Popis</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Popis</div>
                                     <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{modalTx.description}</div>
                                 </div>
                             )}
                             {txDetail?.additional_info && (
-                                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Poznámka</div>
+                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Poznámka</div>
                                     <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{txDetail.additional_info}</div>
                                 </div>
                             )}
@@ -445,7 +445,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
                         {/* Category picker */}
                         {modalPickingCategory && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '10px 12px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
                                 {[...categories.filter(c => c.is_active),
                                   { id: -1, name: 'Internal Transfer', icon: Icons.category.internalTransfer, color: '#6b7280', is_income: false, is_active: true },
                                   { id: -2, name: 'Family Transfer', icon: Icons.category.familyTransfer, color: '#6b7280', is_income: false, is_active: true }
@@ -457,7 +457,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             padding: '5px 10px', border: '1px solid',
                                             borderColor: modalTx.category === cat.name ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.12)',
                                             borderRadius: 'var(--radius-sm)', background: modalTx.category === cat.name ? 'rgba(255,255,255,0.12)' : 'transparent',
-                                            cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-primary)',
+                                            cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text)',
                                             display: 'flex', alignItems: 'center', gap: '5px',
                                         }}
                                     >
@@ -476,9 +476,9 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 <span style={{ padding: '2px 8px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>{Icons.category.familyTransfer} Rodinný převod</span>
                             )}
                             {modalTx.is_excluded && (
-                                <span style={{ padding: '2px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Vyloučeno z rozpočtu</span>
+                                <span style={{ padding: '2px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', color: 'var(--text-2)' }}>Vyloučeno z rozpočtu</span>
                             )}
-                            <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-tertiary)', fontFamily: 'monospace' }}>{modalTx.id}</span>
+                            <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{modalTx.id}</span>
                         </div>
                     </>)}
                 </div>

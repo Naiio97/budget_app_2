@@ -62,20 +62,8 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
 
     if (loading) {
         return (
-            <div style={{
-                height: '300px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}>
-                <div style={{
-                    width: '32px',
-                    height: '32px',
-                    border: '3px solid var(--glass-border-light)',
-                    borderTopColor: 'var(--accent-primary)',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                }} />
+            <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             </div>
         );
     }
@@ -103,65 +91,61 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
 
     return (
         <div>
-            {/* Header with period selector */}
-            <div className="chart-header-wrap">
+            {/* Header: current value + period toggle */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--spacing-md)', flexWrap: 'wrap', gap: 8 }}>
                 <div>
-                    <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>
+                    <div className="num" style={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.028em' }}>
                         {formatCurrency(endValue)}
                     </div>
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--spacing-xs)',
-                        marginTop: '4px'
-                    }}>
-                        <span className={`stat-change ${change >= 0 ? 'positive' : 'negative'}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <span className={`chip ${change >= 0 ? 'chip-success' : 'chip-danger'}`}>
                             {change >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(change))} ({changePercent}%)
                         </span>
                     </div>
                 </div>
-                <div className="period-buttons-desktop" style={{ display: 'flex', gap: '4px' }}>
+                <div className="seg period-buttons-desktop">
                     {PERIODS.map(p => (
-                        <button
+                        <div
                             key={p.days}
+                            className={`seg-item ${selectedPeriod === p.days ? 'active' : ''}`}
                             onClick={() => setSelectedPeriod(p.days)}
-                            className={`btn ${selectedPeriod === p.days ? 'btn-primary' : ''}`}
-                            style={{ padding: '4px 10px', fontSize: '0.8rem' }}
                         >
                             {p.label}
-                        </button>
+                        </div>
                     ))}
                 </div>
             </div>
 
             {/* Chart */}
-            <div style={{ height: '280px' }}>
+            <div style={{ height: 260, marginLeft: -8 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={data.history} margin={isMobile ? { top: 10, right: 0, left: 0, bottom: 0 } : { top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <AreaChart data={data.history} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                         <defs>
                             <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                                <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.25} />
+                                <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                             </linearGradient>
                             <linearGradient id="colorBank" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#007AFF" stopOpacity={0.2} />
-                                <stop offset="95%" stopColor="#007AFF" stopOpacity={0} />
+                                <stop offset="5%" stopColor="var(--pos)" stopOpacity={0.2} />
+                                <stop offset="95%" stopColor="var(--pos)" stopOpacity={0} />
                             </linearGradient>
                             <linearGradient id="colorInvestment" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#9C27B0" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#9C27B0" stopOpacity={0} />
+                                <stop offset="5%" stopColor="#bf5af2" stopOpacity={0.25} />
+                                <stop offset="95%" stopColor="#bf5af2" stopOpacity={0} />
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                         <XAxis
                             dataKey="date"
-                            stroke="rgba(255,255,255,0.5)"
+                            stroke="var(--text-3)"
                             fontSize={11}
                             tickFormatter={(value) => new Date(value).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short' })}
                             interval="preserveStartEnd"
+                            axisLine={false}
+                            tickLine={false}
                         />
                         <YAxis
-                            stroke="rgba(255,255,255,0.5)"
+                            stroke="var(--text-3)"
                             fontSize={11}
                             tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
                             width={40}
@@ -170,92 +154,48 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                             tickLine={false}
                         />
                         <Tooltip
-                            contentStyle={{
-                                background: 'rgba(0,0,0,0.85)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                borderRadius: '8px',
-                                padding: '12px'
-                            }}
+                            contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', padding: '10px 14px', fontSize: '0.85rem' }}
                             labelFormatter={(value) => new Date(value).toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'long' })}
                             formatter={(value, name) => {
-                                const labels: Record<string, string> = {
-                                    total: 'Celkem',
-                                    bank: 'Banka',
-                                    investment: 'Investice'
-                                };
+                                const labels: Record<string, string> = { total: 'Celkem', bank: 'Banka', investment: 'Investice' };
                                 return [formatCurrency(Number(value) || 0), labels[String(name)] || String(name)];
                             }}
                         />
-                        <Area
-                            type="monotone"
-                            dataKey="bank"
-                            stroke="#007AFF"
-                            strokeWidth={2}
-                            fill="url(#colorBank)"
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="investment"
-                            stroke="#9C27B0"
-                            strokeWidth={2}
-                            fill="url(#colorInvestment)"
-                        />
-                        <Area
-                            type="monotone"
-                            dataKey="total"
-                            stroke="#2dd4bf"
-                            strokeWidth={2}
-                            fill="url(#colorTotal)"
-                        />
+                        <Area type="monotone" dataKey="bank" stroke="var(--pos)" strokeWidth={2} fill="url(#colorBank)" />
+                        <Area type="monotone" dataKey="investment" stroke="#bf5af2" strokeWidth={2} fill="url(#colorInvestment)" />
+                        <Area type="monotone" dataKey="total" stroke="var(--accent)" strokeWidth={2} fill="url(#colorTotal)" />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
 
-            {/* Legend / Current Values */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 'var(--spacing-sm)',
-                marginTop: 'var(--spacing-md)',
-                padding: 'var(--spacing-sm) var(--spacing-md)',
-                background: 'rgba(0,0,0,0.1)',
-                borderRadius: 'var(--radius-md)'
-            }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '12px', height: '3px', background: '#2dd4bf', borderRadius: '2px' }} />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Celkem</span>
+            {/* Legend */}
+            <div style={{ display: 'flex', gap: 'var(--spacing-lg)', flexWrap: 'wrap', marginTop: 'var(--spacing-md)', paddingTop: 'var(--spacing-sm)', borderTop: '0.5px solid var(--border)' }}>
+                {[
+                    { label: 'Celkem', color: 'var(--accent)', value: lastEntry?.total },
+                    { label: 'Banka', color: 'var(--pos)', value: lastEntry?.bank },
+                    { label: 'Investice', color: '#bf5af2', value: lastEntry?.investment },
+                ].map(item => (
+                    <div key={item.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 10, height: 3, background: item.color, borderRadius: 2 }} />
+                            <span className="small muted">{item.label}</span>
+                        </div>
+                        <span className="num" style={{ fontWeight: 600, fontSize: '0.9rem' }}>{formatCurrency(item.value || 0)}</span>
                     </div>
-                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{formatCurrency(lastEntry?.total || 0)}</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '12px', height: '3px', background: '#007AFF', borderRadius: '2px' }} />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Banka</span>
-                    </div>
-                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{formatCurrency(lastEntry?.bank || 0)}</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <div style={{ width: '12px', height: '3px', background: '#9C27B0', borderRadius: '2px' }} />
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Investice</span>
-                    </div>
-                    <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{formatCurrency(lastEntry?.investment || 0)}</span>
-                </div>
+                ))}
             </div>
 
             {/* Period Buttons (Mobile only) */}
-            <div className="period-buttons-mobile" style={{ gap: '8px', width: '100%', marginTop: '16px' }}>
+            <div className="period-buttons-mobile seg" style={{ width: '100%', marginTop: 'var(--spacing-md)' }}>
                 {PERIODS.map(p => (
-                    <button
+                    <div
                         key={p.days}
+                        className={`seg-item ${selectedPeriod === p.days ? 'active' : ''}`}
                         onClick={() => setSelectedPeriod(p.days)}
-                        className={`btn ${selectedPeriod === p.days ? 'btn-primary' : ''}`}
-                        style={{ flex: 1, padding: '8px 0', fontSize: '0.85rem' }}
+                        style={{ flex: 1, justifyContent: 'center', display: 'flex' }}
                     >
                         {p.label}
-                    </button>
+                    </div>
                 ))}
             </div>
         </div>

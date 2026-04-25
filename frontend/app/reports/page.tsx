@@ -3,8 +3,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
-import GlassCard from '@/components/GlassCard';
-import { Icons } from '@/lib/icons';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     AreaChart, Area
@@ -119,149 +117,129 @@ export default function ReportsPage() {
 
     return (
         <MainLayout>
-            <div className="page-container">
-                <header className="reports-header">
+            <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+
+                {/* Page header */}
+                <div className="page-head">
                     <div>
-                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{Icons.nav.reports} Měsíční přehledy</h1>
-                        <p className="text-secondary" style={{ marginTop: '4px', fontSize: '0.875rem' }}>
-                            Porovnání příjmů a výdajů
-                        </p>
+                        <h1>Přehledy</h1>
+                        <div className="sub">Trendy a srovnání měsíců</div>
                     </div>
-                    <div className="reports-period-btns">
+                    <div className="seg">
                         {[3, 6, 12].map(m => (
-                            <button
+                            <div
                                 key={m}
-                                className={`btn ${months === m ? 'btn-primary' : ''}`}
+                                className={`seg-item ${months === m ? 'active' : ''}`}
                                 onClick={() => setMonths(m)}
                             >
-                                {m} měsíců
-                            </button>
+                                {m}M
+                            </div>
                         ))}
                     </div>
-                </header>
+                </div>
 
-                {/* Summary Stats Bar */}
+                {/* KPI row */}
                 {report && report.monthly_totals.length > 0 && (() => {
                     const totalIncome = report.monthly_totals.reduce((s, m) => s + m.income, 0);
                     const totalExpenses = report.monthly_totals.reduce((s, m) => s + m.expenses, 0);
                     const avgExpenses = totalExpenses / report.monthly_totals.length;
-
                     return (
-                        <div className="tx-summary-bar animate-fade-in" style={{ marginBottom: 'var(--spacing-xl)' }}>
-                            <div className="tx-summary-item">
-                                <span className="tx-summary-label">Celkové příjmy</span>
-                                <span className="tx-summary-value" style={{ color: 'var(--accent-success)' }}>
-                                    +{formatCurrency(totalIncome)}
-                                </span>
+                        <div className="grid-3">
+                            <div className="surface kpi">
+                                <div className="kpi-label">Příjmy celkem</div>
+                                <div className="kpi-value num" style={{ color: 'var(--pos)' }}>+{formatCurrency(totalIncome)}</div>
+                                <div className="kpi-sub"><span>za {months} měsíců</span></div>
                             </div>
-                            <div className="tx-summary-divider" />
-                            <div className="tx-summary-item">
-                                <span className="tx-summary-label">Celkové výdaje</span>
-                                <span className="tx-summary-value" style={{ color: 'var(--accent-danger)' }}>
-                                    {formatCurrency(totalExpenses)}
-                                </span>
+                            <div className="surface kpi">
+                                <div className="kpi-label">Výdaje celkem</div>
+                                <div className="kpi-value num">{formatCurrency(totalExpenses)}</div>
+                                <div className="kpi-sub"><span>za {months} měsíců</span></div>
                             </div>
-                            <div className="tx-summary-divider" />
-                            <div className="tx-summary-item">
-                                <span className="tx-summary-label">Průměr měsíčně</span>
-                                <span className="tx-summary-value">
-                                    {formatCurrency(avgExpenses)}
-                                </span>
+                            <div className="surface kpi">
+                                <div className="kpi-label">Průměr výdajů / měsíc</div>
+                                <div className="kpi-value num">{formatCurrency(avgExpenses)}</div>
+                                <div className="kpi-sub"><span>průměr</span></div>
                             </div>
                         </div>
                     );
                 })()}
 
                 {/* Income vs Expenses Chart */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>{Icons.section.incomeVsExpenses} Příjmy vs Výdaje</h3>
-                    <div style={{ height: '280px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={report?.monthly_totals.map(m => ({
-                                ...m,
-                                month: formatMonth(m.month)
-                            })) || []}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" fontSize={11} />
-                                <YAxis stroke="rgba(255,255,255,0.5)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} />
-                                <Tooltip
-                                    contentStyle={{
-                                        background: 'rgba(30, 30, 40, 0.95)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        fontSize: '0.85rem'
-                                    }}
-                                    formatter={(value) => formatCurrency(Number(value))}
-                                />
-                                <Legend wrapperStyle={{ fontSize: '0.8rem' }} />
-                                <Bar dataKey="income" name="Příjmy" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                                <Bar dataKey="expenses" name="Výdaje" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>Příjmy vs. výdaje</h3>
                     </div>
-                </GlassCard>
+                    <div className="card-body">
+                        <div style={{ height: 260 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={report?.monthly_totals.map(m => ({ ...m, month: formatMonth(m.month) })) || []}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                    <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} />
+                                    <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} axisLine={false} tickLine={false} />
+                                    <Tooltip
+                                        contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
+                                        formatter={(value) => formatCurrency(Number(value))}
+                                    />
+                                    <Legend wrapperStyle={{ fontSize: '0.8rem' }} />
+                                    <Bar dataKey="income" name="Příjmy" fill="var(--pos)" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="expenses" name="Výdaje" fill="var(--neg)" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Category Breakdown Chart */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>{Icons.section.categories} Výdaje podle kategorií</h3>
-                    <div style={{ height: '280px' }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={categoryData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" fontSize={11} />
-                                <YAxis stroke="rgba(255,255,255,0.5)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} />
-                                <Tooltip
-                                    contentStyle={{
-                                        background: 'rgba(30, 30, 40, 0.95)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        fontSize: '0.85rem'
-                                    }}
-                                    formatter={(value) => formatCurrency(Number(value))}
-                                />
-                                <Legend wrapperStyle={{ fontSize: '0.8rem' }} />
-                                {report?.categories.map(cat => (
-                                    <Area
-                                        key={cat}
-                                        type="monotone"
-                                        dataKey={cat}
-                                        stackId="1"
-                                        stroke={categoryColors[cat] || '#6b7280'}
-                                        fill={categoryColors[cat] || '#6b7280'}
-                                        fillOpacity={0.6}
-                                    />
-                                ))}
-                            </AreaChart>
-                        </ResponsiveContainer>
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>Výdaje podle kategorií</h3>
                     </div>
-                </GlassCard>
+                    <div className="card-body">
+                        <div style={{ height: 260 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={categoryData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                                    <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} />
+                                    <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} axisLine={false} tickLine={false} />
+                                    <Tooltip
+                                        contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
+                                        formatter={(value) => formatCurrency(Number(value))}
+                                    />
+                                    <Legend wrapperStyle={{ fontSize: '0.8rem' }} />
+                                    {report?.categories.map(cat => (
+                                        <Area key={cat} type="monotone" dataKey={cat} stackId="1"
+                                            stroke={categoryColors[cat] || 'var(--text-3)'}
+                                            fill={categoryColors[cat] || 'var(--text-3)'}
+                                            fillOpacity={0.6} />
+                                    ))}
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Monthly Table */}
-                <GlassCard style={{ paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
-                    <h3 style={{ marginBottom: 'var(--spacing-md)', fontSize: '1.1rem' }}>{Icons.section.monthlyOverview} Detaily po měsících</h3>
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>Detail po měsících</h3>
+                    </div>
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
-                                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                    <th style={{ textAlign: 'left', padding: '10px 6px', fontSize: '0.8rem' }}>Měsíc</th>
-                                    <th style={{ textAlign: 'right', padding: '10px 6px', fontSize: '0.8rem' }}>Příjmy</th>
-                                    <th style={{ textAlign: 'right', padding: '10px 6px', fontSize: '0.8rem' }}>Výdaje</th>
-                                    <th style={{ textAlign: 'right', padding: '10px 6px', fontSize: '0.8rem' }}>Bilance</th>
+                                <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
+                                    <th style={{ textAlign: 'left', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Měsíc</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Příjmy</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Výdaje</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Bilance</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {report?.monthly_totals.slice().reverse().map((m, i) => (
-                                    <tr key={m.month} style={{ borderBottom: i < report.monthly_totals.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
-                                        <td style={{ padding: '10px 6px', fontWeight: 500, fontSize: '0.85rem' }}>{formatMonth(m.month)}</td>
-                                        <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--accent-success)', fontSize: '0.85rem' }}>{formatCurrency(m.income)}</td>
-                                        <td style={{ padding: '10px 6px', textAlign: 'right', color: 'var(--accent-danger)', fontSize: '0.85rem' }}>{formatCurrency(m.expenses)}</td>
-                                        <td style={{
-                                            padding: '10px 6px',
-                                            textAlign: 'right',
-                                            fontWeight: 600,
-                                            fontSize: '0.85rem',
-                                            color: m.balance >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)'
-                                        }}>
+                                {report?.monthly_totals.slice().reverse().map((m, i, arr) => (
+                                    <tr key={m.month} style={{ borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                                        <td style={{ padding: '11px var(--spacing-lg)', fontWeight: 510, fontSize: '0.875rem' }}>{formatMonth(m.month)}</td>
+                                        <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--pos)', fontSize: '0.875rem' }}>+{formatCurrency(m.income)}</td>
+                                        <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--text-2)', fontSize: '0.875rem' }}>{formatCurrency(m.expenses)}</td>
+                                        <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', fontWeight: 600, fontSize: '0.875rem', color: m.balance >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
                                             {m.balance >= 0 ? '+' : ''}{formatCurrency(m.balance)}
                                         </td>
                                     </tr>
@@ -269,7 +247,8 @@ export default function ReportsPage() {
                             </tbody>
                         </table>
                     </div>
-                </GlassCard>
+                </div>
+
             </div>
         </MainLayout>
     );
