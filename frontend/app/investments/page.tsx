@@ -705,7 +705,7 @@ export default function InvestmentsPage() {
                         const totalValue = last.invested + last.gains;
                         const gainPct = last.invested > 0 ? (last.gains / last.invested) * 100 : 0;
                         return (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)', paddingTop: 'var(--spacing-md)', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)', paddingTop: 'var(--spacing-md)', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
                                 <div>
                                     <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Hodnota za {projYears} let</div>
                                     <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(totalValue, 'CZK')}</div>
