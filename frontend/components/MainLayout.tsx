@@ -48,7 +48,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
         { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
         { href: '/rozpocet', label: 'Rozpočet', icon: Icons.nav.monthlyBudget },
-        { href: '/budgets', label: 'Rozpočty', icon: Icons.nav.budgets },
+        { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
         { href: '/settings', label: 'Více', icon: Icons.nav.more },
     ];
 
