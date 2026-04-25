@@ -627,7 +627,21 @@ export default function InvestmentsPage() {
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
                         <div>
-                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Počáteční hodnota (Kč)</label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Počáteční hodnota (Kč)</label>
+                                {projStartOverride !== '' ? (
+                                    <button
+                                        onClick={() => setProjStartOverride('')}
+                                        style={{ fontSize: '0.7rem', color: 'var(--accent-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                    >
+                                        ↺ Použít aktuální zůstatek
+                                    </button>
+                                ) : (
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--accent-success)' }}>
+                                        ✓ z portfolia
+                                    </span>
+                                )}
+                            </div>
                             <input
                                 className="input"
                                 type="number"
