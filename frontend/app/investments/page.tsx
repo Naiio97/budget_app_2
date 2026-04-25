@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
@@ -13,6 +13,7 @@ import {
     getPositions,
     getPies,
     getManualInvestments,
+    getManualInvestmentHistory,
     createManualInvestment,
     InvestmentPortfolio,
     InvestmentPortfolioDetail,
@@ -80,6 +81,33 @@ export default function InvestmentsPage() {
         queryKey: queryKeys.manualInvestments,
         queryFn: getManualInvestments,
     });
+
+    const manualHistoryResults = useQueries({
+        queries: manualInvestments.map(acc => ({
+            queryKey: queryKeys.manualInvestmentHistory(acc.id),
+            queryFn: () => getManualInvestmentHistory(acc.id),
+        })),
+    });
+
+    const combinedChartData = useMemo(() => {
+        const allDates = new Set<string>();
+        history?.history.forEach(p => allDates.add(p.date));
+        manualHistoryResults.forEach(r => r.data?.forEach(p => allDates.add(p.date)));
+        if (allDates.size === 0) return [];
+
+        const sortedDates = Array.from(allDates).sort();
+        const t212Map = new Map(history?.history.map(p => [p.date, p.value]) ?? []);
+        const manualMaps = manualHistoryResults.map(r => new Map(r.data?.map(p => [p.date, p.value]) ?? []));
+
+        let lastT212 = 0;
+        const lastManual = manualMaps.map(() => 0);
+
+        return sortedDates.map(date => {
+            if (t212Map.has(date)) lastT212 = t212Map.get(date)!;
+            manualMaps.forEach((m, i) => { if (m.has(date)) lastManual[i] = m.get(date)!; });
+            return { date, value: lastT212 + lastManual.reduce((s, v) => s + v, 0) };
+        });
+    }, [history, manualHistoryResults]);
 
     const createAccountMutation = useMutation({
         mutationFn: () => createManualInvestment({ name: newAccountName.trim(), currency: newAccountCurrency }),
@@ -249,10 +277,10 @@ export default function InvestmentsPage() {
                 <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
                     <h3 style={{ margin: '0 0 var(--spacing-md)' }}>{Icons.section.valueGrowth} Vývoj hodnoty</h3>
 
-                    {history && history.history.length >= 2 ? (
+                    {combinedChartData.length >= 2 ? (
                         <div style={{ height: '300px' }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={history.history}>
+                                <AreaChart data={combinedChartData}>
                                     <defs>
                                         <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
@@ -279,7 +307,7 @@ export default function InvestmentsPage() {
                                             borderRadius: '8px'
                                         }}
                                         labelFormatter={(value) => new Date(value).toLocaleDateString('cs-CZ')}
-                                        formatter={(value) => [formatCurrency(Number(value) || 0, history.currency), 'Hodnota']}
+                                        formatter={(value) => [formatCurrency(Number(value) || 0, 'CZK'), 'Hodnota']}
                                     />
                                     <Area
                                         type="monotone"
@@ -295,7 +323,7 @@ export default function InvestmentsPage() {
                         <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px' }}>
                             <span style={{ fontSize: '1.5rem' }}>📈</span>
                             <span className="text-secondary" style={{ fontSize: '0.85rem' }}>
-                                Graf se plní po každém syncu — zatím málo dat ({history?.history.length ?? 0} bod{history?.history.length === 1 ? '' : 'ů'})
+                                Graf se plní postupně — zatím málo dat ({combinedChartData.length} bod{combinedChartData.length === 1 ? '' : 'ů'})
                             </span>
                         </div>
                     )}
@@ -315,8 +343,8 @@ export default function InvestmentsPage() {
                     </div>
                 </GlassCard>
 
-                {/* Positions — merged with Pies */}
-                {(pies.length > 0 || positions.length > 0) && (
+                {/* Positions — merged with Pies + manual investments */}
+                {(pies.length > 0 || positions.length > 0 || manualInvestments.some(a => a.positions.length > 0)) && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
                         <h3 style={{ marginBottom: 'var(--spacing-md)' }}>Pozice</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
@@ -458,6 +486,43 @@ export default function InvestmentsPage() {
                                     </div>
                                 </div>
                             ))}
+
+                            {/* Manual investment positions — grouped by account */}
+                            {manualInvestments.filter(a => a.positions.length > 0).map(acc => (
+                                <div key={acc.id}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 4px', borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: '4px' }}>
+                                        <Link href={`/investments/manual/${acc.id}`} style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                                            {acc.name}
+                                        </Link>
+                                        <span className="text-secondary" style={{ fontSize: '0.8rem' }}>{formatCurrency(acc.total_value, acc.currency)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                        {acc.positions.map(pos => (
+                                            <div key={pos.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '12px', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{pos.name}</div>
+                                                    {pos.quantity != null && (
+                                                        <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>
+                                                            {pos.quantity} ks{pos.avg_buy_price != null ? ` · nákup ${formatCurrency(pos.avg_buy_price, pos.currency)}` : ''}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontWeight: 500, fontSize: '0.88rem' }}>{formatCurrency(pos.current_value, pos.currency)}</div>
+                                                    {acc.total_value > 0 && <div className="text-tertiary" style={{ fontSize: '0.73rem' }}>{((pos.current_value / acc.total_value) * 100).toFixed(1)} %</div>}
+                                                </div>
+                                                {pos.pnl != null && (
+                                                    <div style={{ textAlign: 'right', minWidth: '80px', color: pos.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
+                                                        <div style={{ fontSize: '0.82rem', fontWeight: 500 }}>{pos.pnl >= 0 ? '+' : ''}{formatCurrency(pos.pnl, pos.currency)}</div>
+                                                        <div style={{ fontSize: '0.73rem', opacity: 0.85 }}>{pos.pnl_pct != null ? `${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(2)} %` : ''}</div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+
                         </div>
                     </GlassCard>
                 )}
@@ -536,10 +601,10 @@ export default function InvestmentsPage() {
                     )}
                 </div>
 
-                {/* Manual investment accounts */}
+                {/* Manual accounts — navigation + create */}
                 <GlassCard style={{ marginTop: 'var(--spacing-lg)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <h3 style={{ margin: 0 }}>{Icons.accountType.investment} Manuální investiční účty</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showNewAccountForm || manualInvestments.length > 0 ? 'var(--spacing-md)' : 0 }}>
+                        <h3 style={{ margin: 0 }}>{Icons.accountType.investment} Manuální účty</h3>
                         <button className="btn btn-primary" onClick={() => setShowNewAccountForm(v => !v)} style={{ fontSize: '0.85rem' }}>
                             {showNewAccountForm ? 'Zrušit' : '+ Nový účet'}
                         </button>
@@ -561,33 +626,16 @@ export default function InvestmentsPage() {
                         </div>
                     )}
 
-                    {manualInvestments.length === 0 && !showNewAccountForm && (
-                        <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-secondary)' }}>
-                            Zatím žádné manuální investiční účty.
-                        </div>
-                    )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                         {manualInvestments.map(acc => (
                             <Link key={acc.id} href={`/investments/manual/${acc.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center', padding: '12px 14px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'background 0.15s' }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', transition: 'background 0.15s', whiteSpace: 'nowrap' }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                                 >
-                                    <div>
-                                        <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{acc.name}</div>
-                                        <div className="text-secondary" style={{ fontSize: '0.75rem', marginTop: '2px' }}>
-                                            {acc.positions.length} pozic{acc.positions.length === 1 ? 'e' : acc.positions.length < 5 ? 'e' : ''}
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontWeight: 600, fontSize: '1.05rem' }}>{formatCurrency(acc.total_value, acc.currency)}</div>
-                                        {acc.pnl !== 0 && acc.invested > 0 && (
-                                            <div style={{ fontSize: '0.78rem', color: acc.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>
-                                                {acc.pnl >= 0 ? '+' : ''}{formatCurrency(acc.pnl, acc.currency)} ({acc.pnl_pct.toFixed(2)} %)
-                                            </div>
-                                        )}
-                                    </div>
+                                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{acc.name}</span>
+                                    <span className="text-secondary" style={{ fontSize: '0.8rem' }}>{formatCurrency(acc.total_value, acc.currency)}</span>
+                                    <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>→</span>
                                 </div>
                             </Link>
                         ))}
