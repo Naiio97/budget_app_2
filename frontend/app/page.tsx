@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import NetWorthChart from '@/components/NetWorthChart';
-import { getDashboard, getBudgetOverview } from '@/lib/api';
+import CategoryChart from '@/components/CategoryChart';
+import { getDashboard } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 
@@ -13,11 +14,6 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard,
     queryFn: getDashboard,
-  });
-
-  const { data: budgetOverview } = useQuery({
-    queryKey: queryKeys.budgetOverview,
-    queryFn: () => getBudgetOverview().catch(() => null),
   });
 
   if (isLoading || !data) {
@@ -89,7 +85,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Bottom row: recent transactions + budget */}
+        {/* Bottom row: recent transactions + category breakdown */}
         <div className="grid-2">
           {/* Recent transactions */}
           <div className="surface">
@@ -104,71 +100,16 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Budget widget */}
-          {budgetOverview && budgetOverview.categories_count > 0 ? (
-            <div className="surface">
-              <div className="card-head">
-                <h3>Stav rozpočtu</h3>
-                <Link href="/budgets" className="btn btn-ghost btn-sm">Detail →</Link>
-              </div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* Total progress */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Celkem</span>
-                    <span className="num" style={{ fontSize: 13 }}>
-                      {formatCurrency(budgetOverview.total_spent)} / {formatCurrency(budgetOverview.total_budget)}
-                    </span>
-                  </div>
-                  <div className="progress">
-                    <span style={{
-                      width: `${Math.min(budgetOverview.total_percentage, 100)}%`,
-                      background: budgetOverview.total_percentage >= 100 ? 'var(--neg)' : budgetOverview.total_percentage >= 80 ? 'var(--warn)' : 'var(--accent)',
-                    }} />
-                  </div>
-                </div>
-                {/* Top categories */}
-                {budgetOverview.categories.slice(0, 4).map((cat, i) => (
-                  <div key={i}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{cat.category}</span>
-                      <span className="num" style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                        {Math.round(cat.percentage)} %
-                      </span>
-                    </div>
-                    <div className="progress">
-                      <span style={{
-                        width: `${Math.min(cat.percentage, 100)}%`,
-                        background: cat.percentage >= 100 ? 'var(--neg)' : cat.percentage >= 80 ? 'var(--warn)' : 'var(--accent)',
-                      }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {/* Category breakdown */}
+          <div className="surface">
+            <div className="card-head">
+              <h3>Výdaje podle kategorií</h3>
+              <span className="muted" style={{ fontSize: 12 }}>Tento měsíc</span>
             </div>
-          ) : (
-            <div className="surface">
-              <div className="card-head">
-                <h3>Zůstatky účtů</h3>
-              </div>
-              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '0.5px solid var(--border)' }}>
-                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>Bankovní účty</span>
-                  <span className="num" style={{ fontWeight: 600 }}>{formatCurrency(data.summary.bank_balance, data.summary.currency)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '0.5px solid var(--border)' }}>
-                  <span style={{ fontSize: 14, color: 'var(--text-2)' }}>Investice</span>
-                  <span className="num" style={{ fontWeight: 600 }}>{formatCurrency(data.summary.investment_balance, data.summary.currency)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                  <span style={{ fontSize: 14, fontWeight: 600 }}>Celkem</span>
-                  <span className="num" style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>
-                    {formatCurrency(data.summary.total_balance, data.summary.currency)}
-                  </span>
-                </div>
-              </div>
+            <div className="card-body">
+              <CategoryChart categories={data.categories} currency={data.summary.currency} />
             </div>
-          )}
+          </div>
         </div>
 
       </div>

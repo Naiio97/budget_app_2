@@ -10,7 +10,6 @@ import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
-import BuildVersionBadge from '@/components/BuildVersionBadge';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -128,147 +127,141 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         return null;
     };
 
-    const renderSidebarContent = () => (
-        <>
-            <div style={{ flex: '1 1 auto' }}>
-            <h4 style={{ marginBottom: 'var(--spacing-lg)', color: 'var(--text-secondary)' }}>
-                Napojené účty
-            </h4>
+    const getAccountHref = (account: { id: string; type: string }) => {
+        if (account.type === 'investment') return '/investments';
+        if (account.type === 'manual_investment' || account.id.startsWith('manual-inv-'))
+            return `/investments/manual/${account.id.replace('manual-inv-', '')}`;
+        if (account.type === 'manual' || account.id.startsWith('manual-'))
+            return `/manual-account/${account.id.replace('manual-', '')}`;
+        return `/accounts/${account.id}`;
+    };
 
-            {accounts.length === 0 ? (
-                <div className="glass glass-card" style={{ textAlign: 'center' }}>
-                    <p className="text-secondary" style={{ marginBottom: 'var(--spacing-md)' }}>
-                        Zatím nemáte připojené žádné účty
-                    </p>
-                    <Link href="/settings" className="btn btn-primary">
-                        Připojit účet
+    const getAccentColor = (type: string) => {
+        if (type === 'bank') return 'linear-gradient(135deg, #1e40c4, #0b2eb0)';
+        if (type === 'investment' || type === 'manual_investment') return 'linear-gradient(135deg, #5e5ce6, #3634a3)';
+        return 'linear-gradient(135deg, #10b981, #059669)';
+    };
+
+    const getInitials = (name: string) =>
+        name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+
+    const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
+
+    const renderSidebarContent = () => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)', flex: '1 1 auto', minHeight: 0 }}>
+
+            {/* Net worth hero */}
+            <div className="surface" style={{ padding: 'var(--spacing-md)' }}>
+                <div className="kpi-label">Čisté jmění</div>
+                <div className="kpi-value num" style={{ fontSize: '1.6rem', marginTop: 4 }}>
+                    {formatCurrency(totalBalance)}
+                </div>
+                <div className="kpi-sub" style={{ marginTop: 6 }}>
+                    <span className="muted" style={{ fontSize: 12 }}>{accounts.length} účtů</span>
+                </div>
+            </div>
+
+            {/* Accounts list */}
+            <div>
+                <div className="card-head" style={{ padding: '6px 4px 8px' }}>
+                    <h4 style={{ fontSize: 13 }}>Účty</h4>
+                    <span className="muted">{accounts.length}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {accounts.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 'var(--spacing-md)', color: 'var(--text-3)', fontSize: 13 }}>
+                            Žádné účty
+                        </div>
+                    ) : (
+                        accounts.map((account) => {
+                            const logoUrl = getBankLogo(account.institution);
+                            const href = getAccountHref(account);
+                            return (
+                                <Link key={account.id} href={href} className="acc-card">
+                                    {logoUrl ? (
+                                        <div className="acc-logo" style={{ background: '#fff', padding: 4, overflow: 'hidden' }}>
+                                            <Image src={logoUrl} alt={account.institution || account.name} width={32} height={32} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                        </div>
+                                    ) : (
+                                        <div className="acc-logo" style={{ background: getAccentColor(account.type), fontSize: 11 }}>
+                                            {getInitials(account.name)}
+                                        </div>
+                                    )}
+                                    <div style={{ minWidth: 0 }}>
+                                        <div className="acc-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.name}</div>
+                                        <div className="acc-balance">{account.currency}</div>
+                                    </div>
+                                    <div className="num" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', flexShrink: 0, color: account.balance < 0 ? 'var(--neg)' : 'var(--text)' }}>
+                                        {formatCurrency(account.balance, account.currency)}
+                                    </div>
+                                </Link>
+                            );
+                        })
+                    )}
+                    <Link href="/settings" className="btn btn-ghost btn-sm" style={{ justifyContent: 'center', marginTop: 4 }}>
+                        + Propojit účet
                     </Link>
                 </div>
-            ) : (
-                accounts.map((account) => {
-                    const logoUrl = getBankLogo(account.institution);
-                    let href = `/accounts/${account.id}`;
-                    if (account.type === 'investment') {
-                        href = '/investments';
-                    } else if (account.type === 'manual_investment' || account.id.startsWith('manual-inv-')) {
-                        const manualInvId = account.id.replace('manual-inv-', '');
-                        href = `/investments/manual/${manualInvId}`;
-                    } else if (account.type === 'manual' || account.id.startsWith('manual-')) {
-                        const manualId = account.id.replace('manual-', '');
-                        href = `/manual-account/${manualId}`;
-                    }
+            </div>
 
-                    return (
-                        <Link
-                            key={account.id}
-                            href={href}
-                            className="glass account-card"
-                        >
-                            {logoUrl ? (
-                                <div className="account-icon" style={{ background: 'white', overflow: 'hidden', padding: '4px' }}>
-                                    <Image src={logoUrl} alt={account.institution || account.name} width={40} height={40} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                </div>
-                            ) : (
-                                <div className={`account-icon ${account.type}`}>
-                                    {account.type === 'bank' ? Icons.accountType.bank : account.type === 'manual' ? Icons.accountType.manual : Icons.accountType.investment /* manual_investment also uses investment icon */}
-                                </div>
-                            )}
-                            <div className="account-info">
-                                <div className="account-name">{account.name}</div>
-                                <div className="account-balance">
-                                    {formatCurrency(account.balance, account.currency)}
-                                </div>
-                            </div>
-                        </Link>
-                    );
-                })
+            {/* Mobile-only navigation */}
+            {isMobile && (
+                <div>
+                    <div className="card-head" style={{ padding: '6px 4px 8px' }}>
+                        <h4 style={{ fontSize: 13 }}>Navigace</h4>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {navItems.map((item) => (
+                            <Link key={item.href} href={item.href}
+                                className={`btn ${pathname === item.href ? 'btn-primary' : ''}`}
+                                style={{ justifyContent: 'flex-start' }}
+                            >
+                                <span>{item.icon}</span>
+                                <span>{item.label}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
             )}
 
-            {/* Quick Actions - also shows extra nav links on mobile */}
-            <div style={{ marginTop: 'var(--spacing-xl)' }}>
-                {isMobile && (
-                    <>
-                        <h5 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
-                            Navigace
-                        </h5>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-lg)' }}>
-                            {navItems.map((item) => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`btn ${pathname === item.href ? 'btn-primary' : ''}`}
-                                    style={{ justifyContent: 'flex-start' }}
-                                >
-                                    <span>{item.icon}</span>
-                                    <span>{item.label}</span>
-                                </Link>
-                            ))}
-                        </div>
-                    </>
-                )}
-
-                <h5 style={{ marginBottom: 'var(--spacing-md)', color: 'var(--text-secondary)' }}>
-                    Rychlé akce
-                </h5>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-                    <Link href="/settings" className="btn" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                        <span>{Icons.action.add}</span>
-                        <span>Přidat účet</span>
-                    </Link>
-                    <button
-                        className="btn"
-                        style={{ justifyContent: 'flex-start' }}
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                    >
+            {/* Quick actions */}
+            <div>
+                <div className="card-head" style={{ padding: '6px 4px 8px' }}>
+                    <h4 style={{ fontSize: 13 }}>Rychlé akce</h4>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button className="btn btn-sm" onClick={handleSync} disabled={isSyncing}
+                        style={{ justifyContent: 'flex-start' }}>
                         {isSyncing ? (
-                            <>
-                                <span style={{
-                                    animation: 'spin 1s linear infinite',
-                                    display: 'inline-block',
-                                    width: '1em',
-                                    height: '1em',
-                                    border: '2px solid rgba(255,255,255,0.3)',
-                                    borderTopColor: 'white',
-                                    borderRadius: '50%',
-                                    marginRight: '8px'
-                                }} />
-                                <span>Synchronizuji...</span>
-                            </>
+                            <><span style={{ width: 14, height: 14, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} /><span>Sync...</span></>
                         ) : (
-                            <>
-                                <span>{Icons.action.sync}</span>
-                                <span>Synchronizovat</span>
-                            </>
+                            <><span>{Icons.action.sync}</span><span>Sync</span></>
                         )}
                     </button>
-
-                    {/* Sync status info */}
-                    {syncStatus && syncStatus.status !== 'never' && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', paddingLeft: '4px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            {syncStatus.last_sync && (
-                                <span>
-                                    Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}
-                                </span>
-                            )}
-                            <span style={{
-                                color: syncStatus.syncs_today >= 4
-                                    ? 'var(--accent-danger)'
-                                    : syncStatus.syncs_today >= 3
-                                        ? 'var(--accent-warning, #f59e0b)'
-                                        : 'var(--text-tertiary)',
-                                fontWeight: syncStatus.syncs_today >= 3 ? 600 : undefined,
-                            }}>
-                                {syncStatus.syncs_today}/4 dnes
-                                {syncStatus.syncs_today >= 4 && ' — denní limit'}
-                            </span>
-                        </div>
-                    )}
+                    <Link href="/settings" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
+                        <span>{Icons.nav.settings}</span><span>Nastavení</span>
+                    </Link>
+                    <Link href="/transactions" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
+                        <span>{Icons.nav.transactions}</span><span>Transakce</span>
+                    </Link>
+                    <Link href="/reports" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
+                        <span>{Icons.nav.reports}</span><span>Přehledy</span>
+                    </Link>
                 </div>
+                {/* Sync status */}
+                {syncStatus && syncStatus.status !== 'never' && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-3)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {syncStatus.last_sync && (
+                            <span>Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}</span>
+                        )}
+                        <span style={{ color: syncStatus.syncs_today >= 4 ? 'var(--neg)' : syncStatus.syncs_today >= 3 ? 'var(--warn)' : 'var(--text-3)', fontWeight: syncStatus.syncs_today >= 3 ? 600 : undefined }}>
+                            {syncStatus.syncs_today}/4 dnes{syncStatus.syncs_today >= 4 && ' — denní limit'}
+                        </span>
+                    </div>
+                )}
             </div>
-            </div>
-            <BuildVersionBadge />
-        </>
+
+        </div>
     );
 
     return (
