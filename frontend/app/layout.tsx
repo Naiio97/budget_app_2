@@ -10,17 +10,17 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#1a1a2e",
+  themeColor: "#000000",
 };
 
 export const metadata: Metadata = {
-  title: "Budget Tracker",
-  description: "Osobní správa financí s moderním designem",
+  title: "Koruna",
+  description: "Osobní správa financí",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Budget Tracker",
+    title: "Koruna",
   },
   icons: {
     icon: "/icons/icon-192x192.png",
@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="cs">
+    <html lang="cs" data-mode="dark">
       <body>
         <ServiceWorkerRegister />
         <Providers>

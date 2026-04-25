@@ -13,7 +13,7 @@ export default function GlassCard({
     hover = true,
     style = {}
 }: GlassCardProps) {
-    const baseClass = variant === 'subtle' ? 'glass-subtle' : 'glass';
+    const baseClass = variant === 'subtle' ? 'surface surface-subtle' : 'surface';
     const paddingClass = variant === 'compact' ? 'glass-card-compact' : 'glass-card';
     const hoverClass = hover ? '' : 'no-hover';
 

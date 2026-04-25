@@ -23,6 +23,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
     const { accounts } = useAccounts();
     const queryClient = useQueryClient();
 
@@ -51,6 +52,20 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
         { href: '/settings', label: 'Více', icon: Icons.nav.more },
     ];
+
+    useEffect(() => {
+        const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
+        const initial = saved ?? 'dark';
+        setTheme(initial);
+        document.documentElement.setAttribute('data-mode', initial);
+    }, []);
+
+    const toggleTheme = () => {
+        const next = theme === 'dark' ? 'light' : 'dark';
+        setTheme(next);
+        localStorage.setItem('theme', next);
+        document.documentElement.setAttribute('data-mode', next);
+    };
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -257,6 +272,46 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     );
 
     return (
+        <div className="app-root">
+            {/* Koruna appbar — desktop only */}
+            <header className="appbar">
+                <div className="appbar-logo">
+                    <span className="appbar-logo-mark">K</span>
+                    <span>Koruna</span>
+                </div>
+                <nav className="appbar-nav">
+                    {navItems.slice(0, 6).map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`appbar-nav-item ${pathname === item.href ? 'active' : ''}`}
+                        >
+                            {item.label}
+                        </Link>
+                    ))}
+                </nav>
+                <button
+                    onClick={toggleTheme}
+                    aria-label="Přepnout motiv"
+                    style={{
+                        background: 'var(--surface-sunken)',
+                        border: '0.5px solid var(--border)',
+                        borderRadius: 'var(--radius-full)',
+                        color: 'var(--text)',
+                        cursor: 'pointer',
+                        fontSize: 16,
+                        width: 36,
+                        height: 36,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                    }}
+                >
+                    {theme === 'dark' ? '☀️' : '🌙'}
+                </button>
+            </header>
+
         <div className="layout">
             <main className="main-content">
                 {/* Hamburger menu for medium screens */}
@@ -353,6 +408,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     })}
                 </nav>
             )}
+        </div>
         </div>
     );
 }
