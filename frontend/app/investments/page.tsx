@@ -43,6 +43,10 @@ export default function InvestmentsPage() {
     const [showNewAccountForm, setShowNewAccountForm] = useState(false);
     const [newAccountName, setNewAccountName] = useState('');
     const [newAccountCurrency, setNewAccountCurrency] = useState('CZK');
+    const [projStartOverride, setProjStartOverride] = useState('');
+    const [projMonthly, setProjMonthly] = useState(5000);
+    const [projRate, setProjRate] = useState(7);
+    const [projYears, setProjYears] = useState(20);
     const qc = useQueryClient();
 
     const { data: portfolio, isLoading: loadingPortfolio, isError } = useQuery<InvestmentPortfolio>({
@@ -125,6 +129,22 @@ export default function InvestmentsPage() {
 
     const manualTotal = manualInvestments.reduce((s, a) => s + a.total_value, 0);
     const combinedTotal = (portfolio?.total_value ?? 0) + manualTotal;
+
+    const projectionData = useMemo(() => {
+        const start = projStartOverride !== '' ? (parseFloat(projStartOverride) || 0) : combinedTotal;
+        const monthlyRate = projRate / 100 / 12;
+        const points = [];
+        let value = start;
+        let invested = start;
+        for (let y = 0; y <= projYears; y++) {
+            points.push({ year: y, invested: Math.round(invested), gains: Math.round(Math.max(0, value - invested)) });
+            for (let m = 0; m < 12; m++) {
+                value = value * (1 + monthlyRate) + projMonthly;
+                invested += projMonthly;
+            }
+        }
+        return points;
+    }, [combinedTotal, projStartOverride, projMonthly, projRate, projYears]);
 
     const PIE_ICON_MAP: Record<string, string> = {
         Umbrella: '☂️', Home: '🏠', Savings: '🏦', Vacation: '🌴', Health: '🏥',
@@ -600,6 +620,111 @@ export default function InvestmentsPage() {
                         </GlassCard>
                     )}
                 </div>
+
+                {/* Compound interest projection */}
+                <GlassCard style={{ marginTop: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
+                    <h3 style={{ margin: '0 0 var(--spacing-lg)' }}>Projekce složeného úročení</h3>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)' }}>
+                        <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Počáteční hodnota (Kč)</label>
+                            <input
+                                className="input"
+                                type="number"
+                                value={projStartOverride !== '' ? projStartOverride : String(Math.round(combinedTotal))}
+                                onChange={e => setProjStartOverride(e.target.value)}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                                Měsíční příspěvek: <strong>{projMonthly.toLocaleString('cs-CZ')} Kč</strong>
+                            </label>
+                            <input type="range" min="0" max="50000" step="500" value={projMonthly} onChange={e => setProjMonthly(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent-primary)' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                <span>0</span><span>50 000 Kč</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                                Roční výnos: <strong>{projRate} %</strong>
+                            </label>
+                            <input type="range" min="1" max="20" step="0.5" value={projRate} onChange={e => setProjRate(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent-primary)' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                <span>1 %</span><span>20 %</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                                Horizont: <strong>{projYears} let</strong>
+                            </label>
+                            <input type="range" min="1" max="40" step="1" value={projYears} onChange={e => setProjYears(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent-primary)' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                                <span>1 rok</span><span>40 let</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <ResponsiveContainer width="100%" height={260}>
+                        <AreaChart data={projectionData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="projInvestGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.45} />
+                                    <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0.1} />
+                                </linearGradient>
+                                <linearGradient id="projGainsGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.55} />
+                                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0.1} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                            <XAxis
+                                dataKey="year"
+                                tickFormatter={(y: number) => y === 0 ? 'Dnes' : `+${y}r`}
+                                tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                                axisLine={false} tickLine={false}
+                            />
+                            <YAxis
+                                tickFormatter={(v: number) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : `${(v / 1000).toFixed(0)}k`}
+                                tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                                axisLine={false} tickLine={false} width={55}
+                            />
+                            <Tooltip
+                                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                formatter={(v: number | undefined, name: string | undefined) => [formatCurrency(v ?? 0, 'CZK'), name === 'invested' ? 'Investováno' : 'Výnos ze složeného úročení']}
+                                labelFormatter={(y: number) => y === 0 ? 'Dnes' : `Za ${y} let`}
+                            />
+                            <Area type="monotone" dataKey="invested" stackId="1" stroke="#2dd4bf" strokeWidth={1.5} fill="url(#projInvestGrad)" name="invested" />
+                            <Area type="monotone" dataKey="gains" stackId="1" stroke="#818cf8" strokeWidth={1.5} fill="url(#projGainsGrad)" name="gains" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+
+                    {(() => {
+                        const last = projectionData[projectionData.length - 1];
+                        if (!last) return null;
+                        const totalValue = last.invested + last.gains;
+                        const gainPct = last.invested > 0 ? (last.gains / last.invested) * 100 : 0;
+                        return (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--spacing-md)', marginTop: 'var(--spacing-lg)', paddingTop: 'var(--spacing-md)', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                                <div>
+                                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Hodnota za {projYears} let</div>
+                                    <div style={{ fontSize: '1.4rem', fontWeight: 700 }}>{formatCurrency(totalValue, 'CZK')}</div>
+                                </div>
+                                <div>
+                                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Celkem vloženo</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 500 }}>{formatCurrency(last.invested, 'CZK')}</div>
+                                </div>
+                                <div>
+                                    <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Výnos ze složeného úročení</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--accent-success)' }}>
+                                        +{formatCurrency(last.gains, 'CZK')}
+                                        <span style={{ fontSize: '0.8rem', opacity: 0.8, fontWeight: 400, marginLeft: '6px' }}>({gainPct.toFixed(0)} %)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </GlassCard>
 
                 {/* Manual accounts — navigation + create */}
                 <GlassCard style={{ marginTop: 'var(--spacing-lg)' }}>
