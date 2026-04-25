@@ -44,6 +44,37 @@ type PositionForm = {
 
 const emptyForm: PositionForm = { name: '', current_value: '', quantity: '', avg_buy_price: '', currency: 'CZK', note: '' };
 
+function PositionFormFields({ form, onChange }: { form: PositionForm; onChange: (f: PositionForm) => void }) {
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Název *</label>
+                <input className="input" value={form.name} onChange={e => onChange({ ...form, name: e.target.value })} placeholder="VWCE, Bitcoin…" style={{ width: '100%', marginTop: '4px' }} />
+            </div>
+            <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Aktuální hodnota *</label>
+                <input className="input" type="number" value={form.current_value} onChange={e => onChange({ ...form, current_value: e.target.value })} placeholder="15 000" style={{ width: '100%', marginTop: '4px' }} />
+            </div>
+            <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Měna</label>
+                <input className="input" value={form.currency} onChange={e => onChange({ ...form, currency: e.target.value })} placeholder="CZK" style={{ width: '100%', marginTop: '4px' }} />
+            </div>
+            <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Počet ks (volitelné)</label>
+                <input className="input" type="number" value={form.quantity} onChange={e => onChange({ ...form, quantity: e.target.value })} placeholder="10" style={{ width: '100%', marginTop: '4px' }} />
+            </div>
+            <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Nákupní cena/ks (volitelné)</label>
+                <input className="input" type="number" value={form.avg_buy_price} onChange={e => onChange({ ...form, avg_buy_price: e.target.value })} placeholder="1 400" style={{ width: '100%', marginTop: '4px' }} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Poznámka</label>
+                <input className="input" value={form.note} onChange={e => onChange({ ...form, note: e.target.value })} placeholder="" style={{ width: '100%', marginTop: '4px' }} />
+            </div>
+        </div>
+    );
+}
+
 export default function ManualInvestmentDetailPage() {
     const params = useParams();
     const router = useRouter();
@@ -133,34 +164,6 @@ export default function ManualInvestmentDetailPage() {
         });
     };
 
-    const PositionFormFields = ({ form, onChange }: { form: PositionForm; onChange: (f: PositionForm) => void }) => (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px' }}>
-            <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Název *</label>
-                <input className="input" value={form.name} onChange={e => onChange({ ...form, name: e.target.value })} placeholder="VWCE, Bitcoin…" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-            <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Aktuální hodnota *</label>
-                <input className="input" type="number" value={form.current_value} onChange={e => onChange({ ...form, current_value: e.target.value })} placeholder="15 000" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-            <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Měna</label>
-                <input className="input" value={form.currency} onChange={e => onChange({ ...form, currency: e.target.value })} placeholder="CZK" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-            <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Počet ks (volitelné)</label>
-                <input className="input" type="number" value={form.quantity} onChange={e => onChange({ ...form, quantity: e.target.value })} placeholder="10" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-            <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Nákupní cena/ks (volitelné)</label>
-                <input className="input" type="number" value={form.avg_buy_price} onChange={e => onChange({ ...form, avg_buy_price: e.target.value })} placeholder="1 400" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Poznámka</label>
-                <input className="input" value={form.note} onChange={e => onChange({ ...form, note: e.target.value })} placeholder="" style={{ width: '100%', marginTop: '4px' }} />
-            </div>
-        </div>
-    );
 
     if (isLoading || !account) {
         return <MainLayout><div style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--text-secondary)' }}>Načítám…</div></MainLayout>;
