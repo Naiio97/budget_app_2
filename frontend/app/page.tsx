@@ -59,7 +59,8 @@ function getNextPayday(today: Date): Date {
 }
 
 function getGreeting(hour: number): string {
-  if (hour >= 5 && hour < 12) return 'Dobré ráno';
+  if (hour >= 5 && hour < 10) return 'Dobré ráno';
+  if (hour >= 10 && hour < 12) return 'Dobré dopoledne';
   if (hour >= 12 && hour < 18) return 'Dobré odpoledne';
   if (hour >= 18 && hour < 22) return 'Dobrý večer';
   return 'Dobrou noc';
