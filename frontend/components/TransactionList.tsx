@@ -224,73 +224,99 @@ export default function TransactionList({ transactions: initialTransactions, sho
     }
 
     const modalEl = modalTx ? (
-            <div
-                onClick={() => setSelectedTx(null)}
-                className="tx-modal-overlay"
-                style={{
-                    position: 'fixed', inset: 0, zIndex: 1000,
-                    background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: 'var(--spacing-md)',
-                    overscrollBehavior: 'contain',
-                }}
-            >
-                <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="tx-modal-card"
-                    style={{
-                        width: '100%', maxWidth: '480px',
-                        maxHeight: '90vh', overflowY: 'auto',
-                        padding: 'var(--spacing-xl)',
-                        display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)',
-                        position: 'relative',
-                        background: 'var(--surface-strong)',
-                        border: '0.5px solid var(--border-strong)',
-                        borderRadius: 'var(--radius-xl)',
-                        boxShadow: 'var(--shadow-lg)',
-                    }}
-                >
-                    {/* Close button */}
-                    <button
-                        onClick={() => setSelectedTx(null)}
-                        style={{
-                            position: 'absolute', top: 'var(--spacing-md)', right: 'var(--spacing-md)',
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'var(--text-2)', fontSize: '1.2rem', lineHeight: 1,
-                        }}
-                    >✕</button>
+        <div onClick={() => setSelectedTx(null)} className="modal-backdrop tx-modal-overlay">
+            <div onClick={e => e.stopPropagation()} className="modal tx-modal-card" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
 
-                    {/* Header: icon + name + amount */}
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--spacing-md)', paddingRight: 'var(--spacing-xl)' }}>
-                        <div className="transaction-icon" style={{ flexShrink: 0, fontSize: '1.5rem' }}>
-                            {categoryIcons[modalTx.category || 'Other'] || Icons.category.fallback}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, fontSize: '1rem', wordBreak: 'break-word' }}>
-                                {getDisplayName(modalTx)}
-                            </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-2)', marginTop: '2px' }}>
-                                {formatDateFull(modalTx.date)}
-                            </div>
-                        </div>
-                        <div
-                            className={`transaction-amount ${modalTx.amount >= 0 ? 'income' : 'expense'}`}
-                            style={{ flexShrink: 0, fontSize: '1.1rem', fontWeight: 700 }}
-                        >
-                            {modalTx.amount >= 0 ? '+' : ''}{formatCurrency(modalTx.amount, modalTx.currency)}
-                        </div>
+                {/* ── Hero header ── */}
+                <div style={{
+                    padding: '20px var(--spacing-lg) 18px',
+                    background: modalTx.amount >= 0
+                        ? 'linear-gradient(180deg, color-mix(in srgb, var(--pos) 12%, transparent), transparent)'
+                        : 'linear-gradient(180deg, color-mix(in srgb, var(--neg) 8%, transparent), transparent)',
+                    borderBottom: '0.5px solid var(--border)',
+                    textAlign: 'center',
+                    position: 'relative',
+                }}>
+                    <button onClick={() => setSelectedTx(null)} className="btn btn-icon btn-ghost"
+                        style={{ position: 'absolute', top: 12, left: 12 }}>✕</button>
+
+                    <div style={{ fontSize: '2.8rem', lineHeight: 1, marginBottom: 10 }}>
+                        {categoryIcons[modalTx.category || 'Other'] || Icons.category.fallback}
                     </div>
+                    <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 4, fontWeight: 500 }}>
+                        {getDisplayName(modalTx)}
+                    </div>
+                    <div className="num" style={{
+                        fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em',
+                        color: modalTx.amount >= 0 ? 'var(--pos)' : 'var(--text)',
+                    }}>
+                        {modalTx.amount >= 0 ? '+' : ''}{formatCurrency(modalTx.amount, modalTx.currency)}
+                    </div>
+                </div>
 
-                    {detailLoading && (
-                        <div style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: '0.85rem', padding: 'var(--spacing-md) 0' }}>
-                            Načítám...
+                {/* ── Detail rows ── */}
+                {detailLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-xl)' }}>
+                        <div style={{ width: 24, height: 24, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    </div>
+                ) : (
+                    <dl style={{ margin: 0 }}>
+                        {/* Kategorie — kliknutí otevře picker */}
+                        <div className="label-row" onClick={() => setModalPickingCategory(p => !p)}
+                            style={{ cursor: 'pointer' }}>
+                            <dt>Kategorie</dt>
+                            <dd style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {updatingId === modalTx.id
+                                    ? <span style={{ color: 'var(--text-3)' }}>Ukládám…</span>
+                                    : <span className="chip chip-accent">{categoryIcons[modalTx.category || 'Other']} {modalTx.category || 'Other'}</span>
+                                }
+                                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{Icons.action.edit}</span>
+                            </dd>
                         </div>
-                    )}
 
-                    {!detailLoading && (<>
+                        {/* Category picker */}
+                        {modalPickingCategory && (
+                            <div style={{ padding: '10px var(--spacing-lg)', borderBottom: '0.5px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 6, background: 'var(--surface-sunken)' }}>
+                                {[...categories.filter(c => c.is_active),
+                                    { id: -1, name: 'Internal Transfer', icon: Icons.category.internalTransfer, color: '#6b7280', is_income: false, is_active: true },
+                                    { id: -2, name: 'Family Transfer', icon: Icons.category.familyTransfer, color: '#6b7280', is_income: false, is_active: true },
+                                ].filter((cat, i, self) => i === self.findIndex(c => c.name === cat.name)).map(cat => (
+                                    <button key={cat.name}
+                                        onClick={() => { handleCategorySelect(modalTx.id, cat.name); setModalPickingCategory(false); }}
+                                        className={`chip ${modalTx.category === cat.name ? 'chip-accent' : ''}`}
+                                        style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        {cat.icon} {cat.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
+                        <div className="label-row">
+                            <dt>Datum</dt>
+                            <dd>{formatDateFull(modalTx.date)}</dd>
+                        </div>
 
-                        {/* Parties — side by side */}
+                        {txDetail?.balance_after != null && (
+                            <div className="label-row">
+                                <dt>Zůstatek po</dt>
+                                <dd className="num">{formatCurrency(txDetail.balance_after, txDetail.balance_after_currency || modalTx.currency)}</dd>
+                            </div>
+                        )}
+                        {!txDetail?.balance_after && txDetail?.value_date && txDetail.value_date !== modalTx.date && (
+                            <div className="label-row">
+                                <dt>Valuta</dt>
+                                <dd>{formatDateFull(txDetail.value_date)}</dd>
+                            </div>
+                        )}
+
+                        {(txDetail?.account_name || modalTx.account_name) && (
+                            <div className="label-row">
+                                <dt>Účet</dt>
+                                <dd>{txDetail?.account_name || modalTx.account_name}</dd>
+                            </div>
+                        )}
+
+                        {/* Counterparty rows */}
                         {(() => {
                             const debtorName = txDetail?.debtor_name || modalTx.debtor_name;
                             const creditorName = txDetail?.creditor_name || modalTx.creditor_name;
@@ -298,191 +324,86 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             const creditorIban = txDetail?.creditor_iban || modalTx.creditor_iban || null;
                             const nameSource = txDetail?.counterparty_name_source ?? modalTx.counterparty_name_source ?? null;
                             const isOutgoing = modalTx.amount < 0;
-                            // User's own account is on the opposite side — only allow rename for counterparty.
-                            const counterpartyDirection: 'creditor' | 'debtor' = isOutgoing ? 'creditor' : 'debtor';
-                            const showDebtor = debtorName || (counterpartyDirection === 'debtor' && debtorIban);
-                            const showCreditor = creditorName || (counterpartyDirection === 'creditor' && creditorIban);
-                            if (!showDebtor && !showCreditor) return null;
+                            const counterpartyDir: 'creditor' | 'debtor' = isOutgoing ? 'creditor' : 'debtor';
 
-                            const renderRenameControls = (iban: string, direction: 'creditor' | 'debtor', currentName?: string | null) => {
-                                const editable = counterpartyDirection === direction;
-                                if (!editable) return null;
-                                if (namingIban === iban) {
-                                    return (
-                                        <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }} onClick={e => e.stopPropagation()}>
-                                            <input
-                                                autoFocus
-                                                value={nameInput}
-                                                onChange={e => setNameInput(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter') handleSaveContact(iban, direction);
-                                                    if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
-                                                }}
-                                                placeholder="Např. Táta, Nájem, ČEZ…"
-                                                style={{ flex: 1, minWidth: 0, padding: '4px 6px', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 'var(--radius-sm)', background: 'rgba(0,0,0,0.25)', color: 'var(--text)' }}
-                                            />
-                                            <button
-                                                onClick={() => handleSaveContact(iban, direction)}
-                                                disabled={savingContact || !nameInput.trim()}
-                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(45,212,191,0.4)', borderRadius: 'var(--radius-sm)', background: 'rgba(45,212,191,0.15)', color: 'var(--text)', cursor: savingContact ? 'wait' : 'pointer' }}
-                                            >{savingContact ? '…' : 'OK'}</button>
-                                            <button
-                                                onClick={() => { setNamingIban(null); setNameInput(''); }}
-                                                style={{ padding: '4px 8px', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer' }}
-                                            >✕</button>
-                                        </div>
-                                    );
-                                }
-                                // Show "Pojmenovat" when no name yet, or name came from contacts (auto/manual) — user can still edit.
-                                const canEdit = !currentName || nameSource === 'contact_auto' || nameSource === 'contact_manual';
-                                if (!canEdit) return null;
+                            const renderParty = (label: string, name: string | null | undefined, iban: string | null, dir: 'creditor' | 'debtor') => {
+                                const isEditable = counterpartyDir === dir;
+                                const canEdit = isEditable && (!name || nameSource === 'contact_auto' || nameSource === 'contact_manual');
                                 return (
-                                    <button
-                                        onClick={() => { setNamingIban(iban); setNameInput(currentName || ''); }}
-                                        style={{ marginTop: '6px', padding: '3px 8px', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-2)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                    >
-                                        {currentName ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
-                                    </button>
+                                    <div className="label-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                                            <dt>{label}</dt>
+                                            {canEdit && namingIban !== iban && (
+                                                <button onClick={() => { setNamingIban(iban); setNameInput(name || ''); }}
+                                                    style={{ fontSize: '0.75rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', padding: '2px 7px' }}>
+                                                    {name ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <dd style={{ textAlign: 'left', fontWeight: name ? 500 : 400, color: name ? 'var(--text)' : 'var(--text-3)', fontStyle: name ? 'normal' : 'italic' }}>
+                                            {name || 'Nepojmenovaná protistrana'}
+                                        </dd>
+                                        {iban && <dd style={{ textAlign: 'left', fontSize: '0.78rem', color: 'var(--text-3)', fontFamily: 'monospace', fontWeight: 400 }}>{formatAccount(iban)?.display ?? iban}</dd>}
+                                        {iban && namingIban === iban && (
+                                            <div style={{ display: 'flex', gap: 4, width: '100%' }} onClick={e => e.stopPropagation()}>
+                                                <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleSaveContact(iban, dir);
+                                                        if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
+                                                    }}
+                                                    placeholder="Např. Táta, Nájem, ČEZ…"
+                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                />
+                                                <button onClick={() => handleSaveContact(iban, dir)} disabled={savingContact || !nameInput.trim()}
+                                                    className="btn btn-primary btn-sm">{savingContact ? '…' : 'OK'}</button>
+                                                <button onClick={() => { setNamingIban(null); setNameInput(''); }} className="btn btn-sm">✕</button>
+                                            </div>
+                                        )}
+                                    </div>
                                 );
                             };
 
-                            return (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
-                                    {showDebtor && (
-                                        <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Odesílatel</div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: debtorName ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: debtorName ? 'normal' : 'italic' }}>
-                                                {debtorName || 'Nepojmenovaná protistrana'}
-                                            </div>
-                                            {debtorIban && (
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '3px', fontFamily: 'monospace' }}>
-                                                    {formatAccount(debtorIban)?.display ?? debtorIban}
-                                                </div>
-                                            )}
-                                            {debtorIban && renderRenameControls(debtorIban, 'debtor', debtorName)}
-                                        </div>
-                                    )}
-                                    {showCreditor && (
-                                        <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                            <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjemce</div>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 500, color: creditorName ? 'var(--text-primary)' : 'var(--text-tertiary)', fontStyle: creditorName ? 'normal' : 'italic' }}>
-                                                {creditorName || 'Nepojmenovaná protistrana'}
-                                            </div>
-                                            {creditorIban && (
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--text-2)', marginTop: '3px', fontFamily: 'monospace' }}>
-                                                    {formatAccount(creditorIban)?.display ?? creditorIban}
-                                                </div>
-                                            )}
-                                            {creditorIban && renderRenameControls(creditorIban, 'creditor', creditorName)}
-                                        </div>
-                                    )}
-                                </div>
-                            );
+                            const showDebtor = debtorName || (counterpartyDir === 'debtor' && debtorIban);
+                            const showCreditor = creditorName || (counterpartyDir === 'creditor' && creditorIban);
+                            return <>
+                                {showDebtor && renderParty('Odesílatel', debtorName, debtorIban, 'debtor')}
+                                {showCreditor && renderParty('Příjemce', creditorName, creditorIban, 'creditor')}
+                            </>;
                         })()}
 
-                        {/* Details grid — 2 columns */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-sm)' }}>
-                            <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Datum zaúčtování</div>
-                                <div style={{ fontSize: '0.85rem' }}>{formatDateFull(modalTx.date)}</div>
+                        {txDetail?.fx_rate && (
+                            <div className="label-row">
+                                <dt>Kurz</dt>
+                                <dd>{txDetail.fx_source_currency} → {txDetail.fx_target_currency} @ {txDetail.fx_rate}</dd>
                             </div>
-                            {txDetail?.balance_after != null ? (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zůstatek po transakci</div>
-                                    <div style={{ fontSize: '0.85rem' }}>{formatCurrency(txDetail.balance_after, txDetail.balance_after_currency || modalTx.currency)}</div>
-                                </div>
-                            ) : txDetail?.value_date && txDetail.value_date !== modalTx.date ? (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Datum valuta</div>
-                                    <div style={{ fontSize: '0.85rem' }}>{formatDateFull(txDetail.value_date)}</div>
-                                </div>
-                            ) : null}
-                            {/* Category — clickable, opens picker */}
-                            <div
-                                onClick={() => setModalPickingCategory(p => !p)}
-                                style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', cursor: 'pointer', transition: 'background 0.15s' }}
-                                onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                                onMouseOut={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
-                            >
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px', display: 'flex', justifyContent: 'space-between' }}>
-                                    <span>Kategorie</span><span style={{ opacity: 0.9, fontSize: '0.8rem' }}>{Icons.action.edit}</span>
-                                </div>
-                                <div style={{ fontSize: '0.85rem' }}>
-                                    {updatingId === modalTx.id ? 'Ukládám...' : `${categoryIcons[modalTx.category || 'Other'] || ''} ${modalTx.category || 'Other'}`}
-                                </div>
+                        )}
+                        {(txDetail?.remittance_info || (!txDetail?.remittance_info && modalTx.description && modalTx.description !== getDisplayName(modalTx))) && (
+                            <div className="label-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                                <dt>Zpráva</dt>
+                                <dd style={{ textAlign: 'left', fontWeight: 400, color: 'var(--text-2)' }}>{txDetail?.remittance_info || modalTx.description}</dd>
                             </div>
-                            {(txDetail?.account_name || modalTx.account_name) && (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Účet</div>
-                                    <div style={{ fontSize: '0.85rem' }}>{txDetail?.account_name || modalTx.account_name}</div>
-                                </div>
-                            )}
-                            {txDetail?.fx_rate && (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Kurz</div>
-                                    <div style={{ fontSize: '0.85rem' }}>{txDetail.fx_source_currency} → {txDetail.fx_target_currency} @ {txDetail.fx_rate}</div>
-                                </div>
-                            )}
-                            {txDetail?.remittance_info && (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zpráva pro příjemce</div>
-                                    <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{txDetail.remittance_info}</div>
-                                </div>
-                            )}
-                            {!txDetail?.remittance_info && modalTx.description && modalTx.description !== getDisplayName(modalTx) && (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Popis</div>
-                                    <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{modalTx.description}</div>
-                                </div>
-                            )}
-                            {txDetail?.additional_info && (
-                                <div style={{ background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', gridColumn: '1 / -1' }}>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Poznámka</div>
-                                    <div style={{ fontSize: '0.85rem', wordBreak: 'break-word' }}>{txDetail.additional_info}</div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Category picker */}
-                        {modalPickingCategory && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '10px 12px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-sm)' }}>
-                                {[...categories.filter(c => c.is_active),
-                                  { id: -1, name: 'Internal Transfer', icon: Icons.category.internalTransfer, color: '#6b7280', is_income: false, is_active: true },
-                                  { id: -2, name: 'Family Transfer', icon: Icons.category.familyTransfer, color: '#6b7280', is_income: false, is_active: true }
-                                ].filter((cat, i, self) => i === self.findIndex(c => c.name === cat.name)).map(cat => (
-                                    <button
-                                        key={cat.name}
-                                        onClick={() => { handleCategorySelect(modalTx.id, cat.name); setModalPickingCategory(false); }}
-                                        style={{
-                                            padding: '5px 10px', border: '1px solid',
-                                            borderColor: modalTx.category === cat.name ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.12)',
-                                            borderRadius: 'var(--radius-sm)', background: modalTx.category === cat.name ? 'rgba(255,255,255,0.12)' : 'transparent',
-                                            cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text)',
-                                            display: 'flex', alignItems: 'center', gap: '5px',
-                                        }}
-                                    >
-                                        {cat.icon} {cat.name}
-                                    </button>
-                                ))}
+                        )}
+                        {txDetail?.additional_info && (
+                            <div className="label-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                                <dt>Poznámka</dt>
+                                <dd style={{ textAlign: 'left', fontWeight: 400, color: 'var(--text-2)' }}>{txDetail.additional_info}</dd>
                             </div>
                         )}
 
-                        {/* Type badges + ID — footer row */}
-                        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                            {modalTx.transaction_type === 'internal_transfer' && (
-                                <span style={{ padding: '2px 8px', background: 'rgba(45,212,191,0.15)', border: '1px solid rgba(45,212,191,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>{Icons.category.internalTransfer} Interní převod</span>
-                            )}
-                            {modalTx.transaction_type === 'family_transfer' && (
-                                <span style={{ padding: '2px 8px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem' }}>{Icons.category.familyTransfer} Rodinný převod</span>
-                            )}
-                            {modalTx.is_excluded && (
-                                <span style={{ padding: '2px 8px', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', color: 'var(--text-2)' }}>Vyloučeno z rozpočtu</span>
-                            )}
-                            <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{modalTx.id}</span>
+                        {/* Footer — badges + ID */}
+                        <div className="label-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                            <dt style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span className="chip chip-success">✓ Zaúčtováno</span>
+                                {modalTx.transaction_type === 'internal_transfer' && <span className="chip">{Icons.category.internalTransfer} Interní převod</span>}
+                                {modalTx.transaction_type === 'family_transfer' && <span className="chip">{Icons.category.familyTransfer} Rodinný převod</span>}
+                                {modalTx.is_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
+                            </dt>
+                            <dd style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace', fontWeight: 400 }}>{modalTx.id}</dd>
                         </div>
-                    </>)}
-                </div>
+                    </dl>
+                )}
             </div>
+        </div>
     ) : null;
 
     return (

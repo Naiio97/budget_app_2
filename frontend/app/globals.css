@@ -751,6 +751,14 @@ select.input {
   box-shadow: var(--shadow-lg);
   min-width: 320px; max-width: 480px; width: 100%; overflow: hidden;
 }
+.label-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 11px var(--spacing-lg); gap: var(--spacing-md);
+  border-bottom: 0.5px solid var(--border);
+}
+.label-row:last-child { border-bottom: none; }
+.label-row dt { font-size: 13px; color: var(--text-3); flex-shrink: 0; padding-top: 1px; }
+.label-row dd { font-size: 13px; color: var(--text); font-weight: 500; text-align: right; min-width: 0; word-break: break-word; }
 
 /* ══ BOTTOM NAVIGATION — Apple tab bar ══════════════════════ */
 .bottom-nav {
