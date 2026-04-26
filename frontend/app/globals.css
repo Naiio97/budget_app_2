@@ -398,26 +398,27 @@ select.input {
   display: flex;
   flex: 1;
   height: 0; /* fill remaining space in flex column */
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   max-width: 100vw;
+  align-items: flex-start;
 }
 .main-content {
-  flex: 1; padding: 0;
+  flex: 1; min-width: 0; padding: 0;
   display: flex; flex-direction: column;
-  overflow: hidden;
 }
 .page-container {
   padding: var(--spacing-xl);
   flex: 1;
   display: flex; flex-direction: column;
-  overflow-y: auto;
 }
-
-@media (min-width: 769px) {
-  .main-scroll-area {
-    margin-right: -12px;
-    padding-right: 12px;
-  }
+.right-panel {
+  width: 360px; flex-shrink: 0;
+  padding: var(--spacing-lg);
+  padding-left: 0;
+  display: flex; flex-direction: column;
+  gap: var(--spacing-md);
 }
 
 /* ══ SIDEBAR — hidden, no longer used ═══════════════════════ */
@@ -928,11 +929,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .appbar { display: none; }
 
   .main-content {
-    margin-right: 0; max-width: 100vw;
+    max-width: 100vw;
     padding-top: env(safe-area-inset-top);
     padding-bottom: calc(72px + env(safe-area-inset-bottom));
   }
   .page-container { padding: var(--spacing-md); }
+  .right-panel { display: none; }
 
   .month-nav-row { flex: 1 1 auto; min-width: 0; }
   .month-nav-row > .month-nav-arrow { flex-shrink: 0; }
