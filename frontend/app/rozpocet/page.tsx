@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import GlassCard from '@/components/GlassCard';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
@@ -117,7 +116,6 @@ export default function RozpocetPage() {
     const [selectedMonth, setSelectedMonth] = useState(currentMonth);
     const [viewMode, setViewMode] = useState<'month' | 'year'>('month');
 
-    // Forms
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [newExpense, setNewExpense] = useState({ name: '', amount: '', is_auto_paid: false, match_pattern: '' });
     const [showAddAccount, setShowAddAccount] = useState(false);
@@ -134,7 +132,6 @@ export default function RozpocetPage() {
     const [editingIncomeNames, setEditingIncomeNames] = useState<Record<number, string>>({});
     const [editingExpenseNames, setEditingExpenseNames] = useState<Record<number, string>>({});
 
-    // Track which months we've already auto-synced so we don't loop
     const autoSyncedMonths = useRef<Set<string>>(new Set());
 
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -161,7 +158,6 @@ export default function RozpocetPage() {
         queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear}`).then(r => r.json()),
     });
 
-    // Previous year needed when selected month is January (previous month = December of prev year)
     const { data: prevYearData } = useQuery<AnnualData>({
         queryKey: queryKeys.annualOverview(selectedYear - 1),
         queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear - 1}`).then(r => r.json()),
@@ -179,7 +175,6 @@ export default function RozpocetPage() {
     const formatCurrency = (amount: number) =>
         new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
-    // === Month navigation ===
     const goToPrevMonth = () => {
         if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); }
         else setSelectedMonth(m => m - 1);
@@ -189,9 +184,6 @@ export default function RozpocetPage() {
         else setSelectedMonth(m => m + 1);
     };
 
-    // === Auto-sync on month open ===
-    // - Income sync: only when the salary row is missing or zero (don't overwrite manually set values)
-    // - Match transactions: always (idempotent, just marks expenses as paid)
     useEffect(() => {
         if (!budget || viewMode !== 'month') return;
         if (autoSyncedMonths.current.has(yearMonth)) return;
@@ -212,11 +204,8 @@ export default function RozpocetPage() {
         };
 
         runAutoSync();
-        // Záměrně závisíme jen na budget?.id — salary hodnotu čteme uvnitř, ale nechceme re-fire při její změně.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [budget?.id, yearMonth, viewMode, refreshBudget]);
-
-    // === Handlers ===
 
     const updateBudget = async (field: string, value: number) => {
         try {
@@ -453,7 +442,7 @@ export default function RozpocetPage() {
         }
     };
 
-    const deleteBudget = async () => {
+    const deleteBudgetMonth = async () => {
         if (!confirm(`Opravdu chcete smazat rozpočet pro ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}?`)) return;
         try {
             await fetch(`${API_BASE}/monthly-budget/${yearMonth}`, { method: 'DELETE' });
@@ -538,163 +527,111 @@ export default function RozpocetPage() {
     const savingsRate = totalIncome > 0 ? Math.round(((investmentAmount + (budget?.surplus_to_savings || 0)) / totalIncome) * 100) : 0;
     const paidCount = budget?.expenses.filter(e => e.is_paid).length || 0;
     const totalCount = budget?.expenses.length || 0;
-    const budgetUsedPct = Math.min(100, totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0);
 
-    // === Render Functions ===
+    // === Render functions ===
 
     const renderKpiBar = () => {
         if (!budget) return null;
         const isOverBudget = remaining < 0;
-
-        // Previous month income (handles Jan → Dec of prev year)
         const prevMonthIncome = selectedMonth === 1
             ? prevYearData?.months.find(m => m.month === 12)?.income ?? 0
             : annualData?.months.find(m => m.month === selectedMonth - 1)?.income ?? 0;
         const incomeDelta = totalIncome - prevMonthIncome;
         const hasPrevMonth = prevMonthIncome > 0;
-
-        // Average income across active months (income > 0) in current year — excludes
-        // the selected month so the delta is a real comparison, not self-comparison.
         const otherActiveIncomeMonths = annualData?.months.filter(m => m.income > 0 && m.month !== selectedMonth) ?? [];
         const avgIncome = otherActiveIncomeMonths.length > 0
             ? otherActiveIncomeMonths.reduce((s, m) => s + m.income, 0) / otherActiveIncomeMonths.length
             : 0;
-        const avgDelta = totalIncome - avgIncome;
-        const hasAvgComparison = avgIncome > 0 && totalIncome > 0;
+        const budgetUsedPct = Math.min(100, totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0);
 
         return (
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                gap: 'var(--spacing-sm)',
-                marginBottom: 'var(--spacing-md)',
-            }}>
-                {/* Příjmy */}
-                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Příjmy</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-success)' }}>{formatCurrency(totalIncome)}</div>
-                    {isAutoSyncing ? (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>{Icons.action.sync} Načítám...</div>
-                    ) : (
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)', marginTop: '3px', lineHeight: 1.4 }}>
-                            {hasPrevMonth && totalIncome > 0 && (
-                                <div style={{ color: incomeDelta >= 0 ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)' }}>
-                                    {incomeDelta >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(incomeDelta))} vs. minulý měsíc
-                                </div>
-                            )}
-                            {avgIncome > 0 && totalIncome > 0 && (
-                                <div>
-                                    ⌀ {formatCurrency(avgIncome)}/měs letos
-                                    {hasAvgComparison && (
-                                        <span style={{ color: avgDelta >= 0 ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)', marginLeft: '4px' }}>
-                                            ({avgDelta >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(avgDelta))})
-                                        </span>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </GlassCard>
-
-                {/* Výdaje */}
-                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Výdaje</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-danger, #ef4444)' }}>{formatCurrency(totalExpenses)}</div>
-                    <div style={{ marginTop: '6px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${budgetUsedPct}%`, background: budgetUsedPct > 90 ? 'var(--accent-danger, #ef4444)' : budgetUsedPct > 70 ? '#f59e0b' : 'var(--accent-success)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--spacing-md)' }}>
+                <div className="surface kpi">
+                    <div className="kpi-label">Příjmy</div>
+                    <div className="kpi-value num" style={{ color: 'var(--pos)', fontSize: 22 }}>{formatCurrency(totalIncome)}</div>
+                    <div className="kpi-sub">
+                        {isAutoSyncing ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ width: 10, height: 10, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                                Sync...
+                            </span>
+                        ) : hasPrevMonth && totalIncome > 0 ? (
+                            <span style={{ color: incomeDelta >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
+                                {incomeDelta >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(incomeDelta))} vs. min. měs.
+                            </span>
+                        ) : avgIncome > 0 ? (
+                            <span>⌀ {formatCurrency(avgIncome)}/měs</span>
+                        ) : null}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '3px' }}>{expensePct}% z příjmů</div>
-                </GlassCard>
+                </div>
 
-                {/* Zbývá */}
-                <GlassCard style={{ padding: '12px 16px', margin: 0, background: isOverBudget ? 'rgba(239, 68, 68, 0.08)' : undefined }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zbývá</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: isOverBudget ? 'var(--accent-danger, #ef4444)' : 'var(--accent-success)' }}>
+                <div className="surface kpi">
+                    <div className="kpi-label">Výdaje</div>
+                    <div className="kpi-value num" style={{ color: 'var(--neg)', fontSize: 22 }}>{formatCurrency(totalExpenses)}</div>
+                    <div className="kpi-sub">
+                        <div className="progress" style={{ flex: 1 }}>
+                            <span style={{ width: `${budgetUsedPct}%`, background: budgetUsedPct > 90 ? 'var(--neg)' : budgetUsedPct > 70 ? 'var(--warn)' : 'var(--pos)' }} />
+                        </div>
+                        <span>{expensePct}%</span>
+                    </div>
+                </div>
+
+                <div className="surface kpi" style={isOverBudget ? { background: 'color-mix(in srgb, var(--neg) 6%, var(--surface))' } : undefined}>
+                    <div className="kpi-label">Zbývá</div>
+                    <div className="kpi-value num" style={{ color: isOverBudget ? 'var(--neg)' : 'var(--pos)', fontSize: 22 }}>
                         {isOverBudget ? '−' : '+'}{formatCurrency(Math.abs(remaining))}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                        {isOverBudget ? `${Icons.status.overBudget} Přečerpáno` : `${Icons.status.ok} V pohodě`}
+                    <div className="kpi-sub">
+                        <span className={isOverBudget ? 'chip chip-danger' : 'chip chip-success'}>
+                            {isOverBudget ? `${Icons.status.overBudget} Přečerpáno` : `${Icons.status.ok} V pohodě`}
+                        </span>
                     </div>
-                </GlassCard>
+                </div>
 
-                {/* Zaplaceno */}
-                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Zaplaceno</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: paidCount === totalCount && totalCount > 0 ? 'var(--accent-success)' : 'var(--text-primary)' }}>
+                <div className="surface kpi">
+                    <div className="kpi-label">Zaplaceno</div>
+                    <div className="kpi-value num" style={{ color: paidCount === totalCount && totalCount > 0 ? 'var(--pos)' : 'var(--text)', fontSize: 22 }}>
                         {paidCount} / {totalCount}
                     </div>
-                    <div style={{ marginTop: '6px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: totalCount > 0 ? `${(paidCount / totalCount) * 100}%` : '0%', background: 'var(--accent-success)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+                    <div className="kpi-sub">
+                        <div className="progress" style={{ flex: 1 }}>
+                            <span style={{ width: totalCount > 0 ? `${(paidCount / totalCount) * 100}%` : '0%', background: 'var(--pos)' }} />
+                        </div>
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '3px' }}>výdajů</div>
-                </GlassCard>
+                </div>
 
-                {/* Spoření */}
-                <GlassCard style={{ padding: '12px 16px', margin: 0 }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Spoření</div>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-primary)' }}>{formatCurrency(investmentAmount + (budget?.surplus_to_savings || 0))}</div>
-                    <div style={{ marginTop: '6px', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, savingsRate)}%`, background: 'var(--accent-primary)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+                <div className="surface kpi">
+                    <div className="kpi-label">Spoření</div>
+                    <div className="kpi-value num" style={{ color: 'var(--accent)', fontSize: 22 }}>{formatCurrency(investmentAmount + (budget?.surplus_to_savings || 0))}</div>
+                    <div className="kpi-sub">
+                        <div className="progress" style={{ flex: 1 }}>
+                            <span style={{ width: `${Math.min(100, savingsRate)}%` }} />
+                        </div>
+                        <span>{savingsRate}%</span>
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '3px' }}>{savingsRate}% z příjmů</div>
-                </GlassCard>
+                </div>
             </div>
-        );
-    };
-
-    const renderExpenseChart = () => {
-        if (!budget?.expenses.length) return null;
-        const sorted = [...budget.expenses].sort((a, b) => b.my_amount - a.my_amount);
-        const maxAmount = sorted[0]?.my_amount || 1;
-
-        return (
-            <GlassCard>
-                <h3 style={{ margin: '0 0 var(--spacing-md) 0', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{Icons.section.expensesByItem} Výdaje podle položek</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '380px', overflowY: 'auto', overflowX: 'clip', paddingRight: '4px', overscrollBehavior: 'contain' }}>
-                    {sorted.map(exp => {
-                        const pct = Math.round((exp.my_amount / totalExpenses) * 100);
-                        const barWidth = Math.round((exp.my_amount / maxAmount) * 100);
-                        return (
-                            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <div style={{ width: '10px', height: '10px', borderRadius: '50%', flexShrink: 0, background: exp.is_paid ? 'var(--accent-success)' : exp.is_auto_paid ? 'rgba(34, 197, 94, 0.4)' : 'rgba(255,255,255,0.2)' }} />
-                                <span style={{ fontSize: '0.78rem', width: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={exp.name}>{exp.name}</span>
-                                <div style={{ flex: 1, height: '14px', background: 'rgba(255,255,255,0.07)', borderRadius: '3px', overflow: 'hidden' }}>
-                                    <div style={{ height: '100%', width: `${barWidth}%`, background: exp.is_paid ? 'var(--accent-success)' : 'var(--accent-primary)', borderRadius: '3px', opacity: exp.is_paid ? 0.8 : 1, transition: 'width 0.4s ease' }} />
-                                </div>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '36px', textAlign: 'right', flexShrink: 0 }}>{pct}%</span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', width: '72px', textAlign: 'right', flexShrink: 0 }}>{formatCurrency(exp.my_amount)}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div style={{ marginTop: '10px', display: 'flex', gap: '16px', fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
-                    <span><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-success)', marginRight: '4px' }} />Zaplaceno</span>
-                    <span><span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-primary)', marginRight: '4px' }} />Nezaplaceno</span>
-                </div>
-            </GlassCard>
         );
     };
 
     const renderIncomeSection = () => (
-        <GlassCard>
-            <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-success)' }}>{Icons.section.income} Příjmy</h3>
+        <div className="surface">
+            <div className="card-head">
+                <h3>{Icons.section.income} Příjmy</h3>
                 <div className="section-actions">
-                    <button className="btn" onClick={syncIncome} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                        {Icons.action.sync} Načíst z transakcí
-                    </button>
+                    <button className="btn btn-sm" onClick={syncIncome}>{Icons.action.sync} Načíst</button>
                 </div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {(budget?.income_items || []).map(item => (
-                    <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input
                             className="input"
                             value={editingIncomeNames[item.id] ?? item.name}
                             onChange={(e) => setEditingIncomeNames(prev => ({ ...prev, [item.id]: e.target.value }))}
                             onBlur={() => commitIncomeName(item)}
                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            style={{ flex: 1, padding: '4px 8px' }}
+                            style={{ flex: 1, padding: '6px 10px', fontSize: '0.875rem' }}
                         />
                         <input
                             type="number"
@@ -704,195 +641,35 @@ export default function RozpocetPage() {
                             onChange={(e) => setEditingIncomeAmounts(prev => ({ ...prev, [item.id]: e.target.value }))}
                             onBlur={() => commitIncomeAmount(item)}
                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            style={{ width: '120px', textAlign: 'right', padding: '4px 8px' }}
+                            style={{ width: 120, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
                         />
-                        <button
-                            className="btn"
-                            onClick={() => deleteIncomeItem(item.id)}
-                            title="Smazat řádek"
-                            style={{ fontSize: '0.85rem', padding: '4px 8px', background: 'transparent', border: 'none', opacity: 0.5, cursor: 'pointer' }}
-                        >
+                        <button onClick={() => deleteIncomeItem(item.id)} className="btn btn-icon btn-ghost btn-sm" title="Smazat">
                             {Icons.action.delete}
                         </button>
                     </div>
                 ))}
-                <button
-                    className="btn"
-                    onClick={addIncomeItem}
-                    style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)', alignSelf: 'flex-start' }}
-                >
+                <button className="btn btn-sm" onClick={addIncomeItem} style={{ alignSelf: 'flex-start' }}>
                     + Přidat příjem
                 </button>
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '4px', display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--accent-success)' }}>
-                    <span>Příjmy celkem</span>
-                    <span>{formatCurrency(totalIncome)}</span>
+                <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 14 }}>
+                    <span>Celkem</span>
+                    <span style={{ color: 'var(--pos)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totalIncome)}</span>
                 </div>
             </div>
-        </GlassCard>
-    );
-
-    const renderExpensesSection = () => (
-        <GlassCard>
-            <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-error, #ef4444)' }}>{Icons.section.recurringExpenses} Pravidelné výdaje</h3>
-                <div className="section-actions">
-                    <button className="btn" onClick={copyFromPrevious} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                        {Icons.action.loadFromHistory} Z minula
-                    </button>
-                    <button className="btn" onClick={matchTransactions} style={{ fontSize: '0.8rem', padding: '6px 12px', background: 'rgba(255,255,255,0.05)' }}>
-                        {Icons.action.match} Spárovat
-                    </button>
-                    <button className="btn btn-primary" onClick={() => setShowAddExpense(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-                        + Přidat
-                    </button>
-                </div>
-            </div>
-
-            {showAddExpense && (
-                <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <input className="input" placeholder="Název výdaje" value={newExpense.name} onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })} />
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <input type="number" className="input" placeholder="Částka" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })} style={{ flex: 1 }} />
-                        <input className="input" placeholder="Match pattern (volitelné)" value={newExpense.match_pattern} onChange={(e) => setNewExpense({ ...newExpense, match_pattern: e.target.value })} style={{ flex: 1 }} />
-                    </div>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={newExpense.is_auto_paid} onChange={(e) => setNewExpense({ ...newExpense, is_auto_paid: e.target.checked })} />
-                        Automatická platba (zelená)
-                    </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className="btn btn-primary" onClick={createRecurringExpense}>Uložit</button>
-                        <button className="btn" onClick={() => setShowAddExpense(false)}>Zrušit</button>
-                    </div>
-                </div>
-            )}
-
-            {/* Progress header */}
-            {totalCount > 0 && (
-                <div style={{ marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
-                        <span>Zaplaceno {paidCount} z {totalCount}</span>
-                        <span>{formatCurrency(budget?.expenses.filter(e => e.is_paid).reduce((s, e) => s + e.my_amount, 0) || 0)} / {formatCurrency(totalExpenses)}</span>
-                    </div>
-                    <div style={{ height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${totalCount > 0 ? (paidCount / totalCount) * 100 : 0}%`, background: 'var(--accent-success)', borderRadius: '3px', transition: 'width 0.4s ease' }} />
-                    </div>
-                </div>
-            )}
-
-            <div style={{ maxHeight: '380px', overflowY: 'auto', overflowX: 'clip', overscrollBehavior: 'contain' }}>
-                {budget?.expenses.map(expense => (
-                    <div
-                        key={expense.id}
-                        className="expense-row"
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: '7px 6px',
-                            borderRadius: '6px',
-                            background: expense.is_auto_paid ? 'rgba(34, 197, 94, 0.08)' : 'transparent',
-                            marginBottom: '2px',
-                            borderLeft: expense.matched_transaction_id ? '3px solid var(--accent-success)' : '3px solid transparent',
-                        }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                            <input
-                                type="checkbox"
-                                className="expense-check"
-                                checked={expense.is_paid}
-                                onChange={() => toggleExpensePaid(expense.id, expense.is_paid)}
-                            />
-                            <input
-                                value={editingExpenseNames[expense.id] ?? expense.name}
-                                onChange={(e) => setEditingExpenseNames(prev => ({ ...prev, [expense.id]: e.target.value }))}
-                                onBlur={() => saveExpenseName(expense)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                style={{
-                                    flex: 1,
-                                    minWidth: 0,
-                                    padding: '2px 4px',
-                                    background: 'transparent',
-                                    border: '1px solid transparent',
-                                    borderRadius: '4px',
-                                    color: 'inherit',
-                                    fontSize: '0.875rem',
-                                    textDecoration: expense.is_paid ? 'line-through' : 'none',
-                                    opacity: expense.is_paid ? 0.55 : 1,
-                                }}
-                                onFocus={(e) => { e.currentTarget.style.border = '1px solid rgba(255,255,255,0.15)'; }}
-                                onBlurCapture={(e) => { e.currentTarget.style.border = '1px solid transparent'; }}
-                            />
-                        </div>
-                        <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                            <CustomSelect
-                                compact
-                                value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
-                                onChange={(val) => {
-                                    if (val === '100') updateExpensePercentage(expense.id, 100);
-                                    else if (val === '50') updateExpensePercentage(expense.id, 50);
-                                    else {
-                                        // 'custom' → uložit aktuální my_amount jako override, aby se select přepnul na "Vlastní"
-                                        setEditingMyAmounts(prev => ({
-                                            ...prev,
-                                            [expense.id]: String(Math.round(expense.my_amount)),
-                                        }));
-                                        if (expense.my_amount_override === null) {
-                                            saveCustomOverride(expense.id, Math.round(expense.my_amount));
-                                        }
-                                    }
-                                }}
-                                style={{ width: '78px' }}
-                                options={[
-                                    { value: '100', label: '100%' },
-                                    { value: '50', label: '50%' },
-                                    { value: 'custom', label: 'Vlastní' },
-                                ]}
-                            />
-                            <input
-                                type="number"
-                                className="input"
-                                value={editingAmounts[expense.id] ?? expense.amount}
-                                onChange={(e) => setEditingAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
-                                onBlur={() => saveExpenseAmount(expense)}
-                                style={{ width: '95px', textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem' }}
-                                title="Celková částka"
-                            />
-                            {(expense.my_percentage < 100 || expense.my_amount_override !== null) && (
-                                <input
-                                    type="number"
-                                    className="input"
-                                    value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
-                                    onChange={(e) => setEditingMyAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
-                                    onBlur={() => saveMyAmount(expense)}
-                                    style={{ width: '85px', textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem', color: 'var(--accent-primary)', borderColor: 'rgba(0,122,255,0.3)' }}
-                                    title="Moje část (Kč)"
-                                />
-                            )}
-                            <button
-                                onClick={() => deleteMonthlyExpense(expense.id)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', opacity: 0.4, padding: '4px' }}
-                            >{Icons.action.delete}</button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-                <span>Výdaje celkem</span>
-                <span style={{ color: 'var(--accent-error, #ef4444)' }}>{formatCurrency(totalExpenses)}</span>
-            </div>
-        </GlassCard>
+        </div>
     );
 
     const renderSurplusSection = () => {
         const isOverBudget = remaining < 0;
         const netSavings = investmentAmount + (budget?.surplus_to_savings || 0);
         return (
-            <GlassCard>
-                <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.surplus} Přebytek & Spoření</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="surface">
+                <div className="card-head">
+                    <h3>{Icons.section.surplus} Přebytek & Spoření</h3>
+                </div>
+                <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.875rem' }}>Investice tento měsíc</span>
+                        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Investice</span>
                         <input
                             type="number"
                             className="input"
@@ -900,11 +677,11 @@ export default function RozpocetPage() {
                             value={editingBudgetFields['investment_amount'] ?? ((budget?.investment_amount || 0) === 0 ? '' : String(budget?.investment_amount))}
                             onChange={(e) => setEditingBudgetFields(prev => ({ ...prev, investment_amount: e.target.value }))}
                             onBlur={() => commitBudgetField('investment_amount', budget?.investment_amount || 0)}
-                            style={{ width: '110px', textAlign: 'right', padding: '4px 8px' }}
+                            style={{ width: 110, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
                         />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.875rem' }}>Posláno na spořící účet</span>
+                        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Spořící účet</span>
                         <input
                             type="number"
                             className="input"
@@ -912,169 +689,341 @@ export default function RozpocetPage() {
                             value={editingBudgetFields['surplus_to_savings'] ?? ((budget?.surplus_to_savings || 0) === 0 ? '' : String(budget?.surplus_to_savings))}
                             onChange={(e) => setEditingBudgetFields(prev => ({ ...prev, surplus_to_savings: e.target.value }))}
                             onBlur={() => commitBudgetField('surplus_to_savings', budget?.surplus_to_savings || 0)}
-                            style={{ width: '110px', textAlign: 'right', padding: '4px 8px' }}
+                            style={{ width: 110, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
                         />
                     </div>
 
-                    {/* Savings rate bar */}
                     {totalIncome > 0 && (
-                        <div style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '6px' }}>
-                                <span style={{ color: 'var(--text-secondary)' }}>Spořící sazba</span>
-                                <span style={{ fontWeight: 600, color: savingsRate >= 15 ? 'var(--accent-success)' : savingsRate >= 10 ? '#f59e0b' : 'var(--accent-danger, #ef4444)' }}>
+                        <div style={{ padding: '10px 12px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
+                                <span style={{ color: 'var(--text-2)' }}>Spořící sazba</span>
+                                <span style={{ fontWeight: 600, color: savingsRate >= 15 ? 'var(--pos)' : savingsRate >= 10 ? 'var(--warn)' : 'var(--neg)' }}>
                                     {savingsRate}% {savingsRate >= 15 ? Icons.savingsRate.good : savingsRate >= 10 ? Icons.savingsRate.neutral : Icons.savingsRate.bad}
                                 </span>
                             </div>
-                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden', position: 'relative' }}>
-                                <div style={{ height: '100%', width: `${Math.min(100, savingsRate)}%`, background: savingsRate >= 15 ? 'var(--accent-success)' : savingsRate >= 10 ? '#f59e0b' : 'var(--accent-danger, #ef4444)', borderRadius: '3px', transition: 'width 0.5s ease' }} />
-                                {/* 15% target marker */}
-                                <div style={{ position: 'absolute', top: 0, left: '15%', width: '2px', height: '100%', background: 'rgba(255,255,255,0.4)' }} />
+                            <div className="progress" style={{ position: 'relative' }}>
+                                <span style={{ width: `${Math.min(100, savingsRate)}%`, background: savingsRate >= 15 ? 'var(--pos)' : savingsRate >= 10 ? 'var(--warn)' : 'var(--neg)' }} />
+                                <div style={{ position: 'absolute', top: 0, left: '15%', width: 1, height: '100%', background: 'var(--border-strong)' }} />
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: '4px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>
                                 <span>{formatCurrency(netSavings)} ušetřeno</span>
                                 <span>cíl: 15%</span>
                             </div>
                         </div>
                     )}
 
-                    {/* Remaining */}
                     <div style={{
-                        padding: 'var(--spacing-md)',
-                        background: isOverBudget ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-                        borderRadius: '8px',
-                        textAlign: 'center',
-                        border: `1px solid ${isOverBudget ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}`,
+                        padding: 'var(--spacing-md)', textAlign: 'center',
+                        background: isOverBudget
+                            ? 'color-mix(in srgb, var(--neg) 8%, transparent)'
+                            : 'color-mix(in srgb, var(--pos) 8%, transparent)',
+                        borderRadius: 'var(--radius-md)',
+                        border: `0.5px solid ${isOverBudget ? 'color-mix(in srgb, var(--neg) 20%, transparent)' : 'color-mix(in srgb, var(--pos) 20%, transparent)'}`,
                     }}>
-                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Zbylé peníze</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 700, color: isOverBudget ? 'var(--accent-danger, #ef4444)' : 'var(--accent-success)' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Zbylé peníze</div>
+                        <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: isOverBudget ? 'var(--neg)' : 'var(--pos)' }}>
                             {formatCurrency(remaining)}
                         </div>
-                        {isOverBudget && <div style={{ fontSize: '0.78rem', color: 'var(--accent-danger, #ef4444)', marginTop: '2px' }}>{Icons.status.overBudget} Přečerpáno!</div>}
+                        {isOverBudget && <div style={{ fontSize: 12, color: 'var(--neg)', marginTop: 4 }}>{Icons.status.overBudget} Přečerpáno</div>}
                     </div>
                 </div>
-            </GlassCard>
+            </div>
+        );
+    };
+
+    const renderExpensesSection = () => (
+        <div className="surface">
+            <div className="card-head">
+                <h3>{Icons.section.recurringExpenses} Pravidelné výdaje</h3>
+                <div className="section-actions">
+                    <button className="btn btn-sm" onClick={copyFromPrevious}>{Icons.action.loadFromHistory} Z minula</button>
+                    <button className="btn btn-sm" onClick={matchTransactions}>{Icons.action.match} Spárovat</button>
+                    <button className="btn btn-primary btn-sm" onClick={() => setShowAddExpense(true)}>+ Přidat</button>
+                </div>
+            </div>
+
+            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {showAddExpense && (
+                    <div style={{ background: 'var(--surface-sunken)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <input className="input" placeholder="Název výdaje" value={newExpense.name} onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })} />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input type="number" className="input" placeholder="Částka" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })} style={{ flex: 1 }} />
+                            <input className="input" placeholder="Match pattern (volitelné)" value={newExpense.match_pattern} onChange={(e) => setNewExpense({ ...newExpense, match_pattern: e.target.value })} style={{ flex: 1 }} />
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={newExpense.is_auto_paid} onChange={(e) => setNewExpense({ ...newExpense, is_auto_paid: e.target.checked })} />
+                            Automatická platba
+                        </label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-primary btn-sm" onClick={createRecurringExpense}>Uložit</button>
+                            <button className="btn btn-sm" onClick={() => setShowAddExpense(false)}>Zrušit</button>
+                        </div>
+                    </div>
+                )}
+
+                {totalCount > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>
+                            <span>Zaplaceno {paidCount} / {totalCount}</span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {formatCurrency(budget?.expenses.filter(e => e.is_paid).reduce((s, e) => s + e.my_amount, 0) || 0)} / {formatCurrency(totalExpenses)}
+                            </span>
+                        </div>
+                        <div className="progress">
+                            <span style={{ width: `${totalCount > 0 ? (paidCount / totalCount) * 100 : 0}%`, background: 'var(--pos)' }} />
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ maxHeight: 380, overflowY: 'auto', overflowX: 'clip', overscrollBehavior: 'contain' }}>
+                    {budget?.expenses.map(expense => (
+                        <div
+                            key={expense.id}
+                            className="expense-row"
+                            style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                padding: '7px 6px', borderRadius: 'var(--radius-sm)',
+                                background: expense.is_auto_paid ? 'color-mix(in srgb, var(--pos) 6%, transparent)' : 'transparent',
+                                marginBottom: 2,
+                                borderLeft: expense.matched_transaction_id ? `3px solid var(--pos)` : '3px solid transparent',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                <input
+                                    type="checkbox"
+                                    className="expense-check"
+                                    checked={expense.is_paid}
+                                    onChange={() => toggleExpensePaid(expense.id, expense.is_paid)}
+                                />
+                                <input
+                                    value={editingExpenseNames[expense.id] ?? expense.name}
+                                    onChange={(e) => setEditingExpenseNames(prev => ({ ...prev, [expense.id]: e.target.value }))}
+                                    onBlur={() => saveExpenseName(expense)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                    style={{
+                                        flex: 1, minWidth: 0,
+                                        padding: '2px 4px',
+                                        background: 'transparent',
+                                        border: '1px solid transparent',
+                                        borderRadius: 'var(--radius-sm)',
+                                        color: 'inherit', fontSize: '0.875rem',
+                                        textDecoration: expense.is_paid ? 'line-through' : 'none',
+                                        opacity: expense.is_paid ? 0.5 : 1,
+                                    }}
+                                    onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                                    onBlurCapture={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
+                                />
+                            </div>
+                            <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                <CustomSelect
+                                    compact
+                                    value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
+                                    onChange={(val) => {
+                                        if (val === '100') updateExpensePercentage(expense.id, 100);
+                                        else if (val === '50') updateExpensePercentage(expense.id, 50);
+                                        else {
+                                            setEditingMyAmounts(prev => ({ ...prev, [expense.id]: String(Math.round(expense.my_amount)) }));
+                                            if (expense.my_amount_override === null) saveCustomOverride(expense.id, Math.round(expense.my_amount));
+                                        }
+                                    }}
+                                    style={{ width: 78 }}
+                                    options={[
+                                        { value: '100', label: '100%' },
+                                        { value: '50', label: '50%' },
+                                        { value: 'custom', label: 'Vlastní' },
+                                    ]}
+                                />
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={editingAmounts[expense.id] ?? expense.amount}
+                                    onChange={(e) => setEditingAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
+                                    onBlur={() => saveExpenseAmount(expense)}
+                                    style={{ width: 95, textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem' }}
+                                    title="Celková částka"
+                                />
+                                {(expense.my_percentage < 100 || expense.my_amount_override !== null) && (
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
+                                        onChange={(e) => setEditingMyAmounts(prev => ({ ...prev, [expense.id]: e.target.value }))}
+                                        onBlur={() => saveMyAmount(expense)}
+                                        style={{ width: 85, textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem', color: 'var(--accent)', borderColor: 'var(--accent-soft)' }}
+                                        title="Moje část (Kč)"
+                                    />
+                                )}
+                                <button
+                                    onClick={() => deleteMonthlyExpense(expense.id)}
+                                    className="btn btn-icon btn-ghost btn-sm"
+                                    style={{ opacity: 0.4, fontSize: '0.8rem' }}
+                                >{Icons.action.delete}</button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 14 }}>
+                    <span>Celkem</span>
+                    <span style={{ color: 'var(--neg)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totalExpenses)}</span>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderExpenseChart = () => {
+        if (!budget?.expenses.length) return null;
+        const sorted = [...budget.expenses].sort((a, b) => b.my_amount - a.my_amount);
+        const maxAmount = sorted[0]?.my_amount || 1;
+
+        return (
+            <div className="surface">
+                <div className="card-head">
+                    <h3>{Icons.section.expensesByItem} Výdaje podle položek</h3>
+                </div>
+                <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 360, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+                    {sorted.map(exp => {
+                        const pct = Math.round((exp.my_amount / totalExpenses) * 100);
+                        const barWidth = Math.round((exp.my_amount / maxAmount) * 100);
+                        return (
+                            <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: exp.is_paid ? 'var(--pos)' : exp.is_auto_paid ? 'color-mix(in srgb, var(--pos) 40%, transparent)' : 'var(--border-strong)' }} />
+                                <span style={{ fontSize: '0.78rem', width: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={exp.name}>{exp.name}</span>
+                                <div className="progress" style={{ flex: 1 }}>
+                                    <span style={{ width: `${barWidth}%`, background: exp.is_paid ? 'var(--pos)' : 'var(--accent)' }} />
+                                </div>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', width: 30, textAlign: 'right', flexShrink: 0 }}>{pct}%</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-2)', width: 72, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(exp.my_amount)}</span>
+                            </div>
+                        );
+                    })}
+                    <div style={{ marginTop: 6, display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-3)' }}>
+                        <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--pos)', marginRight: 4 }} />Zaplaceno</span>
+                        <span><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginRight: 4 }} />Nezaplaceno</span>
+                    </div>
+                </div>
+            </div>
         );
     };
 
     const renderManualAccounts = () => (
-        <GlassCard>
-            <div className="section-header-wrap">
-                <h3 style={{ margin: 0, color: 'var(--accent-primary)' }}>{Icons.section.savingsAccounts} Spořící účty</h3>
-                <div className="section-actions">
-                    <button className="btn btn-primary" onClick={() => setShowAddAccount(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-                        + Přidat
-                    </button>
-                </div>
+        <div className="surface">
+            <div className="card-head">
+                <h3>{Icons.section.savingsAccounts} Spořící účty</h3>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowAddAccount(true)}>+ Přidat</button>
             </div>
+            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                {showAddAccount && (
+                    <div style={{ background: 'var(--surface-sunken)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--spacing-md)', display: 'flex', gap: 8 }}>
+                        <input className="input" placeholder="Název účtu" value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} style={{ flex: 1 }} />
+                        <input type="number" className="input" placeholder="Zůstatek" value={newAccount.balance} onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })} style={{ width: 110 }} />
+                        <button className="btn btn-primary btn-sm" onClick={createManualAccount}>Uložit</button>
+                        <button className="btn btn-sm" onClick={() => setShowAddAccount(false)}>×</button>
+                    </div>
+                )}
 
-            {showAddAccount && (
-                <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)', display: 'flex', gap: '8px' }}>
-                    <input className="input" placeholder="Název účtu" value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} style={{ flex: 1 }} />
-                    <input type="number" className="input" placeholder="Zůstatek" value={newAccount.balance} onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })} style={{ width: '120px' }} />
-                    <button className="btn btn-primary" onClick={createManualAccount}>Uložit</button>
-                    <button className="btn" onClick={() => setShowAddAccount(false)}>×</button>
-                </div>
-            )}
+                {manualAccounts.map(account => (
+                    <div key={account.id} style={{ padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <span style={{ fontWeight: 600, fontSize: 14 }}>{account.name}</span>
+                            {editingAccountId === account.id ? (
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: 100, padding: '4px 8px' }} />
+                                    <button className="btn btn-primary btn-sm" onClick={() => updateManualAccountBalance(account.id)}>{Icons.action.confirm}</button>
+                                    <button className="btn btn-sm" onClick={() => setEditingAccountId(null)}>×</button>
+                                </div>
+                            ) : (
+                                <span onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }}
+                                    style={{ cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
+                                    {formatCurrency(account.balance)} {Icons.action.edit}
+                                </span>
+                            )}
+                        </div>
 
-            {manualAccounts.map(account => (
-                <div key={account.id} style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', marginBottom: 'var(--spacing-sm)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: 600 }}>{account.name}</span>
-                        {editingAccountId === account.id ? (
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                                <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: '100px', padding: '4px 8px' }} />
-                                <button className="btn btn-primary" onClick={() => updateManualAccountBalance(account.id)} style={{ padding: '4px 8px' }}>{Icons.action.confirm}</button>
-                                <button className="btn" onClick={() => setEditingAccountId(null)} style={{ padding: '4px 8px' }}>×</button>
+                        {Array.isArray(account.envelopes) && account.envelopes.length > 0 && (
+                            <div style={{ borderLeft: '2px solid var(--border)', paddingLeft: 12, marginBottom: 8 }}>
+                                <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Obálky</div>
+                                {account.envelopes.map(env => (
+                                    <div key={env.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, marginBottom: 3 }}>
+                                        <span style={{ color: 'var(--text-2)' }}>
+                                            {env.is_mine ? Icons.envelope.mine : Icons.envelope.shared} {env.name}
+                                        </span>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                            <span style={{ color: env.is_mine ? 'var(--pos)' : 'var(--warn)', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                                                {env.is_mine ? '' : '−'}{formatCurrency(env.amount)}
+                                            </span>
+                                            <button onClick={() => deleteAccountItem(account.id, env.id)} className="btn btn-icon btn-ghost btn-sm" style={{ opacity: 0.4 }}>{Icons.action.delete}</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {showAddItem === account.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
+                                    <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: 80, padding: '4px 8px' }} />
+                                    <button className="btn btn-primary btn-sm" onClick={() => addAccountItem(account.id)}>{Icons.action.confirm}</button>
+                                    <button className="btn btn-sm" onClick={() => setShowAddItem(null)}>×</button>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
+                                    <input type="checkbox" checked={newItem.is_mine} onChange={(e) => setNewItem({ ...newItem, is_mine: e.target.checked })} />
+                                    Volné (moje peníze)
+                                </label>
                             </div>
                         ) : (
-                            <span onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }} style={{ cursor: 'pointer', color: 'var(--accent-primary)', fontWeight: 600 }}>
-                                {formatCurrency(account.balance)} {Icons.action.edit}
-                            </span>
+                            <button onClick={() => setShowAddItem(account.id)} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
+                                + Přidat obálku
+                            </button>
                         )}
-                    </div>
 
-                    {Array.isArray(account.envelopes) && account.envelopes.length > 0 && (
-                        <div style={{ paddingLeft: '14px', borderLeft: '2px solid rgba(255,255,255,0.1)', marginBottom: '8px' }}>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Obálky:</div>
-                            {account.envelopes.map(env => (
-                                <div key={env.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.83rem', marginBottom: '2px' }}>
-                                    <span style={{ color: 'var(--text-secondary)' }}>
-                                        {env.is_mine ? Icons.envelope.mine : Icons.envelope.shared} {env.name}
-                                    </span>
-                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                        <span style={{ color: env.is_mine ? 'var(--accent-success)' : '#f59e0b' }}>
-                                            {env.is_mine ? '' : '−'}{formatCurrency(env.amount)}
-                                        </span>
-                                        <button onClick={() => deleteAccountItem(account.id, env.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.7rem', opacity: 0.4 }}>{Icons.action.delete}</button>
-                                    </div>
+                        <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 8, marginTop: 8 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-3)', marginBottom: 3 }}>
+                                <span>Cizí rezervy</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>−{formatCurrency(account.balance - account.my_balance)}</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 14 }}>
+                                <span>Volné k utracení</span>
+                                <span style={{ color: 'var(--pos)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(account.my_balance)}</span>
+                            </div>
+                            {account.balance > 0 && (
+                                <div className="progress" style={{ marginTop: 8 }}>
+                                    <span style={{ width: `${Math.min(100, (account.my_balance / account.balance) * 100)}%`, background: 'var(--pos)' }} />
                                 </div>
-                            ))}
+                            )}
                         </div>
-                    )}
-
-                    {showAddItem === account.id ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
-                            <div style={{ display: 'flex', gap: '4px' }}>
-                                <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
-                                <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: '80px', padding: '4px 8px' }} />
-                                <button className="btn btn-primary" onClick={() => addAccountItem(account.id)} style={{ padding: '4px 8px' }}>{Icons.action.confirm}</button>
-                                <button className="btn" onClick={() => setShowAddItem(null)} style={{ padding: '4px 8px' }}>×</button>
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', cursor: 'pointer', paddingLeft: '2px' }}>
-                                <input type="checkbox" checked={newItem.is_mine} onChange={(e) => setNewItem({ ...newItem, is_mine: e.target.checked })} />
-                                Volné (moje peníze)
-                            </label>
-                        </div>
-                    ) : (
-                        <button onClick={() => setShowAddItem(account.id)} style={{ fontSize: '0.75rem', background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '2px 0' }}>
-                            + Přidat obálku
-                        </button>
-                    )}
-
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px', marginTop: '8px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.83rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
-                            <span>Cizí rezervy</span>
-                            <span>−{formatCurrency(account.balance - account.my_balance)}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, color: 'var(--accent-success)' }}>
-                            <span>Volné k utracení</span>
-                            <span>{formatCurrency(account.my_balance)}</span>
-                        </div>
-                        {account.balance > 0 && (
-                            <div style={{ marginTop: '8px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ height: '100%', width: `${Math.min(100, (account.my_balance / account.balance) * 100)}%`, background: 'var(--accent-success)', borderRadius: '3px' }} />
-                            </div>
-                        )}
                     </div>
-                </div>
-            ))}
-        </GlassCard>
+                ))}
+            </div>
+        </div>
     );
 
     const renderAnnualOverview = () => {
-        if (!annualData) return <div>Načítám...</div>;
+        if (!annualData) return (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-xl)' }}>
+                <div style={{ width: 28, height: 28, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+            </div>
+        );
 
         const maxValue = Math.max(...annualData.months.map(m => Math.max(m.income, m.expenses)));
         const activeMonths = annualData.months.filter(m => m.income > 0);
         const prev = annualData.previous_year;
 
-        // YoY delta badge — returns null if previous value is 0 (avoid Infinity)
         const renderDelta = (current: number, previous: number | undefined, invert = false) => {
             if (previous === undefined || previous === 0) return null;
             const deltaPct = ((current - previous) / Math.abs(previous)) * 100;
             if (Math.abs(deltaPct) < 0.5) return null;
-            // invert=true for expenses (increase = bad)
             const isGood = invert ? deltaPct < 0 : deltaPct > 0;
-            const color = isGood ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)';
+            const color = isGood ? 'var(--pos)' : 'var(--neg)';
             const arrow = deltaPct > 0 ? '▲' : '▼';
             return (
-                <span style={{ fontSize: '0.72rem', color, fontWeight: 600, marginLeft: '6px' }} title={`Oproti ${selectedYear - 1}: ${formatCurrency(previous)}`}>
+                <span style={{ fontSize: 11, color, fontWeight: 600, marginLeft: 6 }} title={`Oproti ${selectedYear - 1}: ${formatCurrency(previous)}`}>
                     {arrow} {Math.abs(deltaPct).toFixed(1)}%
                 </span>
             );
         };
 
-        // Cumulative net per month (running total of income - expenses)
         let runningNet = 0;
         const cumulativeNet = annualData.months.map(m => {
             runningNet += m.income - m.expenses;
@@ -1084,272 +1033,195 @@ export default function RozpocetPage() {
         const cumulativeMin = Math.min(...cumulativeNet, 0);
         const cumulativeRange = cumulativeMax - cumulativeMin || 1;
 
-        // Best/worst month (by net = income - expenses), savings-rate sparkline
         const monthsWithNet = activeMonths.map(m => ({
-            ...m,
-            net: m.income - m.expenses,
+            ...m, net: m.income - m.expenses,
             savingsRate: m.income > 0 ? (m.investments / m.income) * 100 : 0,
         }));
-        const bestMonth = monthsWithNet.length > 0
-            ? monthsWithNet.reduce((a, b) => (a.net > b.net ? a : b))
-            : null;
-        const worstMonth = monthsWithNet.length > 0
-            ? monthsWithNet.reduce((a, b) => (a.net < b.net ? a : b))
-            : null;
-
-        const avgSavingsRate = annualData.totals.income > 0
-            ? (annualData.totals.investments / annualData.totals.income) * 100
-            : 0;
-
-        // Sparkline path for savings rate across all 12 months
-        const sparkW = 280;
-        const sparkH = 44;
+        const bestMonth = monthsWithNet.length > 0 ? monthsWithNet.reduce((a, b) => (a.net > b.net ? a : b)) : null;
+        const worstMonth = monthsWithNet.length > 0 ? monthsWithNet.reduce((a, b) => (a.net < b.net ? a : b)) : null;
+        const avgSavingsRate = annualData.totals.income > 0 ? (annualData.totals.investments / annualData.totals.income) * 100 : 0;
+        const sparkW = 280; const sparkH = 44;
         const maxSavingsRate = Math.max(...annualData.months.map(m => m.income > 0 ? (m.investments / m.income) * 100 : 0), 10);
-        const sparkPoints = annualData.months.map((m, i) => {
-            const x = (i / 11) * sparkW;
-            const rate = m.income > 0 ? (m.investments / m.income) * 100 : 0;
-            const y = sparkH - (rate / maxSavingsRate) * sparkH;
-            return { x, y, rate, hasData: m.income > 0 };
-        });
-        const sparkPath = sparkPoints
-            .filter(p => p.hasData)
-            .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-            .join(' ');
+        const sparkPoints = annualData.months.map((m, i) => ({
+            x: (i / 11) * sparkW,
+            y: sparkH - ((m.income > 0 ? (m.investments / m.income) * 100 : 0) / maxSavingsRate) * sparkH,
+            hasData: m.income > 0,
+        }));
+        const sparkPath = sparkPoints.filter(p => p.hasData).map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
         return (
-            <>
-                <div className="dashboard-grid" style={{ gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
-                    <GlassCard>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Příjmy celkem</div>
-                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-success)' }}>
-                            {formatCurrency(annualData.totals.income)}
-                            {renderDelta(annualData.totals.income, prev?.income)}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>⌀ {formatCurrency(annualData.averages.income)}/měs</div>
-                    </GlassCard>
-                    <GlassCard>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Výdaje celkem</div>
-                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-danger, #ef4444)' }}>
-                            {formatCurrency(annualData.totals.expenses)}
-                            {renderDelta(annualData.totals.expenses, prev?.expenses, true)}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>⌀ {formatCurrency(annualData.averages.expenses)}/měs</div>
-                    </GlassCard>
-                    <GlassCard>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Investice</div>
-                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent-primary)' }}>
-                            {formatCurrency(annualData.totals.investments)}
-                            {renderDelta(annualData.totals.investments, prev?.investments)}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>⌀ {formatCurrency(annualData.averages.investments)}/měs</div>
-                    </GlassCard>
-                    <GlassCard>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Čistý zisk</div>
-                        <div style={{ fontSize: '1.3rem', fontWeight: 700, color: annualData.totals.net >= 0 ? 'var(--accent-success)' : 'var(--accent-danger, #ef4444)' }}>
-                            {formatCurrency(annualData.totals.net)}
-                            {renderDelta(annualData.totals.net, prev?.net)}
-                        </div>
-                        {activeMonths.length > 0 && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                                úspor. sazba: {Math.round(avgSavingsRate)}%
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                <div className="grid-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                    {[
+                        { label: 'Příjmy celkem', value: annualData.totals.income, prev: prev?.income, color: 'var(--pos)', avg: annualData.averages.income },
+                        { label: 'Výdaje celkem', value: annualData.totals.expenses, prev: prev?.expenses, color: 'var(--neg)', avg: annualData.averages.expenses, invert: true },
+                        { label: 'Investice', value: annualData.totals.investments, prev: prev?.investments, color: 'var(--accent)', avg: annualData.averages.investments },
+                        { label: 'Čistý zisk', value: annualData.totals.net, prev: prev?.net, color: annualData.totals.net >= 0 ? 'var(--pos)' : 'var(--neg)' },
+                    ].map(item => (
+                        <div key={item.label} className="surface kpi">
+                            <div className="kpi-label">{item.label}</div>
+                            <div className="kpi-value num" style={{ color: item.color, fontSize: 20 }}>
+                                {formatCurrency(item.value)}
+                                {renderDelta(item.value, item.prev, item.invert)}
                             </div>
-                        )}
-                    </GlassCard>
+                            {item.avg !== undefined && (
+                                <div className="kpi-sub">⌀ {formatCurrency(item.avg)}/měs</div>
+                            )}
+                            {item.label === 'Čistý zisk' && activeMonths.length > 0 && (
+                                <div className="kpi-sub">úspor. {Math.round(avgSavingsRate)}%</div>
+                            )}
+                        </div>
+                    ))}
                 </div>
 
-                {/* Monthly chart with cumulative net overlay */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.monthlyOverview} Měsíční přehled {selectedYear}</h3>
-                    <div style={{ position: 'relative', height: '180px' }}>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', height: '180px' }}>
-                            {annualData.months.map((month, idx) => (
-                                <div
-                                    key={month.month}
-                                    style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', cursor: 'pointer' }}
-                                    onClick={() => { setViewMode('month'); setSelectedMonth(month.month); }}
-                                    title={`${MONTH_NAMES[idx]}: Příjmy ${formatCurrency(month.income)}, Výdaje ${formatCurrency(month.expenses)}, Kumul. čistý ${formatCurrency(cumulativeNet[idx])}`}
-                                >
-                                    <div style={{ display: 'flex', gap: '2px', alignItems: 'flex-end', height: '160px' }}>
-                                        <div style={{ width: '10px', height: maxValue > 0 ? `${(month.income / maxValue) * 100}%` : '0%', background: 'var(--accent-success)', borderRadius: '2px 2px 0 0', minHeight: month.income > 0 ? '4px' : '0', transition: 'height 0.3s ease' }} />
-                                        <div style={{ width: '10px', height: maxValue > 0 ? `${(month.expenses / maxValue) * 100}%` : '0%', background: 'var(--accent-danger, #ef4444)', borderRadius: '2px 2px 0 0', minHeight: month.expenses > 0 ? '4px' : '0', opacity: month.expenses > month.income ? 1 : 0.75, transition: 'height 0.3s ease' }} />
-                                    </div>
-                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-tertiary)' }}>{MONTH_NAMES[idx].substring(0, 3)}</span>
-                                </div>
-                            ))}
-                        </div>
-                        {/* Cumulative net overlay — only show if there's any activity */}
-                        {activeMonths.length > 0 && (
-                            <svg
-                                viewBox={`0 0 100 160`}
-                                preserveAspectRatio="none"
-                                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '160px', pointerEvents: 'none' }}
-                            >
-                                <polyline
-                                    points={cumulativeNet.map((val, i) => {
-                                        const x = (i / 11) * 100;
-                                        const y = 160 - ((val - cumulativeMin) / cumulativeRange) * 160;
-                                        return `${x},${y.toFixed(2)}`;
-                                    }).join(' ')}
-                                    fill="none"
-                                    stroke="var(--accent-primary)"
-                                    strokeWidth="1.2"
-                                    vectorEffect="non-scaling-stroke"
-                                    strokeLinejoin="round"
-                                    strokeDasharray="4 3"
-                                />
-                            </svg>
-                        )}
+                {/* Monthly bar chart */}
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>{Icons.section.monthlyOverview} Měsíční přehled {selectedYear}</h3>
                     </div>
-                    <div style={{ display: 'flex', gap: 'var(--spacing-md)', justifyContent: 'center', marginTop: 'var(--spacing-sm)', fontSize: '0.78rem', flexWrap: 'wrap' }}>
-                        <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--accent-success)', borderRadius: '2px', marginRight: '4px' }} />Příjmy</span>
-                        <span><span style={{ display: 'inline-block', width: '10px', height: '10px', background: 'var(--accent-danger, #ef4444)', borderRadius: '2px', marginRight: '4px' }} />Výdaje</span>
-                        <span><span style={{ display: 'inline-block', width: '14px', height: '2px', background: 'var(--accent-primary)', marginRight: '4px', verticalAlign: 'middle' }} />Kumulativní čistý</span>
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '4px' }}>Klikni na měsíc pro detail</div>
-                </GlassCard>
-
-                {/* Best/Worst month + savings rate sparkline */}
-                {activeMonths.length > 0 && (
-                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.bestWorst} Nejlepší &amp; nejhorší měsíc</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)' }}>
-                            {bestMonth && (
-                                <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.08)', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>🥇 Nejlepší měsíc</div>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-success)', marginTop: '2px' }}>
-                                        {MONTH_NAMES[bestMonth.month - 1]}
+                    <div className="card-body">
+                        <div style={{ position: 'relative', height: 180 }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 180 }}>
+                                {annualData.months.map((month, idx) => (
+                                    <div key={month.month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'pointer' }}
+                                        onClick={() => { setViewMode('month'); setSelectedMonth(month.month); }}
+                                        title={`${MONTH_NAMES[idx]}: ${formatCurrency(month.income)} / ${formatCurrency(month.expenses)}`}>
+                                        <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 160 }}>
+                                            <div style={{ width: 10, height: maxValue > 0 ? `${(month.income / maxValue) * 100}%` : '0%', background: 'var(--pos)', borderRadius: '2px 2px 0 0', minHeight: month.income > 0 ? 4 : 0, transition: 'height 0.3s ease' }} />
+                                            <div style={{ width: 10, height: maxValue > 0 ? `${(month.expenses / maxValue) * 100}%` : '0%', background: 'var(--neg)', borderRadius: '2px 2px 0 0', minHeight: month.expenses > 0 ? 4 : 0, opacity: month.expenses > month.income ? 1 : 0.7, transition: 'height 0.3s ease' }} />
+                                        </div>
+                                        <span style={{ fontSize: '0.62rem', color: 'var(--text-3)' }}>{MONTH_NAMES[idx].substring(0, 3)}</span>
                                     </div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                                        {formatCurrency(bestMonth.net)}
-                                    </div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                                        úspor. sazba {bestMonth.savingsRate.toFixed(0)}%
-                                    </div>
-                                </div>
-                            )}
-                            {worstMonth && worstMonth.month !== bestMonth?.month && (
-                                <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{Icons.section.trend} Nejhorší měsíc</div>
-                                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-danger, #ef4444)', marginTop: '2px' }}>
-                                        {MONTH_NAMES[worstMonth.month - 1]}
-                                    </div>
-                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                                        {formatCurrency(worstMonth.net)}
-                                    </div>
-                                    <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                                        úspor. sazba {worstMonth.savingsRate.toFixed(0)}%
-                                    </div>
-                                </div>
-                            )}
-                            <div style={{ padding: '12px', background: 'rgba(0, 122, 255, 0.06)', borderRadius: '8px', border: '1px solid rgba(0, 122, 255, 0.2)' }}>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{Icons.section.trend} Trend úspor. sazby</div>
-                                <svg width="100%" height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`} preserveAspectRatio="none" style={{ marginTop: '6px' }}>
-                                    {sparkPath && (
-                                        <path d={sparkPath} fill="none" stroke="var(--accent-primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-                                    )}
-                                    {sparkPoints.filter(p => p.hasData).map((p, i) => (
-                                        <circle key={i} cx={p.x} cy={p.y} r="2" fill="var(--accent-primary)" />
-                                    ))}
-                                </svg>
-                                <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: '2px' }}>
-                                    ⌀ {avgSavingsRate.toFixed(0)}% za rok
-                                </div>
+                                ))}
                             </div>
+                            {activeMonths.length > 0 && (
+                                <svg viewBox="0 0 100 160" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 160, pointerEvents: 'none' }}>
+                                    <polyline
+                                        points={cumulativeNet.map((val, i) => `${(i / 11) * 100},${(160 - ((val - cumulativeMin) / cumulativeRange) * 160).toFixed(2)}`).join(' ')}
+                                        fill="none" stroke="var(--accent)" strokeWidth="1.2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeDasharray="4 3"
+                                    />
+                                </svg>
+                            )}
                         </div>
-                    </GlassCard>
+                        <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 'var(--spacing-sm)', fontSize: 12, flexWrap: 'wrap', color: 'var(--text-3)' }}>
+                            <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--pos)', borderRadius: 2, marginRight: 4 }} />Příjmy</span>
+                            <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--neg)', borderRadius: 2, marginRight: 4 }} />Výdaje</span>
+                            <span><span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--accent)', marginRight: 4, verticalAlign: 'middle' }} />Kumulativní čistý</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'center', marginTop: 4 }}>Klikni na měsíc pro detail</div>
+                    </div>
+                </div>
+
+                {activeMonths.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--spacing-md)' }}>
+                        {bestMonth && (
+                            <div className="surface" style={{ padding: 'var(--spacing-md)', background: 'color-mix(in srgb, var(--pos) 6%, var(--surface))' }}>
+                                <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>🥇 Nejlepší měsíc</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--pos)' }}>{MONTH_NAMES[bestMonth.month - 1]}</div>
+                                <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{formatCurrency(bestMonth.net)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>úspor. {bestMonth.savingsRate.toFixed(0)}%</div>
+                            </div>
+                        )}
+                        {worstMonth && worstMonth.month !== bestMonth?.month && (
+                            <div className="surface" style={{ padding: 'var(--spacing-md)', background: 'color-mix(in srgb, var(--neg) 6%, var(--surface))' }}>
+                                <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>{Icons.section.trend} Nejhorší měsíc</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--neg)' }}>{MONTH_NAMES[worstMonth.month - 1]}</div>
+                                <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{formatCurrency(worstMonth.net)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>úspor. {worstMonth.savingsRate.toFixed(0)}%</div>
+                            </div>
+                        )}
+                        <div className="surface" style={{ padding: 'var(--spacing-md)' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>{Icons.section.trend} Trend úspor. sazby</div>
+                            <svg width="100%" height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`} preserveAspectRatio="none" style={{ marginTop: 6 }}>
+                                {sparkPath && <path d={sparkPath} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />}
+                                {sparkPoints.filter(p => p.hasData).map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="2" fill="var(--accent)" />)}
+                            </svg>
+                            <div style={{ fontSize: 11, color: 'var(--text-3)', textAlign: 'center', marginTop: 2 }}>⌀ {avgSavingsRate.toFixed(0)}% za rok</div>
+                        </div>
+                    </div>
                 )}
 
-                {/* Expense breakdown */}
-                <GlassCard>
-                    <h3 style={{ margin: '0 0 var(--spacing-md) 0' }}>{Icons.section.expensesByItem} Výdaje podle položek</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>{Icons.section.expensesByItem} Výdaje podle položek</h3>
+                    </div>
+                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {Object.entries(annualData.expense_breakdown)
-                            .sort(([, a], [, b]) => b - a)
-                            .slice(0, 15)
+                            .sort(([, a], [, b]) => b - a).slice(0, 15)
                             .map(([name, amount]) => {
                                 const pct = (amount / annualData.totals.expenses) * 100;
                                 return (
-                                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ width: '140px', fontSize: '0.83rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                                        <div style={{ flex: 1, height: '14px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                                            <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent-primary)', borderRadius: '3px' }} />
+                                    <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ width: 140, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-2)' }}>{name}</span>
+                                        <div className="progress" style={{ flex: 1 }}>
+                                            <span style={{ width: `${pct}%` }} />
                                         </div>
-                                        <span style={{ width: '90px', textAlign: 'right', fontSize: '0.83rem' }}>{formatCurrency(amount)}</span>
-                                        <span style={{ width: '40px', textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{pct.toFixed(0)}%</span>
+                                        <span style={{ width: 90, textAlign: 'right', fontSize: 13, fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>{formatCurrency(amount)}</span>
+                                        <span style={{ width: 36, textAlign: 'right', fontSize: 12, color: 'var(--text-3)' }}>{pct.toFixed(0)}%</span>
                                     </div>
                                 );
                             })}
                     </div>
-                </GlassCard>
-            </>
+                </div>
+            </div>
         );
     };
 
     const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
+    const monthLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
 
     return (
         <MainLayout>
-            <div className="page-container">
-                {/* Header */}
-                <div style={{ marginBottom: 'var(--spacing-md)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                        <h1 style={{ fontSize: '1.5rem', margin: 0 }}>{Icons.nav.monthlyBudget} Měsíční rozpočet</h1>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {isAutoSyncing && (
-                                <span style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block', width: '12px', height: '12px', border: '2px solid rgba(255,255,255,0.2)', borderTopColor: 'var(--accent-primary)', borderRadius: '50%' }} />
-                                    Auto-sync...
-                                </span>
-                            )}
-                            <button
-                                onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')}
-                                className="btn"
-                                style={{ background: viewMode === 'year' ? 'var(--accent-warning, #f59e0b)' : 'rgba(255,255,255,0.05)', color: viewMode === 'year' ? '#000' : 'var(--text-primary)', padding: '6px 12px', fontSize: '0.85rem', fontWeight: viewMode === 'year' ? 600 : 400 }}
-                            >
-                                {viewMode === 'year' ? '← Na měsíc' : `${Icons.nav.reports} Roční přehled`}
-                            </button>
-                            {viewMode === 'month' && (
-                                <button className="btn" onClick={deleteBudget} style={{ fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-danger, #ef4444)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '6px 12px' }}>
-                                    {Icons.action.delete} Smazat
-                                </button>
-                            )}
-                        </div>
-                    </div>
+            <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
 
-                    {/* Month navigation */}
-                    {viewMode === 'month' && (
-                        <div className="month-nav" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <div className="month-nav-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <button className="btn month-nav-arrow" onClick={goToPrevMonth} style={{ padding: '8px 12px', fontSize: '1rem' }}>←</button>
-                                <CustomSelect
-                                    value={selectedMonth.toString()}
-                                    onChange={(val) => setSelectedMonth(Number(val))}
-                                    style={{ width: '150px' }}
-                                    options={MONTH_NAMES.map((name, idx) => ({ value: (idx + 1).toString(), label: name }))}
-                                />
-                                <CustomSelect
-                                    value={selectedYear.toString()}
-                                    onChange={(val) => setSelectedYear(Number(val))}
-                                    style={{ width: '110px' }}
-                                    options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))}
-                                />
-                                <button className="btn month-nav-arrow" onClick={goToNextMonth} style={{ padding: '8px 12px', fontSize: '1rem' }}>→</button>
-                            </div>
+                {/* Page header */}
+                <div className="page-head">
+                    <div>
+                        <h1>Měsíční rozpočet</h1>
+                        <div className="sub">{monthLabel}{isAutoSyncing ? ' · Synchronizuji...' : ''}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button onClick={() => setViewMode(viewMode === 'month' ? 'year' : 'month')} className={`btn btn-sm ${viewMode === 'year' ? 'btn-primary' : ''}`}>
+                            {viewMode === 'year' ? '← Měsíc' : `${Icons.nav.reports} Roční přehled`}
+                        </button>
+                        {viewMode === 'month' && (
+                            <button className="btn btn-sm" onClick={deleteBudgetMonth} style={{ color: 'var(--neg)', borderColor: 'color-mix(in srgb, var(--neg) 30%, transparent)' }}>
+                                {Icons.action.delete} Smazat
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Month / year navigation */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {viewMode === 'month' ? (
+                        <>
+                            <button className="btn btn-sm" onClick={goToPrevMonth}>←</button>
+                            <CustomSelect
+                                value={selectedMonth.toString()}
+                                onChange={(val) => setSelectedMonth(Number(val))}
+                                style={{ width: 150 }}
+                                options={MONTH_NAMES.map((name, idx) => ({ value: (idx + 1).toString(), label: name }))}
+                            />
+                            <CustomSelect
+                                value={selectedYear.toString()}
+                                onChange={(val) => setSelectedYear(Number(val))}
+                                style={{ width: 110 }}
+                                options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))}
+                            />
+                            <button className="btn btn-sm" onClick={goToNextMonth}>→</button>
                             {!isCurrentMonth && (
-                                <button className="btn" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }} style={{ fontSize: '0.8rem', padding: '6px 10px', background: 'rgba(255,255,255,0.05)' }}>
+                                <button className="btn btn-sm" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }}>
                                     Dnes
                                 </button>
                             )}
-                        </div>
-                    )}
-
-                    {/* Year navigation */}
-                    {viewMode === 'year' && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button className="btn" onClick={() => setSelectedYear(y => y - 1)} style={{ padding: '8px 12px', fontSize: '1rem' }}>←</button>
-                            <span style={{ fontWeight: 600, fontSize: '1.1rem', minWidth: '60px', textAlign: 'center' }}>{selectedYear}</span>
-                            <button className="btn" onClick={() => setSelectedYear(y => y + 1)} style={{ padding: '8px 12px', fontSize: '1rem' }}>→</button>
-                        </div>
+                        </>
+                    ) : (
+                        <>
+                            <button className="btn btn-sm" onClick={() => setSelectedYear(y => y - 1)}>←</button>
+                            <span style={{ fontWeight: 600, fontSize: 15, minWidth: 60, textAlign: 'center' }}>{selectedYear}</span>
+                            <button className="btn btn-sm" onClick={() => setSelectedYear(y => y + 1)}>→</button>
+                        </>
                     )}
                 </div>
 

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import GlassCard from '@/components/GlassCard';
 import {
     Budget, SavingsGoal,
     getBudgets, createBudget, deleteBudget,
@@ -26,16 +25,18 @@ function getCategoryIcon(category: string): string {
     return CATEGORIES.find(c => c.value === category)?.icon || Icons.category.other;
 }
 
-function getProgressColor(percentage: number): string {
-    if (percentage >= 100) return 'var(--accent-error)';
-    if (percentage >= 80) return 'var(--accent-warning)';
-    return 'var(--accent-success)';
+function progressColor(pct: number): string {
+    if (pct >= 100) return 'var(--neg)';
+    if (pct >= 80) return 'var(--warn)';
+    return 'var(--pos)';
 }
+
+const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
 export default function BudgetsPage() {
     const queryClient = useQueryClient();
 
-    // Forms
     const [showBudgetForm, setShowBudgetForm] = useState(false);
     const [showGoalForm, setShowGoalForm] = useState(false);
     const [newBudget, setNewBudget] = useState({ category: '', amount: '' });
@@ -43,16 +44,8 @@ export default function BudgetsPage() {
     const [addAmountGoalId, setAddAmountGoalId] = useState<number | null>(null);
     const [addAmount, setAddAmount] = useState('');
 
-    // Queries
-    const { data: budgets = [] } = useQuery<Budget[]>({
-        queryKey: queryKeys.budgets,
-        queryFn: getBudgets,
-    });
-
-    const { data: goals = [] } = useQuery<SavingsGoal[]>({
-        queryKey: queryKeys.goals,
-        queryFn: getGoals,
-    });
+    const { data: budgets = [] } = useQuery<Budget[]>({ queryKey: queryKeys.budgets, queryFn: getBudgets });
+    const { data: goals = [] } = useQuery<SavingsGoal[]>({ queryKey: queryKeys.goals, queryFn: getGoals });
 
     const invalidateBudgets = () => {
         queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
@@ -60,399 +53,195 @@ export default function BudgetsPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     };
 
-    // Mutations
     const createBudgetMutation = useMutation({
         mutationFn: (data: { category: string; amount: number }) => createBudget(data),
-        onSuccess: () => {
-            invalidateBudgets();
-            setNewBudget({ category: '', amount: '' });
-            setShowBudgetForm(false);
-        },
+        onSuccess: () => { invalidateBudgets(); setNewBudget({ category: '', amount: '' }); setShowBudgetForm(false); },
     });
-
-    const deleteBudgetMutation = useMutation({
-        mutationFn: (id: number) => deleteBudget(id),
-        onSuccess: invalidateBudgets,
-    });
-
+    const deleteBudgetMutation = useMutation({ mutationFn: (id: number) => deleteBudget(id), onSuccess: invalidateBudgets });
     const createGoalMutation = useMutation({
         mutationFn: (data: { name: string; target_amount: number; deadline?: string }) => createGoal(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.goals });
-            setNewGoal({ name: '', target_amount: '', deadline: '' });
-            setShowGoalForm(false);
-        },
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.goals }); setNewGoal({ name: '', target_amount: '', deadline: '' }); setShowGoalForm(false); },
     });
-
     const addToGoalMutation = useMutation({
-        mutationFn: ({ goalId, amount }: { goalId: number; amount: number }) =>
-            updateGoal(goalId, { add_amount: amount }),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: queryKeys.goals });
-            setAddAmountGoalId(null);
-            setAddAmount('');
-        },
+        mutationFn: ({ goalId, amount }: { goalId: number; amount: number }) => updateGoal(goalId, { add_amount: amount }),
+        onSuccess: () => { queryClient.invalidateQueries({ queryKey: queryKeys.goals }); setAddAmountGoalId(null); setAddAmount(''); },
     });
-
     const deleteGoalMutation = useMutation({
         mutationFn: (id: number) => deleteGoal(id),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.goals }),
     });
 
-    // Handlers
-    const handleCreateBudget = () => {
-        if (!newBudget.category || !newBudget.amount) return;
-        createBudgetMutation.mutate({ category: newBudget.category, amount: parseFloat(newBudget.amount) });
-    };
-
-    const handleCreateGoal = () => {
-        if (!newGoal.name || !newGoal.target_amount) return;
-        createGoalMutation.mutate({
-            name: newGoal.name,
-            target_amount: parseFloat(newGoal.target_amount),
-            deadline: newGoal.deadline || undefined,
-        });
-    };
-
-    const handleAddToGoal = (goalId: number) => {
-        if (!addAmount) return;
-        addToGoalMutation.mutate({ goalId, amount: parseFloat(addAmount) });
-    };
-
-    const formatCurrency = (amount: number, currency: string = 'CZK') => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency,
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
-    };
-
     const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
     const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
-    const totalPercentage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    const totalPct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
 
     const now = new Date();
     const monthName = now.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
 
     return (
         <MainLayout>
-            <div style={{ padding: 'var(--spacing-lg)' }}>
-                {/* Header */}
-                <div style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>
-                        {Icons.nav.budgets} Rozpočty - {monthName.charAt(0).toUpperCase() + monthName.slice(1)}
-                    </h1>
+            <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
+
+                <div className="page-head">
+                    <div>
+                        <h1>Rozpočty</h1>
+                        <div className="sub">{monthName.charAt(0).toUpperCase() + monthName.slice(1)}</div>
+                    </div>
                 </div>
 
-                {/* Total Overview */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <span className="text-secondary">Celkem utraceno tento měsíc</span>
-                        <span style={{ fontSize: '1.25rem', fontWeight: 600 }}>
-                            {formatCurrency(totalSpent)} / {formatCurrency(totalBudget)}
-                        </span>
+                {/* Total overview KPI */}
+                <div className="surface kpi">
+                    <div className="kpi-label">Celkem utraceno tento měsíc</div>
+                    <div className="kpi-value num">
+                        <span style={{ color: progressColor(totalPct) }}>{formatCurrency(totalSpent)}</span>
+                        <span style={{ fontSize: 16, color: 'var(--text-3)', fontWeight: 400 }}> / {formatCurrency(totalBudget)}</span>
                     </div>
-                    <div style={{
-                        height: '12px',
-                        background: 'rgba(255,255,255,0.1)',
-                        borderRadius: '6px',
-                        overflow: 'hidden'
-                    }}>
-                        <div style={{
-                            height: '100%',
-                            width: `${Math.min(totalPercentage, 100)}%`,
-                            background: getProgressColor(totalPercentage),
-                            borderRadius: '6px',
-                            transition: 'width 0.5s ease'
-                        }} />
+                    <div className="kpi-sub" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+                        <div className="progress">
+                            <span style={{ width: `${Math.min(totalPct, 100)}%`, background: progressColor(totalPct) }} />
+                        </div>
+                        <span>{totalPct.toFixed(0)}% vyčerpáno</span>
                     </div>
-                    <div style={{ textAlign: 'right', marginTop: '4px' }}>
-                        <span className="text-secondary" style={{ fontSize: '0.85rem' }}>
-                            {totalPercentage.toFixed(0)}%
-                        </span>
-                    </div>
-                </GlassCard>
+                </div>
 
-                {/* Budget Categories */}
-                <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <h3 style={{ margin: 0 }}>{Icons.nav.budgets} Rozpočty podle kategorií</h3>
-                        <button
-                            className="btn btn-primary"
-                            onClick={() => setShowBudgetForm(!showBudgetForm)}
-                            style={{ fontSize: '0.85rem', padding: '6px 12px' }}
-                        >
-                            + Přidat rozpočet
+                {/* Budget categories */}
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>{Icons.nav.budgets} Rozpočty podle kategorií</h3>
+                        <button className="btn btn-primary btn-sm" onClick={() => setShowBudgetForm(!showBudgetForm)}>
+                            + Přidat
                         </button>
                     </div>
+                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                        {showBudgetForm && (
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                                <div style={{ flex: '1 1 200px' }}>
+                                    <CustomSelect
+                                        value={newBudget.category}
+                                        onChange={(val) => setNewBudget({ ...newBudget, category: val })}
+                                        options={CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => ({ value: cat.value, label: cat.label }))}
+                                        placeholder="Vyberte kategorii..."
+                                    />
+                                </div>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    placeholder="Limit (Kč)"
+                                    value={newBudget.amount}
+                                    onChange={(e) => setNewBudget({ ...newBudget, amount: e.target.value })}
+                                    style={{ width: 150 }}
+                                />
+                                <button className="btn btn-primary" onClick={() => createBudgetMutation.mutate({ category: newBudget.category, amount: parseFloat(newBudget.amount) })} disabled={createBudgetMutation.isPending}>
+                                    Uložit
+                                </button>
+                                <button className="btn" onClick={() => setShowBudgetForm(false)}>Zrušit</button>
+                            </div>
+                        )}
 
-                    {/* Add Budget Form */}
-                    {showBudgetForm && (
-                        <div style={{
-                            display: 'flex',
-                            gap: 'var(--spacing-md)',
-                            padding: 'var(--spacing-md)',
-                            background: 'rgba(255,255,255,0.05)',
-                            borderRadius: '8px',
-                            marginBottom: 'var(--spacing-md)'
-                        }}>
-                            <CustomSelect
-                                value={newBudget.category}
-                                onChange={(val) => setNewBudget({ ...newBudget, category: val })}
-                                style={{ flex: 1 }}
-                                options={[
-                                    { value: '', label: 'Vyberte kategorii...' },
-                                    ...CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => ({
-                                        value: cat.value,
-                                        label: cat.label
-                                    }))
-                                ]}
-                            />
-                            <input
-                                type="number"
-                                className="input"
-                                placeholder="Limit (Kč)"
-                                value={newBudget.amount}
-                                onChange={(e) => setNewBudget({ ...newBudget, amount: e.target.value })}
-                                style={{ width: '150px' }}
-                            />
-                            <button className="btn btn-primary" onClick={handleCreateBudget} disabled={createBudgetMutation.isPending}>
-                                Uložit
-                            </button>
-                            <button className="btn" onClick={() => setShowBudgetForm(false)}>
-                                Zrušit
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Budget List */}
-                    {budgets.length === 0 ? (
-                        <p className="text-secondary">Zatím nemáte žádné rozpočty. Přidejte první!</p>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                            {budgets.map(budget => (
-                                <div key={budget.id} style={{
-                                    padding: 'var(--spacing-md)',
-                                    background: 'rgba(255,255,255,0.03)',
-                                    borderRadius: '8px'
-                                }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '1rem' }}>
-                                            {getCategoryIcon(budget.category)} {budget.category}
-                                        </span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)' }}>
-                                            <span>
+                        {budgets.length === 0 ? (
+                            <p style={{ color: 'var(--text-3)', fontSize: 14 }}>Zatím žádné rozpočty. Přidejte první!</p>
+                        ) : (
+                            budgets.map(budget => (
+                                <div key={budget.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontWeight: 600, fontSize: 14 }}>{getCategoryIcon(budget.category)} {budget.category}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--text-2)' }}>
                                                 {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
                                             </span>
-                                            <button
-                                                onClick={() => deleteBudgetMutation.mutate(budget.id)}
-                                                style={{
-                                                    background: 'transparent',
-                                                    border: 'none',
-                                                    color: 'var(--text-secondary)',
-                                                    cursor: 'pointer',
-                                                    padding: '4px 8px',
-                                                    fontSize: '0.85rem'
-                                                }}
-                                            >
-                                                {Icons.action.delete}
-                                            </button>
+                                            <button className="btn btn-icon btn-ghost btn-sm" onClick={() => deleteBudgetMutation.mutate(budget.id)}>{Icons.action.delete}</button>
                                         </div>
                                     </div>
-                                    <div style={{
-                                        height: '8px',
-                                        background: 'rgba(255,255,255,0.1)',
-                                        borderRadius: '4px',
-                                        overflow: 'hidden'
-                                    }}>
-                                        <div style={{
-                                            height: '100%',
-                                            width: `${Math.min(budget.percentage, 100)}%`,
-                                            background: getProgressColor(budget.percentage),
-                                            borderRadius: '4px',
-                                            transition: 'width 0.5s ease'
-                                        }} />
+                                    <div className="progress">
+                                        <span style={{ width: `${Math.min(budget.percentage, 100)}%`, background: progressColor(budget.percentage) }} />
                                     </div>
-                                    <div style={{ textAlign: 'right', marginTop: '4px' }}>
-                                        <span
-                                            className="text-secondary"
-                                            style={{
-                                                fontSize: '0.8rem',
-                                                color: getProgressColor(budget.percentage)
-                                            }}
-                                        >
-                                            {budget.percentage.toFixed(0)}%
-                                            {budget.percentage >= 100 && ` ${Icons.status.overBudget} Překročeno!`}
-                                            {budget.percentage >= 80 && budget.percentage < 100 && ` ${Icons.status.nearLimit} Blízko limitu`}
-                                        </span>
+                                    <div style={{ fontSize: 12, color: progressColor(budget.percentage), textAlign: 'right' }}>
+                                        {budget.percentage.toFixed(0)}%
+                                        {budget.percentage >= 100 && ` ${Icons.status.overBudget} Překročeno`}
+                                        {budget.percentage >= 80 && budget.percentage < 100 && ` ${Icons.status.nearLimit} Blízko limitu`}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </GlassCard>
-
-                {/* Savings Goals */}
-                <GlassCard>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
-                        <h3 style={{ margin: 0 }}>{Icons.section.savingsGoals} Spořící cíle</h3>
-                        <button
-                            className="btn btn-primary"
-                            onClick={() => setShowGoalForm(!showGoalForm)}
-                            style={{ fontSize: '0.85rem', padding: '6px 12px' }}
-                        >
-                            + Přidat cíl
-                        </button>
+                            ))
+                        )}
                     </div>
+                </div>
 
-                    {/* Add Goal Form */}
-                    {showGoalForm && (
-                        <div style={{
-                            display: 'flex',
-                            gap: 'var(--spacing-md)',
-                            padding: 'var(--spacing-md)',
-                            background: 'rgba(255,255,255,0.05)',
-                            borderRadius: '8px',
-                            marginBottom: 'var(--spacing-md)',
-                            flexWrap: 'wrap'
-                        }}>
-                            <input
-                                type="text"
-                                className="input"
-                                placeholder="Název cíle (např. Dovolená)"
-                                value={newGoal.name}
-                                onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })}
-                                style={{ flex: 1, minWidth: '200px' }}
-                            />
-                            <input
-                                type="number"
-                                className="input"
-                                placeholder="Cílová částka (Kč)"
-                                value={newGoal.target_amount}
-                                onChange={(e) => setNewGoal({ ...newGoal, target_amount: e.target.value })}
-                                style={{ width: '180px' }}
-                            />
-                            <input
-                                type="date"
-                                className="input"
-                                value={newGoal.deadline}
-                                onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })}
-                                style={{ width: '160px' }}
-                            />
-                            <button className="btn btn-primary" onClick={handleCreateGoal} disabled={createGoalMutation.isPending}>
-                                Uložit
-                            </button>
-                            <button className="btn" onClick={() => setShowGoalForm(false)}>
-                                Zrušit
-                            </button>
-                        </div>
-                    )}
+                {/* Savings goals */}
+                <div className="surface">
+                    <div className="card-head">
+                        <h3>{Icons.section.savingsGoals} Spořící cíle</h3>
+                        <button className="btn btn-primary btn-sm" onClick={() => setShowGoalForm(!showGoalForm)}>+ Přidat</button>
+                    </div>
+                    <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+                        {showGoalForm && (
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                                <input type="text" className="input" placeholder="Název cíle (např. Dovolená)" value={newGoal.name} onChange={(e) => setNewGoal({ ...newGoal, name: e.target.value })} style={{ flex: '1 1 200px' }} />
+                                <input type="number" className="input" placeholder="Cílová částka" value={newGoal.target_amount} onChange={(e) => setNewGoal({ ...newGoal, target_amount: e.target.value })} style={{ width: 160 }} />
+                                <input type="date" className="input" value={newGoal.deadline} onChange={(e) => setNewGoal({ ...newGoal, deadline: e.target.value })} style={{ width: 160 }} />
+                                <button className="btn btn-primary" onClick={() => createGoalMutation.mutate({ name: newGoal.name, target_amount: parseFloat(newGoal.target_amount), deadline: newGoal.deadline || undefined })} disabled={createGoalMutation.isPending}>
+                                    Uložit
+                                </button>
+                                <button className="btn" onClick={() => setShowGoalForm(false)}>Zrušit</button>
+                            </div>
+                        )}
 
-                    {/* Goals List */}
-                    {goals.length === 0 ? (
-                        <p className="text-secondary">Zatím nemáte žádné spořící cíle. Přidejte první!</p>
-                    ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                            {goals.map(goal => (
+                        {goals.length === 0 ? (
+                            <p style={{ color: 'var(--text-3)', fontSize: 14 }}>Zatím žádné spořící cíle.</p>
+                        ) : (
+                            goals.map(goal => (
                                 <div key={goal.id} style={{
+                                    display: 'flex', flexDirection: 'column', gap: 8,
                                     padding: 'var(--spacing-md)',
-                                    background: goal.is_completed ? 'rgba(0,255,100,0.05)' : 'rgba(255,255,255,0.03)',
-                                    borderRadius: '8px',
-                                    border: goal.is_completed ? '1px solid var(--accent-success)' : 'none'
+                                    background: goal.is_completed ? 'color-mix(in srgb, var(--pos) 6%, var(--surface-sunken))' : 'var(--surface-sunken)',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: goal.is_completed ? '0.5px solid color-mix(in srgb, var(--pos) 30%, transparent)' : '0.5px solid var(--border)',
                                 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                                        <span style={{ fontSize: '1rem' }}>
-                                            {goal.is_completed ? Icons.section.goalCompleted : Icons.section.savingsGoals} {goal.name}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <span style={{ fontWeight: 600, fontSize: 14 }}>
+                                                {goal.is_completed ? Icons.section.goalCompleted : Icons.section.savingsGoals} {goal.name}
+                                            </span>
                                             {goal.deadline && (
-                                                <span className="text-secondary" style={{ fontSize: '0.8rem', marginLeft: '8px' }}>
+                                                <span style={{ fontSize: 12, color: 'var(--text-3)', marginLeft: 8 }}>
                                                     do {new Date(goal.deadline).toLocaleDateString('cs-CZ')}
                                                 </span>
                                             )}
-                                        </span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)' }}>
-                                            <span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--text-2)' }}>
                                                 {formatCurrency(goal.current_amount)} / {formatCurrency(goal.target_amount)}
                                             </span>
                                             {!goal.is_completed && (
-                                                <button
-                                                    className="btn"
-                                                    onClick={() => setAddAmountGoalId(addAmountGoalId === goal.id ? null : goal.id)}
-                                                    style={{ fontSize: '0.8rem', padding: '4px 8px' }}
-                                                >
+                                                <button className="btn btn-sm" onClick={() => setAddAmountGoalId(addAmountGoalId === goal.id ? null : goal.id)}>
                                                     + Přidat
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => deleteGoalMutation.mutate(goal.id)}
-                                                style={{
-                                                    background: 'transparent',
-                                                    border: 'none',
-                                                    color: 'var(--text-secondary)',
-                                                    cursor: 'pointer',
-                                                    padding: '4px 8px',
-                                                    fontSize: '0.85rem'
-                                                }}
-                                            >
-                                                {Icons.action.delete}
-                                            </button>
+                                            <button className="btn btn-icon btn-ghost btn-sm" onClick={() => deleteGoalMutation.mutate(goal.id)}>{Icons.action.delete}</button>
                                         </div>
                                     </div>
 
-                                    {/* Add amount form */}
                                     {addAmountGoalId === goal.id && (
-                                        <div style={{
-                                            display: 'flex',
-                                            gap: 'var(--spacing-sm)',
-                                            marginBottom: 'var(--spacing-sm)',
-                                            padding: '8px',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            borderRadius: '6px'
-                                        }}>
-                                            <input
-                                                type="number"
-                                                className="input"
-                                                placeholder="Částka (Kč)"
-                                                value={addAmount}
-                                                onChange={(e) => setAddAmount(e.target.value)}
-                                                style={{ width: '120px', padding: '6px 10px' }}
-                                            />
-                                            <button
-                                                className="btn btn-primary"
-                                                onClick={() => handleAddToGoal(goal.id)}
-                                                disabled={addToGoalMutation.isPending}
-                                                style={{ padding: '6px 12px' }}
-                                            >
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <input type="number" className="input" placeholder="Částka (Kč)" value={addAmount} onChange={(e) => setAddAmount(e.target.value)} style={{ width: 140 }} />
+                                            <button className="btn btn-primary btn-sm" onClick={() => addToGoalMutation.mutate({ goalId: goal.id, amount: parseFloat(addAmount) })} disabled={addToGoalMutation.isPending}>
                                                 Přidat
                                             </button>
                                         </div>
                                     )}
 
-                                    <div style={{
-                                        height: '8px',
-                                        background: 'rgba(255,255,255,0.1)',
-                                        borderRadius: '4px',
-                                        overflow: 'hidden'
-                                    }}>
-                                        <div style={{
-                                            height: '100%',
-                                            width: `${Math.min(goal.percentage, 100)}%`,
-                                            background: goal.is_completed ? 'var(--accent-success)' : 'var(--accent-primary)',
-                                            borderRadius: '4px',
-                                            transition: 'width 0.5s ease'
-                                        }} />
+                                    <div className="progress">
+                                        <span style={{ width: `${Math.min(goal.percentage, 100)}%`, background: goal.is_completed ? 'var(--pos)' : 'var(--accent)' }} />
                                     </div>
-                                    <div style={{ textAlign: 'right', marginTop: '4px' }}>
-                                        <span className="text-secondary" style={{ fontSize: '0.8rem' }}>
-                                            {goal.percentage.toFixed(0)}%
-                                            {goal.is_completed && ` ${Icons.status.done} Splněno!`}
-                                        </span>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'right' }}>
+                                        {goal.percentage.toFixed(0)}%
+                                        {goal.is_completed && ` ${Icons.status.done} Splněno!`}
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </GlassCard>
+                            ))
+                        )}
+                    </div>
+                </div>
+
             </div>
         </MainLayout>
     );
