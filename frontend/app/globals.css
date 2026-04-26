@@ -123,7 +123,7 @@
 
   /* Layout */
   --sidebar-width: 360px;
-  --header-height: 52px;
+  --header-height: 56px;
 }
 
 /* ══ RESET ════════════════════════════════════════════════════ */
@@ -328,7 +328,7 @@ select.input {
 .appbar {
   position: sticky; top: 0; z-index: 50;
   display: flex; align-items: center; gap: var(--spacing-md);
-  padding: 9px var(--spacing-lg);
+  padding: 11px var(--spacing-lg);
   background: var(--surface);
   backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
@@ -342,32 +342,32 @@ select.input {
 
 .appbar-logo {
   display: flex; align-items: center; gap: 8px;
-  font-weight: 600; font-size: 14px; letter-spacing: -0.015em;
+  font-weight: 600; font-size: 15px; letter-spacing: -0.015em;
   color: var(--text); text-decoration: none;
   flex-shrink: 0;
 }
 .appbar-logo-mark {
-  width: 28px; height: 28px;
+  width: 30px; height: 30px;
   background: var(--accent);
   color: #fff;
   border-radius: 8px;
   display: grid; place-items: center;
-  font-weight: 700; font-size: 13px;
+  font-weight: 700; font-size: 14px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2);
   flex-shrink: 0;
 }
 
 /* Segmented nav */
 .appbar-nav {
-  display: flex; align-items: center; padding: 2px;
+  display: flex; align-items: center; padding: 3px;
   background: var(--surface-sunken);
-  border-radius: 10px;
+  border-radius: 11px;
   margin-left: 4px;
 }
 .appbar-nav-item {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 12px; border-radius: 8px;
-  font-size: 12.5px; font-weight: 510; color: var(--text-2);
+  padding: 6px 14px; border-radius: 8px;
+  font-size: 14px; font-weight: 510; color: var(--text-2);
   cursor: pointer; white-space: nowrap;
   transition: color 0.18s, background 0.18s;
   border: none; background: transparent;
