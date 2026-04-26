@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import NetWorthChart from '@/components/NetWorthChart';
@@ -10,11 +11,83 @@ import { getDashboard } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 
+// ── Payday logic ────────────────────────────────────────────────
+const FIXED_HOLIDAYS: string[] = [
+  '01-01', '05-01', '05-08', '07-05', '07-06',
+  '09-28', '10-28', '11-17', '12-24', '12-25', '12-26',
+];
+
+function easterMonday(year: number): Date {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31) - 1;
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  const d2 = new Date(year, month, day + 1); // +1 = Monday after Easter Sunday
+  return d2;
+}
+
+function isHoliday(d: Date): boolean {
+  const key = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (FIXED_HOLIDAYS.includes(key)) return true;
+  const em = easterMonday(d.getFullYear());
+  return d.getFullYear() === em.getFullYear() && d.getMonth() === em.getMonth() && d.getDate() === em.getDate();
+}
+
+function isWorkingDay(d: Date): boolean {
+  const dow = d.getDay();
+  return dow !== 0 && dow !== 6 && !isHoliday(d);
+}
+
+function lastWorkingDayOnOrBefore(d: Date): Date {
+  const cur = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  while (!isWorkingDay(cur)) cur.setDate(cur.getDate() - 1);
+  return cur;
+}
+
+function getNextPayday(today: Date): Date {
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  let candidate = lastWorkingDayOnOrBefore(new Date(today.getFullYear(), today.getMonth(), 8));
+  if (todayStart > candidate) {
+    candidate = lastWorkingDayOnOrBefore(new Date(today.getFullYear(), today.getMonth() + 1, 8));
+  }
+  return candidate;
+}
+
+function getGreeting(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Dobré ráno';
+  if (hour >= 12 && hour < 18) return 'Dobré odpoledne';
+  if (hour >= 18 && hour < 22) return 'Dobrý večer';
+  return 'Dobrou noc';
+}
+
+function formatDayLabel(d: Date): string {
+  return d.toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function getPaydayText(today: Date, payday: Date): string {
+  const diff = Math.round((payday.getTime() - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86_400_000);
+  if (diff === 0) return 'Dnes je výplatní den!';
+  if (diff === 1) return 'Zítra je výplatní den';
+  return `Do výplaty zbývá ${diff} ${diff >= 5 ? 'dní' : diff >= 2 ? 'dny' : 'den'}`;
+}
+
 export default function DashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard,
     queryFn: getDashboard,
   });
+
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   if (isLoading || !data) {
     return (
@@ -37,8 +110,16 @@ export default function DashboardPage() {
         {/* Page header */}
         <div className="page-head">
           <div>
-            <h1>Přehled</h1>
-            <div className="sub">Aktuální stav financí</div>
+            <h1>{now ? `${getGreeting(now.getHours())}, Nicolas.` : 'Načítám…'}</h1>
+            <div className="sub">
+              {now && (
+                <>
+                  {formatDayLabel(now)}
+                  {' · '}
+                  {getPaydayText(now, getNextPayday(now))}
+                </>
+              )}
+            </div>
           </div>
         </div>
 
