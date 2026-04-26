@@ -330,35 +330,37 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 const isEditable = counterpartyDir === dir;
                                 const canEdit = isEditable && (!name || nameSource === 'contact_auto' || nameSource === 'contact_manual');
                                 return (
-                                    <div className="label-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
-                                            <dt>{label}</dt>
-                                            {canEdit && namingIban !== iban && (
-                                                <button onClick={() => { setNamingIban(iban); setNameInput(name || ''); }}
-                                                    style={{ fontSize: '0.75rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', padding: '2px 7px' }}>
-                                                    {name ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
-                                                </button>
-                                            )}
-                                        </div>
-                                        <dd style={{ textAlign: 'left', fontWeight: name ? 500 : 400, color: name ? 'var(--text)' : 'var(--text-3)', fontStyle: name ? 'normal' : 'italic' }}>
-                                            {name || 'Nepojmenovaná protistrana'}
-                                        </dd>
-                                        {iban && <dd style={{ textAlign: 'left', fontSize: '0.78rem', color: 'var(--text-3)', fontFamily: 'monospace', fontWeight: 400 }}>{formatAccount(iban)?.display ?? iban}</dd>}
-                                        {iban && namingIban === iban && (
-                                            <div style={{ display: 'flex', gap: 4, width: '100%' }} onClick={e => e.stopPropagation()}>
-                                                <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleSaveContact(iban, dir);
-                                                        if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
-                                                    }}
-                                                    placeholder="Např. Táta, Nájem, ČEZ…"
-                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
-                                                />
-                                                <button onClick={() => handleSaveContact(iban, dir)} disabled={savingContact || !nameInput.trim()}
-                                                    className="btn btn-primary btn-sm">{savingContact ? '…' : 'OK'}</button>
-                                                <button onClick={() => { setNamingIban(null); setNameInput(''); }} className="btn btn-sm">✕</button>
+                                    <div className="label-row">
+                                        <dt>{label}</dt>
+                                        <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ fontWeight: name ? 500 : 400, color: name ? 'var(--text)' : 'var(--text-3)', fontStyle: name ? 'normal' : 'italic' }}>
+                                                    {name || 'Nepojmenovaná protistrana'}
+                                                </span>
+                                                {canEdit && namingIban !== iban && (
+                                                    <button onClick={() => { setNamingIban(iban); setNameInput(name || ''); }}
+                                                        style={{ fontSize: '0.72rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}>
+                                                        {name ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
+                                                    </button>
+                                                )}
                                             </div>
-                                        )}
+                                            {iban && <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontFamily: 'monospace', fontWeight: 400 }}>{formatAccount(iban)?.display ?? iban}</span>}
+                                            {iban && namingIban === iban && (
+                                                <div style={{ display: 'flex', gap: 4, width: '100%' }} onClick={e => e.stopPropagation()}>
+                                                    <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveContact(iban, dir);
+                                                            if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
+                                                        }}
+                                                        placeholder="Např. Táta, Nájem, ČEZ…"
+                                                        style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                    />
+                                                    <button onClick={() => handleSaveContact(iban, dir)} disabled={savingContact || !nameInput.trim()}
+                                                        className="btn btn-primary btn-sm">{savingContact ? '…' : 'OK'}</button>
+                                                    <button onClick={() => { setNamingIban(null); setNameInput(''); }} className="btn btn-sm">✕</button>
+                                                </div>
+                                            )}
+                                        </dd>
                                     </div>
                                 );
                             };
@@ -378,27 +380,27 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             </div>
                         )}
                         {(txDetail?.remittance_info || (!txDetail?.remittance_info && modalTx.description && modalTx.description !== getDisplayName(modalTx))) && (
-                            <div className="label-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                            <div className="label-row">
                                 <dt>Zpráva</dt>
-                                <dd style={{ textAlign: 'left', fontWeight: 400, color: 'var(--text-2)' }}>{txDetail?.remittance_info || modalTx.description}</dd>
+                                <dd style={{ fontWeight: 400, color: 'var(--text-2)' }}>{txDetail?.remittance_info || modalTx.description}</dd>
                             </div>
                         )}
                         {txDetail?.additional_info && (
-                            <div className="label-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                            <div className="label-row">
                                 <dt>Poznámka</dt>
-                                <dd style={{ textAlign: 'left', fontWeight: 400, color: 'var(--text-2)' }}>{txDetail.additional_info}</dd>
+                                <dd style={{ fontWeight: 400, color: 'var(--text-2)' }}>{txDetail.additional_info}</dd>
                             </div>
                         )}
 
                         {/* Footer — badges + ID */}
-                        <div className="label-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-                            <dt style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <div style={{ padding: '10px var(--spacing-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <span className="chip chip-success">✓ Zaúčtováno</span>
                                 {modalTx.transaction_type === 'internal_transfer' && <span className="chip">{Icons.category.internalTransfer} Interní převod</span>}
                                 {modalTx.transaction_type === 'family_transfer' && <span className="chip">{Icons.category.familyTransfer} Rodinný převod</span>}
                                 {modalTx.is_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
-                            </dt>
-                            <dd style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace', fontWeight: 400 }}>{modalTx.id}</dd>
+                            </div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{modalTx.id}</span>
                         </div>
                     </dl>
                 )}
