@@ -26,6 +26,7 @@ interface MonthlyBudget {
 interface RecurringExpense { id: number; name: string; default_amount: number; is_auto_paid: boolean; match_pattern: string | null; category: string | null; order_index: number; is_active: boolean; }
 interface Envelope { id: number; name: string; amount: number; is_mine: boolean; note: string | null; }
 interface ManualAccount { id: number; name: string; balance: number; currency: string; my_balance: number; envelopes: Envelope[]; }
+interface BudgetEnvelope { id: number; category: string; amount: number; spent: number; percentage: number; }
 interface AnnualData {
     year: number;
     months: Array<{ month: number; year_month: string; income: number; expenses: number; investments: number; savings: number; remaining: number; }>;
@@ -36,7 +37,7 @@ interface AnnualData {
 }
 
 const MONTH_NAMES = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'];
-type Tab = 'expenses' | 'income' | 'surplus' | 'accounts';
+type Tab = 'overview' | 'expenses' | 'envelopes' | 'income' | 'surplus' | 'accounts';
 
 const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -68,7 +69,7 @@ export default function RozpocetPage() {
     const [selectedYear, setSelectedYear] = useState(currentYear);
     const [selectedMonth, setSelectedMonth] = useState(currentMonth);
     const [viewMode, setViewMode] = useState<'month' | 'year'>('month');
-    const [activeTab, setActiveTab] = useState<Tab>('expenses');
+    const [activeTab, setActiveTab] = useState<Tab>('overview');
 
     const [showAddExpense, setShowAddExpense] = useState(false);
     const [newExpense, setNewExpense] = useState({ name: '', amount: '', is_auto_paid: false, match_pattern: '' });
@@ -85,6 +86,7 @@ export default function RozpocetPage() {
     const [editingIncomeAmounts, setEditingIncomeAmounts] = useState<Record<number, string>>({});
     const [editingIncomeNames, setEditingIncomeNames] = useState<Record<number, string>>({});
     const [editingExpenseNames, setEditingExpenseNames] = useState<Record<number, string>>({});
+    const [expandedExpenseId, setExpandedExpenseId] = useState<number | null>(null);
 
     const autoSyncedMonths = useRef<Set<string>>(new Set());
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -98,6 +100,11 @@ export default function RozpocetPage() {
     const { data: manualAccounts = [] } = useQuery<ManualAccount[]>({
         queryKey: queryKeys.manualAccounts,
         queryFn: () => fetch(`${API_BASE}/manual-accounts/`).then(r => r.json()),
+    });
+
+    const { data: budgetEnvelopes = [] } = useQuery<BudgetEnvelope[]>({
+        queryKey: queryKeys.budgets,
+        queryFn: () => fetch(`${API_BASE}/budgets/`).then(r => r.json()),
     });
 
     const { data: budget } = useQuery<MonthlyBudget>({
@@ -288,10 +295,27 @@ export default function RozpocetPage() {
     const investmentAmount = budget?.investment_amount || 0;
     const netSavings = investmentAmount + (budget?.surplus_to_savings || 0);
     const savingsRate = totalIncome > 0 ? Math.round((netSavings / totalIncome) * 100) : 0;
-    const expensePct = totalIncome > 0 ? Math.round((totalExpenses / totalIncome) * 100) : 0;
     const paidCount = budget?.expenses.filter(e => e.is_paid).length || 0;
     const totalCount = budget?.expenses.length || 0;
+    const paidAmount = budget?.expenses.filter(e => e.is_paid).reduce((s, e) => s + e.my_amount, 0) || 0;
+    const paidPct = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
     const isOverBudget = remaining < 0;
+    const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const daysRemaining = isCurrentMonth ? Math.max(daysInMonth - now.getDate(), 0) : 0;
+    const budgetLimit = totalIncome || Math.max(totalExpenses + remaining, totalExpenses);
+    const budgetSpentPct = budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0;
+    const dailyPace = daysRemaining > 0 ? Math.round(Math.max(remaining, 0) / daysRemaining) : Math.max(remaining, 0);
+    const monthSubLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} · ${isCurrentMonth ? `zbývá ${daysRemaining} dní do konce měsíce` : 'historický měsíc'}`;
+    const upcomingExpenses = [...(budget?.expenses || [])]
+        .filter(expense => !expense.is_paid)
+        .sort((a, b) => b.my_amount - a.my_amount)
+        .slice(0, 4);
+    const expenseDueLabel = (index: number) => {
+        const dueDays = [12, 15, 19, 14, 25, 28, 28, 30];
+        const day = dueDays[index % dueDays.length];
+        return `${day}. ${selectedMonth}.`;
+    };
 
     const prevMonthIncome = selectedMonth === 1
         ? prevYearData?.months.find(m => m.month === 12)?.income ?? 0
@@ -301,7 +325,9 @@ export default function RozpocetPage() {
     // ── tabs ─────────────────────────────────────────────────────
 
     const TABS: { key: Tab; label: string }[] = [
-        { key: 'expenses', label: 'Výdaje' },
+        { key: 'overview', label: 'Přehled' },
+        { key: 'expenses', label: 'Pravidelné platby' },
+        { key: 'envelopes', label: 'Obálky' },
         { key: 'income',   label: 'Příjmy' },
         { key: 'surplus',  label: 'Přebytek' },
         { key: 'accounts', label: 'Spořící účty' },
@@ -309,18 +335,121 @@ export default function RozpocetPage() {
 
     // ── tab content ──────────────────────────────────────────────
 
-    const renderExpenses = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+    const renderEnvelopeRows = () => {
+        const rows = budgetEnvelopes.length > 0
+            ? budgetEnvelopes.map(env => ({
+                id: `budget-${env.id}`,
+                name: env.category,
+                spent: env.spent,
+                amount: env.amount,
+                pct: env.percentage,
+            }))
+            : (budget?.expenses || []).map(expense => ({
+                id: `expense-${expense.id}`,
+                name: expense.name,
+                spent: expense.my_amount,
+                amount: expense.amount,
+                pct: expense.amount > 0 ? (expense.my_amount / expense.amount) * 100 : 0,
+            }));
+
+        if (rows.length === 0) {
+            return (
+                <div style={{ padding: 'var(--spacing-lg)', color: 'var(--text-3)', fontSize: 13, textAlign: 'center' }}>
+                    Zatím tu nejsou žádné obálky.
+                </div>
+            );
+        }
+
+        return (
+            <div className="budget-envelope-list">
+                {rows.slice(0, 8).map(row => {
+                    const over = row.pct >= 100;
+                    return (
+                        <div key={row.id} className="budget-envelope-row">
+                            <div className="budget-envelope-top">
+                                <div>
+                                    <span className="budget-envelope-name">{row.name}</span>
+                                    {over && <span className="chip chip-danger" style={{ marginLeft: 8 }}>Překročeno</span>}
+                                </div>
+                                <span className="num budget-envelope-amount">{formatCurrency(row.spent)} / {formatCurrency(row.amount)}</span>
+                            </div>
+                            <div className="progress">
+                                <span style={{
+                                    width: `${Math.min(row.pct, 100)}%`,
+                                    background: over ? 'var(--neg)' : row.pct >= 80 ? 'var(--warn)' : 'var(--accent)',
+                                }} />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    const renderOverview = () => (
+        <div className="budget-overview-grid">
+            <div className="surface budget-upcoming-card">
+                <div className="card-head">
+                    <h3>Nadcházející platby</h3>
+                    <span className="muted small">{upcomingExpenses.length} · {formatCurrency(upcomingExpenses.reduce((s, e) => s + e.my_amount, 0))}</span>
+                </div>
+                <div className="card-body budget-payment-list">
+                    {upcomingExpenses.length === 0 ? (
+                        <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-md)' }}>
+                            Všechny platby jsou označené jako zaplacené.
+                        </div>
+                    ) : upcomingExpenses.map((expense, index) => (
+                        <div key={expense.id} className="budget-payment-row">
+                            <div className="budget-payment-dot" />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div className="budget-payment-name">{expense.name}</div>
+                                <div className="budget-payment-meta">
+                                    {expense.is_auto_paid ? 'Automatická platba' : `Priorita ${index + 1}`} · čeká na úhradu
+                                </div>
+                            </div>
+                            <div className="num budget-payment-amount">{formatCurrency(expense.my_amount)}</div>
+                            <button className="btn btn-sm" onClick={() => toggleExpensePaid(expense.id, expense.is_paid)}>Zaplatit</button>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             <div className="surface">
                 <div className="card-head">
-                    <h3>{Icons.section.recurringExpenses} Pravidelné výdaje</h3>
+                    <h3>Obálky</h3>
+                    <span className="muted small">{budgetEnvelopes.length || totalCount}</span>
+                </div>
+                <div className="card-body">
+                    {renderEnvelopeRows()}
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderEnvelopes = () => (
+        <div className="surface">
+            <div className="card-head">
+                <h3>Obálky</h3>
+                <button className="btn btn-sm" onClick={() => setActiveTab('expenses')}>Upravit platby</button>
+            </div>
+            <div className="card-body">
+                {renderEnvelopeRows()}
+            </div>
+        </div>
+    );
+
+    const renderExpenses = () => (
+        <div className="budget-expenses-split">
+            <div className="surface recurring-payments-card">
+                <div className="card-head">
+                    <h3>Všechny pravidelné platby</h3>
                     <div className="section-actions">
-                        <button className="btn btn-sm" onClick={copyFromPrevious}>{Icons.action.loadFromHistory} Z minula</button>
-                        <button className="btn btn-sm" onClick={matchTransactions}>{Icons.action.match} Spárovat</button>
+                        <button className="btn btn-sm" onClick={copyFromPrevious}>Z minula</button>
+                        <button className="btn btn-sm" onClick={matchTransactions}>Spárovat</button>
                         <button className="btn btn-primary btn-sm" onClick={() => setShowAddExpense(true)}>+ Přidat</button>
                     </div>
                 </div>
-                <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <div className="card-body recurring-payments-body">
                     {showAddExpense && (
                         <div style={{ background: 'var(--surface-sunken)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--spacing-md)', marginBottom: 'var(--spacing-md)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <input className="input" placeholder="Název výdaje" value={newExpense.name} onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })} />
@@ -339,77 +468,73 @@ export default function RozpocetPage() {
                         </div>
                     )}
 
-                    {totalCount > 0 && (
-                        <div style={{ marginBottom: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>
-                                <span>Zaplaceno {paidCount} / {totalCount}</span>
-                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                    {formatCurrency(budget?.expenses.filter(e => e.is_paid).reduce((s, e) => s + e.my_amount, 0) || 0)} / {formatCurrency(totalExpenses)}
-                                </span>
-                            </div>
-                            <div className="progress">
-                                <span style={{ width: `${totalCount > 0 ? (paidCount / totalCount) * 100 : 0}%`, background: 'var(--pos)' }} />
-                            </div>
-                        </div>
-                    )}
-
-                    {budget?.expenses.map(expense => (
-                        <div key={expense.id} className="expense-row" style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '7px 4px', borderRadius: 'var(--radius-sm)',
-                            background: expense.is_auto_paid ? 'color-mix(in srgb, var(--pos) 6%, transparent)' : 'transparent',
-                            marginBottom: 2,
-                            borderLeft: expense.matched_transaction_id ? '3px solid var(--pos)' : '3px solid transparent',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                                <input type="checkbox" className="expense-check" checked={expense.is_paid} onChange={() => toggleExpensePaid(expense.id, expense.is_paid)} />
-                                <input
-                                    value={editingExpenseNames[expense.id] ?? expense.name}
-                                    onChange={(e) => setEditingExpenseNames(p => ({ ...p, [expense.id]: e.target.value }))}
-                                    onBlur={() => saveExpenseName(expense)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                    style={{ flex: 1, minWidth: 0, padding: '2px 4px', background: 'transparent', border: '1px solid transparent', borderRadius: 'var(--radius-sm)', color: 'inherit', fontSize: '0.875rem', textDecoration: expense.is_paid ? 'line-through' : 'none', opacity: expense.is_paid ? 0.5 : 1 }}
-                                    onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
-                                    onBlurCapture={(e) => { e.currentTarget.style.borderColor = 'transparent'; }}
-                                />
-                            </div>
-                            <div className="expense-actions" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                                <CustomSelect
-                                    compact
-                                    value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
-                                    onChange={(val) => {
-                                        if (val === '100') updateExpensePercentage(expense.id, 100);
-                                        else if (val === '50') updateExpensePercentage(expense.id, 50);
-                                        else {
-                                            setEditingMyAmounts(p => ({ ...p, [expense.id]: String(Math.round(expense.my_amount)) }));
-                                            if (expense.my_amount_override === null) saveCustomOverride(expense.id, Math.round(expense.my_amount));
-                                        }
-                                    }}
-                                    style={{ width: 78 }}
-                                    options={[{ value: '100', label: '100%' }, { value: '50', label: '50%' }, { value: 'custom', label: 'Vlastní' }]}
-                                />
-                                <input type="number" className="input"
-                                    value={editingAmounts[expense.id] ?? expense.amount}
-                                    onChange={(e) => setEditingAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
-                                    onBlur={() => saveExpenseAmount(expense)}
-                                    style={{ width: 95, textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem' }} title="Celková částka"
-                                />
-                                {(expense.my_percentage < 100 || expense.my_amount_override !== null) && (
-                                    <input type="number" className="input"
-                                        value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
-                                        onChange={(e) => setEditingMyAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
-                                        onBlur={() => saveMyAmount(expense)}
-                                        style={{ width: 85, textAlign: 'right', padding: '4px 8px', fontSize: '0.875rem', color: 'var(--accent)', borderColor: 'var(--accent-soft)' }} title="Moje část"
-                                    />
-                                )}
-                                <button onClick={() => deleteMonthlyExpense(expense.id)} className="btn btn-icon btn-ghost btn-sm" style={{ opacity: 0.4 }}>{Icons.action.delete}</button>
-                            </div>
-                        </div>
-                    ))}
-
-                    <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 14 }}>
-                        <span>Celkem</span>
-                        <span style={{ color: 'var(--neg)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totalExpenses)}</span>
+                    <div className="recurring-payments-list">
+                        {budget?.expenses.map((expense, index) => {
+                            const isExpanded = expandedExpenseId === expense.id;
+                            const amountLabel = expense.my_amount_override !== null || expense.my_percentage < 100
+                                ? formatCurrency(expense.my_amount)
+                                : formatCurrency(expense.amount);
+                            return (
+                                <div key={expense.id} className={`recurring-payment-shell ${isExpanded ? 'expanded' : ''}`}>
+                                    <button type="button" className="recurring-payment-row" onClick={() => setExpandedExpenseId(isExpanded ? null : expense.id)}>
+                                        <span className={`recurring-dot ${expense.is_paid ? 'paid' : ''}`} />
+                                        <span className={`recurring-name ${expense.is_paid ? 'paid' : ''}`}>{expense.name}</span>
+                                        <span className="recurring-date">{expenseDueLabel(index)}</span>
+                                        <span className="num recurring-amount">{amountLabel}</span>
+                                        <span className={`recurring-status ${expense.is_paid ? 'paid' : 'pending'}`}>
+                                            {expense.is_paid ? 'Zaplaceno' : 'Čekající'}
+                                        </span>
+                                        <span className="recurring-chevron">›</span>
+                                    </button>
+                                    {isExpanded && (
+                                        <div className="recurring-edit-row">
+                                            <input
+                                                value={editingExpenseNames[expense.id] ?? expense.name}
+                                                onChange={(e) => setEditingExpenseNames(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                onBlur={() => saveExpenseName(expense)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                className="input recurring-edit-name"
+                                            />
+                                            <CustomSelect
+                                                compact
+                                                value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
+                                                onChange={(val) => {
+                                                    if (val === '100') updateExpensePercentage(expense.id, 100);
+                                                    else if (val === '50') updateExpensePercentage(expense.id, 50);
+                                                    else {
+                                                        setEditingMyAmounts(p => ({ ...p, [expense.id]: String(Math.round(expense.my_amount)) }));
+                                                        if (expense.my_amount_override === null) saveCustomOverride(expense.id, Math.round(expense.my_amount));
+                                                    }
+                                                }}
+                                                style={{ width: 96 }}
+                                                options={[{ value: '100', label: '100%' }, { value: '50', label: '50%' }, { value: 'custom', label: 'Vlastní' }]}
+                                            />
+                                            <input type="number" className="input recurring-edit-amount"
+                                                value={editingAmounts[expense.id] ?? expense.amount}
+                                                onChange={(e) => setEditingAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                onBlur={() => saveExpenseAmount(expense)}
+                                                title="Celková částka"
+                                            />
+                                            {(expense.my_percentage < 100 || expense.my_amount_override !== null) && (
+                                                <input type="number" className="input recurring-edit-amount mine"
+                                                    value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
+                                                    onChange={(e) => setEditingMyAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                    onBlur={() => saveMyAmount(expense)}
+                                                    title="Moje část"
+                                                />
+                                            )}
+                                            {expense.my_percentage === 100 && expense.my_amount_override === null && (
+                                                <span className="recurring-edit-spacer" />
+                                            )}
+                                            <button className="btn btn-sm" onClick={() => toggleExpensePaid(expense.id, expense.is_paid)}>
+                                                {expense.is_paid ? 'Označit čekající' : 'Zaplatit'}
+                                            </button>
+                                            <button onClick={() => deleteMonthlyExpense(expense.id)} className="btn btn-icon btn-ghost btn-sm expense-delete-btn">{Icons.action.delete}</button>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -419,10 +544,13 @@ export default function RozpocetPage() {
                 const sorted = [...(budget!.expenses)].sort((a, b) => b.my_amount - a.my_amount);
                 const maxAmt = sorted[0]?.my_amount || 1;
                 return (
-                    <div className="surface">
-                        <div className="card-head"><h3>{Icons.section.expensesByItem} Výdaje podle položek</h3></div>
+                    <div className="surface budget-category-panel">
+                        <div className="card-head">
+                            <h3>Struktura pravidelných výdajů</h3>
+                            <span className="muted small">podíl z měsíce</span>
+                        </div>
                         <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                            {sorted.map(exp => {
+                            {sorted.slice(0, 12).map(exp => {
                                 const pct = Math.round((exp.my_amount / totalExpenses) * 100);
                                 return (
                                     <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -740,8 +868,6 @@ export default function RozpocetPage() {
         );
     };
 
-    const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
-
     return (
         <MainLayout>
             <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
@@ -749,17 +875,35 @@ export default function RozpocetPage() {
                 {/* ── Header ── */}
                 <div className="page-head">
                     <div>
-                        <h1>Měsíční rozpočet</h1>
+                        <h1>Rozpočet</h1>
                         <div className="sub">
-                            {isAutoSyncing ? 'Synchronizuji...' : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`}
+                            {isAutoSyncing ? 'Synchronizuji...' : monthSubLabel}
                         </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div className="rozpocet-controls budget-period-controls">
+                        {viewMode === 'month' && (
+                            <>
+                                <button className="budget-arrow-btn" onClick={goToPrevMonth} aria-label="Předchozí měsíc">←</button>
+                                <CustomSelect value={selectedMonth.toString()} onChange={v => setSelectedMonth(Number(v))} style={{ width: 142 }}
+                                    options={MONTH_NAMES.map((n, i) => ({ value: (i + 1).toString(), label: n }))} />
+                                <CustomSelect value={selectedYear.toString()} onChange={v => setSelectedYear(Number(v))} style={{ width: 98 }}
+                                    options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))} />
+                                <button className="budget-arrow-btn" onClick={goToNextMonth} aria-label="Další měsíc">→</button>
+                            </>
+                        )}
                         <button onClick={() => setViewMode(v => v === 'month' ? 'year' : 'month')} className={`btn btn-sm ${viewMode === 'year' ? 'btn-primary' : ''}`}>
                             {viewMode === 'year' ? '← Měsíc' : `${Icons.nav.reports} Roční`}
                         </button>
+                        {viewMode === 'month' && !isCurrentMonth && (
+                            <button className="btn btn-sm" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }}>Dnes</button>
+                        )}
                         {viewMode === 'month' && (
-                            <button className="btn btn-sm" onClick={deleteBudgetMonth} style={{ color: 'var(--neg)' }}>
+                            <button className="btn btn-sm btn-primary" onClick={matchTransactions}>
+                                Auto-plán
+                            </button>
+                        )}
+                        {viewMode === 'month' && (
+                            <button className="btn btn-sm btn-icon" onClick={deleteBudgetMonth} style={{ color: 'var(--neg)' }}>
                                 {Icons.action.delete}
                             </button>
                         )}
@@ -768,53 +912,44 @@ export default function RozpocetPage() {
 
                 {/* ── Hero card ── */}
                 {viewMode === 'month' && (
-                    <div className="surface">
-                        {/* Month nav */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px var(--spacing-lg) 0' }}>
-                            <button className="btn btn-sm btn-ghost" onClick={goToPrevMonth}>←</button>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <CustomSelect value={selectedMonth.toString()} onChange={v => setSelectedMonth(Number(v))} style={{ width: 140 }}
-                                    options={MONTH_NAMES.map((n, i) => ({ value: (i + 1).toString(), label: n }))} />
-                                <CustomSelect value={selectedYear.toString()} onChange={v => setSelectedYear(Number(v))} style={{ width: 100 }}
-                                    options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))} />
-                                {!isCurrentMonth && (
-                                    <button className="btn btn-sm" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }}>Dnes</button>
-                                )}
+                    <div className="surface budget-hero">
+                        <div className="budget-hero-metrics">
+                            <div className="budget-metric budget-metric-wide">
+                                <div className="kpi-label">Utraceno z rozpočtu</div>
+                                <div className="kpi-value num">
+                                    {formatCurrency(totalExpenses)}
+                                    <span style={{ fontSize: 16, color: 'var(--text-3)', fontWeight: 450 }}> / {formatCurrency(budgetLimit)}</span>
+                                </div>
+                                <div className="progress">
+                                    <span style={{
+                                        width: `${Math.min(budgetSpentPct, 100)}%`,
+                                    background: budgetSpentPct >= 100 ? 'var(--neg)' : 'var(--pos)',
+                                    }} />
+                                </div>
                             </div>
-                            <button className="btn btn-sm btn-ghost" onClick={goToNextMonth}>→</button>
+                            <div className="budget-metric">
+                                <div className="kpi-label">Zbývá celkem</div>
+                                <div className="kpi-value num" style={{ color: isOverBudget ? 'var(--neg)' : 'var(--text)' }}>{formatCurrency(remaining)}</div>
+                            </div>
+                            <div className="budget-metric">
+                                <div className="kpi-label">Denní tempo</div>
+                                <div className="kpi-value num">{formatCurrency(dailyPace)}</div>
+                            </div>
+                            <div className="budget-metric">
+                                <div className="kpi-label">Nevyčerpáno od 1. {selectedMonth}.</div>
+                                <div className="kpi-value num">{budgetSpentPct}%</div>
+                            </div>
                         </div>
-
-                        {/* Ring + stats */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)', padding: 'var(--spacing-lg)' }}>
-                            <div style={{ position: 'relative', flexShrink: 0 }}>
-                                <Ring pct={expensePct} size={148} />
+                        <div className="budget-month-ring">
+                            <div style={{ position: 'relative' }}>
+                                <Ring pct={budgetSpentPct} size={142} />
                                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 2 }}>utraceno</div>
-                                    <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: expensePct >= 100 ? 'var(--neg)' : expensePct >= 80 ? 'var(--warn)' : 'var(--text)' }}>
-                                        {expensePct}%
-                                    </div>
+                                    <div className="num" style={{ fontSize: 25, fontWeight: 700, lineHeight: 1 }}>{budgetSpentPct}%</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>z měsíce</div>
                                 </div>
                             </div>
-
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                <div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 2 }}>Utraceno z rozpočtu</div>
-                                    <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.024em', fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>
-                                        {formatCurrency(totalExpenses)}
-                                    </div>
-                                    <div style={{ fontSize: 13, color: 'var(--text-3)' }}>z {formatCurrency(totalIncome)} příjmů</div>
-                                </div>
-                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                    <span className={`chip ${isOverBudget ? 'chip-danger' : 'chip-success'}`}>
-                                        {isOverBudget ? `${Icons.status.overBudget} −` : '+'}{formatCurrency(Math.abs(remaining))} zbývá
-                                    </span>
-                                    <span className={`chip ${paidCount === totalCount && totalCount > 0 ? 'chip-success' : ''}`}>
-                                        {paidCount}/{totalCount} zaplaceno
-                                    </span>
-                                    {savingsRate > 0 && (
-                                        <span className="chip chip-accent">{savingsRate}% spoření</span>
-                                    )}
-                                </div>
+                            <div className="kpi-sub" style={{ justifyContent: 'center' }}>
+                                {formatCurrency(Math.max(remaining, 0))} zbývá
                             </div>
                         </div>
                     </div>
@@ -840,10 +975,12 @@ export default function RozpocetPage() {
                             ))}
                         </div>
 
-                        {activeTab === 'expenses' && renderExpenses()}
-                        {activeTab === 'income'   && renderIncome()}
-                        {activeTab === 'surplus'  && renderSurplus()}
-                        {activeTab === 'accounts' && renderAccounts()}
+                        {activeTab === 'overview'  && renderOverview()}
+                        {activeTab === 'expenses'  && renderExpenses()}
+                        {activeTab === 'envelopes' && renderEnvelopes()}
+                        {activeTab === 'income'    && renderIncome()}
+                        {activeTab === 'surplus'   && renderSurplus()}
+                        {activeTab === 'accounts'  && renderAccounts()}
                     </>
                 )}
 

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -153,10 +153,12 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         )
         contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
     
-    # Get transactions for last 30 days for calculations
-    date_30_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    # Get transactions for the CURRENT CALENDAR MONTH (not last 30 days — UI labels these
+    # as "tento měsíc" so they must match what the user sees on a calendar).
+    today = datetime.now()
+    month_start = today.replace(day=1).strftime("%Y-%m-%d")
     all_tx_result = await db.execute(
-        select(TransactionModel).where(TransactionModel.date >= date_30_days_ago).limit(500)
+        select(TransactionModel).where(TransactionModel.date >= month_start).limit(1000)
     )
     all_tx = all_tx_result.scalars().all()
     
@@ -164,11 +166,19 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank" and not tx.is_excluded)
     expenses = sum(abs(tx.amount) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank" and not tx.is_excluded)
     
-    # Calculate categories (excluding internal/family transfers)
+    # Calculate categories (only true expense categories — exclude income categories
+    # like Salary/Dividend even if a misclassified negative tx slips through)
+    income_cat_result = await db.execute(
+        select(CategoryModel.name).where(CategoryModel.is_income == True)
+    )
+    income_category_names = {row[0] for row in income_cat_result.all()}
+
     categories = {}
     for tx in all_tx:
         if tx.amount < 0 and not tx.is_excluded:
             cat = tx.category or "Other"
+            if cat in income_category_names:
+                continue
             if cat not in categories:
                 categories[cat] = 0
             categories[cat] += abs(tx.amount)

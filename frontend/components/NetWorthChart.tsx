@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
     XAxis,
     YAxis,
@@ -24,32 +25,13 @@ const PERIODS = [
 ];
 
 export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) {
-    const [data, setData] = useState<NetWorthHistory | null>(null);
-    const [loading, setLoading] = useState(true);
     const [selectedPeriod, setSelectedPeriod] = useState(30);
-    const [isMobile, setIsMobile] = useState(false);
 
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth <= 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-
-    useEffect(() => {
-        async function fetchData() {
-            setLoading(true);
-            try {
-                const history = await getNetWorthHistory(selectedPeriod);
-                setData(history);
-            } catch (err) {
-                console.error('Failed to load net worth history:', err);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchData();
-    }, [selectedPeriod]);
+    const { data, isLoading: loading, error } = useQuery<NetWorthHistory>({
+        queryKey: ['net-worth-history', selectedPeriod],
+        queryFn: () => getNetWorthHistory(selectedPeriod),
+        staleTime: 60_000,
+    });
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('cs-CZ', {
@@ -68,6 +50,15 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
         );
     }
 
+    if (error) {
+        return (
+            <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--neg)' }}>
+                <span>Nepodařilo se načíst vývoj majetku.</span>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{(error as Error).message}</span>
+            </div>
+        );
+    }
+
     if (!data || data.history.length === 0) {
         return (
             <div style={{
@@ -75,7 +66,7 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--text-tertiary)'
+                color: 'var(--text-3)'
             }}>
                 Žádná data k zobrazení
             </div>

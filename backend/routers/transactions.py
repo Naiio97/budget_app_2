@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from database import get_db
 from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel
 from routers.contacts import normalize_iban
@@ -41,7 +41,7 @@ class PaginatedTransactions(BaseModel):
 @router.get("/", response_model=PaginatedTransactions)
 async def get_transactions(
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=1000),
     search: Optional[str] = None,
     category: Optional[str] = None,
     account_id: Optional[str] = None,
@@ -67,7 +67,13 @@ async def get_transactions(
         conditions.append(TransactionModel.category == category)
     if search:
         search_term = f"%{search}%"
-        conditions.append(TransactionModel.description.ilike(search_term))
+        # Match against description, raw_json (covers counterparty name/IBAN from bank),
+        # and account name. Lets users find e.g. "PPF" by counterparty rather than only description.
+        conditions.append(or_(
+            TransactionModel.description.ilike(search_term),
+            TransactionModel.raw_json.ilike(search_term),
+            AccountModel.name.ilike(search_term),
+        ))
     if amount_type == "income":
         conditions.append(TransactionModel.amount > 0)
     elif amount_type == "expense":
@@ -280,7 +286,32 @@ async def update_transaction_category(
                 match_count=1,
             )
             db.add(rule)
-    
+
+        # Retroactive: apply the rule to all existing transactions matching this pattern
+        # so past Billa transactions become Supermarkets too — not just future ones.
+        # Match against description OR raw_json (covers creditorName from bank).
+        like_pattern = f"%{pattern}%"
+        retro_result = await db.execute(
+            select(TransactionModel).where(
+                and_(
+                    TransactionModel.id != transaction_id,
+                    or_(
+                        TransactionModel.description.ilike(like_pattern),
+                        TransactionModel.raw_json.ilike(like_pattern),
+                    ),
+                )
+            )
+        )
+        for matching_tx in retro_result.scalars():
+            matching_tx.category = data.category
+            matching_tx.is_excluded = data.category in excluded_categories
+            if data.category == "Internal Transfer":
+                matching_tx.transaction_type = "internal_transfer"
+            elif data.category == "Family Transfer":
+                matching_tx.transaction_type = "family_transfer"
+            elif matching_tx.transaction_type in ["internal_transfer", "family_transfer"]:
+                matching_tx.transaction_type = "normal"
+
     await db.commit()
     
     return {

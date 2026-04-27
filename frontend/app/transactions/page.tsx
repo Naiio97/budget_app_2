@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
@@ -18,13 +19,17 @@ interface Category {
 }
 
 export default function TransactionsPage() {
+    const searchParams = useSearchParams();
+    const initialAccount = searchParams.get('account_id') ?? '';
+
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('');
-    const [selectedAccount, setSelectedAccount] = useState<string>('');
+    const [selectedAccount, setSelectedAccount] = useState<string>(initialAccount);
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [amountType, setAmountType] = useState<string>('');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState<number>(20);
 
     const [mobileVisible, setMobileVisible] = useState(10);
     const [isMobile, setIsMobile] = useState(false);
@@ -64,6 +69,7 @@ export default function TransactionsPage() {
 
     const txFilters = {
         page,
+        limit: pageSize,
         search: debouncedSearch || undefined,
         category: selectedCategory || undefined,
         account_id: selectedAccount || undefined,
@@ -74,7 +80,7 @@ export default function TransactionsPage() {
 
     const { data: txData, isLoading: loading } = useQuery({
         queryKey: queryKeys.transactions(txFilters),
-        queryFn: () => getTransactions({ ...txFilters, limit: 20 }),
+        queryFn: () => getTransactions(txFilters),
     });
 
     const { data: dashData } = useQuery({
@@ -101,11 +107,15 @@ export default function TransactionsPage() {
     const [lastFetchedPage, setLastFetchedPage] = useState(0);
 
     useEffect(() => {
-        if (allTransactions.length === 0) return;
+        // Wait for the query to settle before touching the accumulator. This prevents wiping
+        // it during in-flight refetches where allTransactions transiently looks empty.
+        if (loading) return;
         if (page === 1) {
+            // Allow empty results to overwrite (e.g. search returns nothing) — otherwise mobile
+            // shows stale results and the search appears broken.
             setAccumulatedTransactions(allTransactions);
             setLastFetchedPage(1);
-        } else if (page > lastFetchedPage) {
+        } else if (allTransactions.length > 0 && page > lastFetchedPage) {
             setAccumulatedTransactions(prev => {
                 const existingIds = new Set(prev.map(t => t.id));
                 const newItems = allTransactions.filter(t => !existingIds.has(t.id));
@@ -113,7 +123,7 @@ export default function TransactionsPage() {
             });
             setLastFetchedPage(page);
         }
-    }, [allTransactions, page, lastFetchedPage]);
+    }, [allTransactions, page, lastFetchedPage, loading]);
 
     const finalDisplayTransactions = isMobile
         ? accumulatedTransactions.slice(0, mobileVisible)
@@ -267,21 +277,40 @@ export default function TransactionsPage() {
                     )}
 
                     {/* Desktop pagination */}
-                    {!isMobile && totalPages > 1 && (
+                    {!isMobile && (
                         <div style={{
-                            display: 'flex', justifyContent: 'center', alignItems: 'center',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             gap: 'var(--spacing-lg)', padding: 'var(--spacing-md) var(--spacing-lg)',
                             borderTop: '0.5px solid var(--border)',
+                            flexWrap: 'wrap',
                         }}>
-                            <button className="btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ opacity: page <= 1 ? 0.4 : 1 }}>
-                                ← Předchozí
-                            </button>
-                            <span style={{ fontSize: 13, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
-                                {page} / {totalPages}
-                            </span>
-                            <button className="btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ opacity: page >= totalPages ? 0.4 : 1 }}>
-                                Další →
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)' }}>
+                                <span>Na stránku:</span>
+                                <div className="seg">
+                                    {[5, 10, 20, 50, 100].map(size => (
+                                        <div
+                                            key={size}
+                                            className={`seg-item ${pageSize === size ? 'active' : ''}`}
+                                            onClick={() => { setPageSize(size); setPage(1); }}
+                                        >
+                                            {size}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            {totalPages > 1 ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)' }}>
+                                    <button className="btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ opacity: page <= 1 ? 0.4 : 1 }}>
+                                        ← Předchozí
+                                    </button>
+                                    <span style={{ fontSize: 13, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+                                        {page} / {totalPages}
+                                    </span>
+                                    <button className="btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ opacity: page >= totalPages ? 0.4 : 1 }}>
+                                        Další →
+                                    </button>
+                                </div>
+                            ) : <span />}
                         </div>
                     )}
                 </div>

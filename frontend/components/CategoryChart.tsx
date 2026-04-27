@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -14,45 +15,48 @@ interface Category {
     name: string;
     icon: string;
     color: string;
+    is_income?: boolean;
+    is_active?: boolean;
 }
 
 const FALLBACK_COLORS: Record<string, string> = {
-    'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
+    'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
     'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
-    'Dividend': '#8b5cf6', 'Salary': '#10b981',
+    'Dividend': '#8b5cf6', 'Salary': '#10b981', 'Subscription': '#030303',
+    'Installments': '#4b4c95', 'Insurance': '#e5c52a', 'Supermarkets': '#e69eb0',
+    'ATM': '#f28f64',
     'Internal Transfer': '#6b7280', 'Family Transfer': '#6b7280', 'Other': '#6b7280',
 };
 
 const FALLBACK_ICONS: Record<string, string> = {
-    'Food': '🛒', 'Transport': '🚗', 'Utilities': '🏠',
-    'Entertainment': '🎬', 'Shopping': '🛍️', 'Investment': '📈',
-    'Salary': '💰', 'Other': '•',
+    'Restaurant': '🍔', 'Food': '🛒', 'Transport': '🚗', 'Utilities': '💡',
+    'Entertainment': '🎬', 'Shopping': '🛒', 'Investment': '📈',
+    'Salary': '💰', 'Dividend': '💵', 'Subscription': '📱',
+    'Installments': '📦', 'Insurance': '🏥', 'Supermarkets': '🍔',
+    'ATM': '💵', 'Other': '📦',
 };
 
 export default function CategoryChart({ categories, currency = 'CZK' }: CategoryChartProps) {
-    const [categoryMeta, setCategoryMeta] = useState<Record<string, { color: string; icon: string }>>({});
+    const { data: categoryList = [] } = useQuery<Category[]>({
+        queryKey: queryKeys.categories,
+        queryFn: () =>
+            fetch(`${API_BASE}/categories/`)
+                .then(r => r.json())
+                .then(d => Array.isArray(d) ? d : []),
+        staleTime: 5 * 60 * 1000,
+    });
 
-    useEffect(() => {
-        fetch(`${API_BASE}/categories/`)
-            .then(res => res.json())
-            .then((data: Category[]) => {
-                const safeData = Array.isArray(data) ? data : [];
-                const meta = safeData.reduce((acc, cat) => {
-                    acc[cat.name] = { color: cat.color, icon: cat.icon };
-                    return acc;
-                }, {} as Record<string, { color: string; icon: string }>);
-                setCategoryMeta(meta);
-            })
-            .catch(() => {});
-    }, []);
+    const meta = categoryList.reduce((acc, cat) => {
+        acc[cat.name] = { color: cat.color, icon: cat.icon };
+        return acc;
+    }, {} as Record<string, { color: string; icon: string }>);
 
-    const getColor = (name: string) => categoryMeta[name]?.color || FALLBACK_COLORS[name] || '#6b7280';
-    const getIcon = (name: string) => categoryMeta[name]?.icon || FALLBACK_ICONS[name] || '•';
+    const getColor = (name: string) => meta[name]?.color || FALLBACK_COLORS[name] || '#6b7280';
+    const getIcon = (name: string) => meta[name]?.icon || FALLBACK_ICONS[name] || '📦';
 
     const fmt = (amount: number) =>
         new Intl.NumberFormat('cs-CZ', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
-    // Only expense categories (negative → stored as positive in categories)
     const sorted = Object.entries(categories)
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1]);

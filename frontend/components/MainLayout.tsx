@@ -34,7 +34,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const navItems = [
         { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
         { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
-        { href: '/rozpocet', label: 'Měs. rozpočet', icon: Icons.nav.monthlyBudget },
+        { href: '/rozpocet', label: 'Rozpočet', icon: Icons.nav.monthlyBudget },
         { href: '/budgets', label: 'Rozpočty', icon: Icons.nav.budgets },
         { href: '/reports', label: 'Přehledy', icon: Icons.nav.reports },
         { href: '/investments', label: 'Investice', icon: Icons.nav.investments },

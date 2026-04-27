@@ -494,10 +494,45 @@ async def recategorize_transactions(db: AsyncSession = Depends(get_db)):
 
 
 
+def _categorize_with_preloaded_rules(
+    tx: dict,
+    user_rules: list[CategoryRuleModel],
+    learned_rules: list[CategoryRuleModel],
+) -> str:
+    """In-memory variant of categorize_transaction_with_rules — avoids N+1 DB queries during sync.
+    Priority: user rules > purposeCode > MCC > learned rules > keyword fallback."""
+    raw_desc = (tx.get("remittanceInformationUnstructured") or
+                tx.get("creditorName") or
+                tx.get("debtorName") or
+                "")
+    desc = str(raw_desc).lower()
+
+    for rule in user_rules:
+        if rule.pattern.lower() in desc:
+            rule.match_count += 1
+            return rule.category
+
+    by_purpose = categorize_by_purpose_code(tx)
+    if by_purpose:
+        return by_purpose
+
+    by_mcc = categorize_by_mcc(tx)
+    if by_mcc:
+        return by_mcc
+
+    if desc:
+        for rule in learned_rules:
+            if rule.pattern.lower() in desc:
+                rule.match_count += 1
+                return rule.category
+
+    return categorize_transaction(tx)
+
+
 @router.post("/")
 async def sync_all_data(db: AsyncSession = Depends(get_db)):
     """Synchronize all data from external APIs to local database"""
-    
+
     sync_status = SyncStatusModel(
         started_at=datetime.utcnow(),
         status="running"
@@ -505,10 +540,25 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
     db.add(sync_status)
     await db.commit()
     await db.refresh(sync_status)
-    
+
     accounts_synced = 0
     transactions_synced = 0
-    
+
+    # Preload all category rules ONCE so categorization during the sync respects user choices
+    # (e.g. "billa → Supermarkets") without N+1 DB roundtrips.
+    user_rules_result = await db.execute(
+        select(CategoryRuleModel)
+        .where(CategoryRuleModel.is_user_defined == True)
+        .order_by(CategoryRuleModel.match_count.desc())
+    )
+    preloaded_user_rules = list(user_rules_result.scalars())
+    learned_rules_result = await db.execute(
+        select(CategoryRuleModel)
+        .where(CategoryRuleModel.is_user_defined == False)
+        .order_by(CategoryRuleModel.match_count.desc())
+    )
+    preloaded_learned_rules = list(learned_rules_result.scalars())
+
     try:
         # Sync bank accounts from GoCardless
         try:
@@ -578,7 +628,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                             "description": description,
                             "amount": float(tx_data.transactionAmount.amount),
                             "currency": tx_data.transactionAmount.currency,
-                            "category": categorize_transaction(tx_dict),
+                            "category": _categorize_with_preloaded_rules(tx_dict, preloaded_user_rules, preloaded_learned_rules),
                             "account_type": "bank",
                             "transaction_type": "normal",
                             "is_excluded": False,
