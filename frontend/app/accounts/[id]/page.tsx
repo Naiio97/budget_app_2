@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -218,13 +218,12 @@ export default function AccountDetailPage() {
     const [nowMs] = useState(() => Date.now());
 
     // Per-account color theme (persisted in localStorage)
-    const [themeId, setThemeId] = useState<string>('default');
-    const [themeOpen, setThemeOpen] = useState(false);
-    useEffect(() => {
-        if (!accountId) return;
+    const [themeId, setThemeId] = useState<string>(() => {
+        if (typeof window === 'undefined' || !accountId) return 'default';
         const saved = localStorage.getItem(`acct-theme-${accountId}`);
-        if (saved && THEMES.some(t => t.id === saved)) setThemeId(saved);
-    }, [accountId]);
+        return saved && THEMES.some(t => t.id === saved) ? saved : 'default';
+    });
+    const [themeOpen, setThemeOpen] = useState(false);
     const selectTheme = (id: string) => {
         setThemeId(id);
         if (accountId) localStorage.setItem(`acct-theme-${accountId}`, id);

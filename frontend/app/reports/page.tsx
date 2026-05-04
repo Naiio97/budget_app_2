@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    AreaChart, Area
+    LineChart, Line
 } from 'recharts';
+import { queryKeys } from '@/lib/queryKeys';
 
 interface MonthlyTotal {
     month: string;
@@ -32,88 +33,139 @@ interface Category {
     id: number;
     name: string;
     color: string;
+    icon?: string;
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
-// Fallback colors
 const FALLBACK_COLORS: Record<string, string> = {
-    'Food': '#ef4444',
-    'Transport': '#f97316',
-    'Shopping': '#14b8a6',
-    'Entertainment': '#22c55e',
-    'Utilities': '#eab308',
-    'Health': '#ec4899',
-    'Investment': '#3b82f6',
-    'Dividend': '#8b5cf6',
-    'Salary': '#10b981',
-    'Other': '#6b7280',
+    'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
+    'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
+    'Dividend': '#8b5cf6', 'Salary': '#10b981', 'Subscription': '#030303',
+    'Installments': '#4b4c95', 'Insurance': '#e5c52a', 'Supermarkets': '#e69eb0',
+    'ATM': '#f28f64', 'Other': '#6b7280',
+};
+
+const formatMoney = (amount: number) =>
+    new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+
+const formatMonth = (monthStr: string) => {
+    const [year, month] = monthStr.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('cs-CZ', { month: 'short', year: '2-digit' });
 };
 
 export default function ReportsPage() {
     const [months, setMonths] = useState(6);
 
-    const { data: report, isLoading: loading } = useQuery<MonthlyReport>({
-        queryKey: ['monthly-report', months],
-        queryFn: () =>
-            fetch(`${API_BASE}/dashboard/monthly-report?months=${months}`).then(r => r.json()),
+    const { data: report, isLoading: loading, error } = useQuery<MonthlyReport>({
+        queryKey: queryKeys.monthlyReport(months),
+        queryFn: () => fetch(`${API_BASE}/dashboard/monthly-report?months=${months}`).then(r => r.json()),
     });
 
-    const { data: categoriesData } = useQuery<Category[]>({
-        queryKey: ['categories'],
+    const { data: categoriesData = [] } = useQuery<Category[]>({
+        queryKey: queryKeys.categories,
         queryFn: () => fetch(`${API_BASE}/categories/`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
         staleTime: 5 * 60 * 1000,
     });
 
-    const categoryColors: Record<string, string> = categoriesData
-        ? categoriesData.reduce((acc, cat) => { acc[cat.name] = cat.color; return acc; }, { ...FALLBACK_COLORS } as Record<string, string>)
-        : FALLBACK_COLORS;
+    const categoryColors: Record<string, string> = useMemo(() =>
+        categoriesData.reduce((acc, cat) => {
+            acc[cat.name] = cat.color || FALLBACK_COLORS[cat.name] || '#6b7280';
+            return acc;
+        }, { ...FALLBACK_COLORS } as Record<string, string>),
+        [categoriesData]
+    );
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency: 'CZK',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(amount);
-    };
+    // Per-month breakdown with one line per top-5 category. Lines are easier to read
+    // than stacked bars/areas — you can compare categories at a glance.
+    const { categoryTrendData, trendCategories } = useMemo(() => {
+        if (!report) return { categoryTrendData: [], trendCategories: [] as string[] };
 
-    const formatMonth = (monthStr: string) => {
-        const [year, month] = monthStr.split('-');
-        const date = new Date(parseInt(year), parseInt(month) - 1);
-        return date.toLocaleDateString('cs-CZ', { month: 'short', year: '2-digit' });
-    };
-
-    // Prepare category data per month for stacked chart
-    const prepareCategoryData = () => {
-        if (!report) return [];
-
-        const monthData: Record<string, Record<string, number>> = {};
-
+        const totals = new Map<string, number>();
         for (const item of report.category_breakdown) {
-            if (!monthData[item.month]) {
-                monthData[item.month] = {};
-            }
-            monthData[item.month][item.category] = item.amount;
+            totals.set(item.category, (totals.get(item.category) || 0) + item.amount);
+        }
+        const top = Array.from(totals.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([name]) => name);
+        const topSet = new Set(top);
+
+        const monthMap: Record<string, Record<string, number>> = {};
+        for (const item of report.category_breakdown) {
+            if (!topSet.has(item.category)) continue;
+            if (!monthMap[item.month]) monthMap[item.month] = {};
+            monthMap[item.month][item.category] = item.amount;
         }
 
+        const data = report.monthly_totals.map(m => {
+            const row: Record<string, number | string> = { month: formatMonth(m.month) };
+            for (const cat of top) {
+                row[cat] = monthMap[m.month]?.[cat] ?? 0;
+            }
+            return row;
+        });
+
+        return { categoryTrendData: data, trendCategories: top };
+    }, [report]);
+
+    // Savings rate trend (per month)
+    const savingsTrend = useMemo(() => {
+        if (!report) return [];
         return report.monthly_totals.map(m => ({
             month: formatMonth(m.month),
-            ...monthData[m.month]
+            rate: m.income > 0 ? Math.round(((m.income - m.expenses) / m.income) * 100) : 0,
+            balance: m.balance,
         }));
-    };
+    }, [report]);
+
+    // Top categories aggregated across the period
+    const topCategoriesAgg = useMemo(() => {
+        if (!report) return [];
+        const map = new Map<string, number>();
+        for (const item of report.category_breakdown) {
+            map.set(item.category, (map.get(item.category) || 0) + item.amount);
+        }
+        return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    }, [report]);
 
     if (loading) {
         return (
             <MainLayout>
-                <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)' }}>
-                    <p className="text-secondary">Načítám přehledy...</p>
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
                 </div>
             </MainLayout>
         );
     }
 
-    const categoryData = prepareCategoryData();
+    if (error || !report) {
+        return (
+            <MainLayout>
+                <div className="page-container">
+                    <div className="surface" style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--neg)' }}>
+                        Nepodařilo se načíst přehledy.
+                    </div>
+                </div>
+            </MainLayout>
+        );
+    }
+
+    const totals = report.monthly_totals;
+    const totalIncome = totals.reduce((s, m) => s + m.income, 0);
+    const totalExpenses = totals.reduce((s, m) => s + m.expenses, 0);
+    const totalSavings = totalIncome - totalExpenses;
+    const avgIncome = totals.length ? totalIncome / totals.length : 0;
+    const avgExpenses = totals.length ? totalExpenses / totals.length : 0;
+    const overallSavingsRate = totalIncome > 0 ? Math.round((totalSavings / totalIncome) * 100) : 0;
+
+    // MoM change (current vs previous month) — uses last 2 months in window
+    const last = totals[totals.length - 1];
+    const prev = totals[totals.length - 2];
+    const momExpensesChange = last && prev && prev.expenses > 0
+        ? Math.round(((last.expenses - prev.expenses) / prev.expenses) * 100)
+        : null;
 
     return (
         <MainLayout>
@@ -138,88 +190,175 @@ export default function ReportsPage() {
                     </div>
                 </div>
 
-                {/* KPI row */}
-                {report && report.monthly_totals.length > 0 && (() => {
-                    const totalIncome = report.monthly_totals.reduce((s, m) => s + m.income, 0);
-                    const totalExpenses = report.monthly_totals.reduce((s, m) => s + m.expenses, 0);
-                    const avgExpenses = totalExpenses / report.monthly_totals.length;
-                    return (
-                        <div className="grid-3">
-                            <div className="surface kpi">
-                                <div className="kpi-label">Příjmy celkem</div>
-                                <div className="kpi-value num" style={{ color: 'var(--pos)' }}>+{formatCurrency(totalIncome)}</div>
-                                <div className="kpi-sub"><span>za {months} měsíců</span></div>
+                {/* Hero KPI strip */}
+                <section className="surface" style={{ padding: '24px 28px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24 }}>
+                        <div>
+                            <div className="kpi-label">Příjmy · {months} měsíců</div>
+                            <div className="num" style={{ fontSize: 28, fontWeight: 700, color: 'var(--pos)', letterSpacing: '-0.03em', marginTop: 4 }}>
+                                +{formatMoney(totalIncome)}
                             </div>
-                            <div className="surface kpi">
-                                <div className="kpi-label">Výdaje celkem</div>
-                                <div className="kpi-value num">{formatCurrency(totalExpenses)}</div>
-                                <div className="kpi-sub"><span>za {months} měsíců</span></div>
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>průměr {formatMoney(avgIncome)}/měsíc</div>
+                        </div>
+                        <div>
+                            <div className="kpi-label">Výdaje · {months} měsíců</div>
+                            <div className="num" style={{ fontSize: 28, fontWeight: 700, color: 'var(--neg)', letterSpacing: '-0.03em', marginTop: 4 }}>
+                                -{formatMoney(totalExpenses)}
                             </div>
-                            <div className="surface kpi">
-                                <div className="kpi-label">Průměr výdajů / měsíc</div>
-                                <div className="kpi-value num">{formatCurrency(avgExpenses)}</div>
-                                <div className="kpi-sub"><span>průměr</span></div>
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>průměr {formatMoney(avgExpenses)}/měsíc</div>
+                        </div>
+                        <div>
+                            <div className="kpi-label">Úspora celkem</div>
+                            <div className="num" style={{ fontSize: 28, fontWeight: 700, color: totalSavings >= 0 ? 'var(--pos)' : 'var(--neg)', letterSpacing: '-0.03em', marginTop: 4 }}>
+                                {totalSavings >= 0 ? '+' : ''}{formatMoney(totalSavings)}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+                                {overallSavingsRate}% z příjmu
                             </div>
                         </div>
-                    );
-                })()}
+                        <div>
+                            <div className="kpi-label">Výdaje vs. min. měsíc</div>
+                            <div className="num" style={{
+                                fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', marginTop: 4,
+                                color: momExpensesChange == null ? 'var(--text-3)' : momExpensesChange > 0 ? 'var(--neg)' : 'var(--pos)',
+                            }}>
+                                {momExpensesChange == null ? '—' : `${momExpensesChange > 0 ? '+' : ''}${momExpensesChange}%`}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+                                {last && prev ? `${formatMonth(last.month)} vs ${formatMonth(prev.month)}` : 'málo dat'}
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
-                {/* Income vs Expenses Chart */}
-                <div className="surface">
+                {/* Income vs Expenses bar chart */}
+                <section className="surface">
                     <div className="card-head">
                         <h3>Příjmy vs. výdaje</h3>
+                        <span className="muted" style={{ fontSize: 12 }}>{months} měsíců zpět</span>
                     </div>
                     <div className="card-body">
-                        <div style={{ height: 260 }}>
+                        <div style={{ height: 280 }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={report?.monthly_totals.map(m => ({ ...m, month: formatMonth(m.month) })) || []}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                                    <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} />
-                                    <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} axisLine={false} tickLine={false} />
+                                <BarChart data={totals.map(m => ({ ...m, month: formatMonth(m.month) }))}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                                    <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
+                                    <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={42} axisLine={false} tickLine={false} />
                                     <Tooltip
                                         contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
-                                        formatter={(value) => formatCurrency(Number(value))}
+                                        formatter={(value, name) => [formatMoney(Number(value)), name === 'income' ? 'Příjmy' : 'Výdaje']}
                                     />
-                                    <Legend wrapperStyle={{ fontSize: '0.8rem' }} />
-                                    <Bar dataKey="income" name="Příjmy" fill="var(--pos)" radius={[4, 4, 0, 0]} />
-                                    <Bar dataKey="expenses" name="Výdaje" fill="var(--neg)" radius={[4, 4, 0, 0]} />
+                                    <Legend wrapperStyle={{ fontSize: '0.8rem' }} formatter={(value) => value === 'income' ? 'Příjmy' : 'Výdaje'} />
+                                    <Bar dataKey="income" fill="var(--pos)" radius={[6, 6, 0, 0]} />
+                                    <Bar dataKey="expenses" fill="var(--neg)" radius={[6, 6, 0, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
+                </section>
+
+                {/* Two-column row: savings trend + top categories */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 'var(--spacing-lg)' }} className="reports-insight-grid">
+                    <section className="surface">
+                        <div className="card-head">
+                            <h3>Trend úspory</h3>
+                            <span className="muted" style={{ fontSize: 12 }}>% z příjmu / měsíc</span>
+                        </div>
+                        <div className="card-body">
+                            <div style={{ height: 220 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={savingsTrend}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                                        <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
+                                        <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${v}%`} width={40} axisLine={false} tickLine={false} />
+                                        <Tooltip
+                                            contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
+                                            formatter={(value, name, item) => {
+                                                const balance = item?.payload?.balance ?? 0;
+                                                return [`${value}%  (${formatMoney(balance)})`, 'Úspora'];
+                                            }}
+                                        />
+                                        <Line type="monotone" dataKey="rate" stroke="var(--pos)" strokeWidth={3} dot={{ r: 4, fill: 'var(--pos)' }} activeDot={{ r: 6 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="surface">
+                        <div className="card-head">
+                            <h3>Top kategorie</h3>
+                            <span className="muted" style={{ fontSize: 12 }}>Celkem za období</span>
+                        </div>
+                        <div className="card-body">
+                            {topCategoriesAgg.length === 0 ? (
+                                <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Žádné výdaje.</div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    {topCategoriesAgg.map(([name, amount]) => {
+                                        const max = topCategoriesAgg[0][1];
+                                        const color = categoryColors[name] || '#6b7280';
+                                        return (
+                                            <div key={name}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                                                    <span style={{ color: 'var(--text)', fontWeight: 500 }}>{name}</span>
+                                                    <span className="num" style={{ color: 'var(--text-2)' }}>{formatMoney(amount)}</span>
+                                                </div>
+                                                <div style={{ height: 6, borderRadius: 999, background: 'var(--surface-sunken)', overflow: 'hidden' }}>
+                                                    <div style={{ height: '100%', width: `${(amount / max) * 100}%`, background: color, borderRadius: 999 }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </section>
                 </div>
 
-                {/* Category Breakdown Chart */}
-                <div className="surface">
+                {/* Multi-line: trend per top-5 category — easier to read than stacked area */}
+                <section className="surface">
                     <div className="card-head">
-                        <h3>Výdaje podle kategorií</h3>
+                        <h3>Kategorie po měsících</h3>
+                        <span className="muted" style={{ fontSize: 12 }}>Top 5 kategorií · vývoj</span>
                     </div>
                     <div className="card-body">
-                        <div style={{ height: 260 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={categoryData}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                                    <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} />
-                                    <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={40} axisLine={false} tickLine={false} />
-                                    <Tooltip
-                                        contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
-                                        formatter={(value) => formatCurrency(Number(value))}
-                                    />
-                                    <Legend wrapperStyle={{ fontSize: '0.8rem' }} />
-                                    {report?.categories.map(cat => (
-                                        <Area key={cat} type="monotone" dataKey={cat} stackId="1"
-                                            stroke={categoryColors[cat] || 'var(--text-3)'}
-                                            fill={categoryColors[cat] || 'var(--text-3)'}
-                                            fillOpacity={0.6} />
-                                    ))}
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        </div>
+                        {trendCategories.length === 0 ? (
+                            <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-xl)' }}>
+                                Žádné výdaje k zobrazení.
+                            </div>
+                        ) : (
+                            <div style={{ height: 320 }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={categoryTrendData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                                        <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
+                                        <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={42} axisLine={false} tickLine={false} />
+                                        <Tooltip
+                                            contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
+                                            formatter={(value, name) => [formatMoney(Number(value)), name as string]}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '0.8rem', paddingTop: 8 }} iconType="circle" />
+                                        {trendCategories.map(cat => (
+                                            <Line
+                                                key={cat}
+                                                type="monotone"
+                                                dataKey={cat}
+                                                stroke={categoryColors[cat] || '#6b7280'}
+                                                strokeWidth={2.5}
+                                                dot={{ r: 3 }}
+                                                activeDot={{ r: 5 }}
+                                            />
+                                        ))}
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
                     </div>
-                </div>
+                </section>
 
-                {/* Monthly Table */}
-                <div className="surface">
+                {/* Monthly table */}
+                <section className="surface">
                     <div className="card-head">
                         <h3>Detail po měsících</h3>
                     </div>
@@ -227,27 +366,34 @@ export default function ReportsPage() {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
-                                    <th style={{ textAlign: 'left', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Měsíc</th>
-                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Příjmy</th>
-                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Výdaje</th>
-                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: '12px', fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Bilance</th>
+                                    <th style={{ textAlign: 'left', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Měsíc</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Příjmy</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Výdaje</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Bilance</th>
+                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Úspora %</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {report?.monthly_totals.slice().reverse().map((m, i, arr) => (
-                                    <tr key={m.month} style={{ borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                                        <td style={{ padding: '11px var(--spacing-lg)', fontWeight: 510, fontSize: '0.875rem' }}>{formatMonth(m.month)}</td>
-                                        <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--pos)', fontSize: '0.875rem' }}>+{formatCurrency(m.income)}</td>
-                                        <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--text-2)', fontSize: '0.875rem' }}>{formatCurrency(m.expenses)}</td>
-                                        <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', fontWeight: 600, fontSize: '0.875rem', color: m.balance >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
-                                            {m.balance >= 0 ? '+' : ''}{formatCurrency(m.balance)}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {totals.slice().reverse().map((m, i, arr) => {
+                                    const rate = m.income > 0 ? Math.round((m.balance / m.income) * 100) : 0;
+                                    return (
+                                        <tr key={m.month} style={{ borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                                            <td style={{ padding: '11px var(--spacing-lg)', fontWeight: 510, fontSize: 14 }}>{formatMonth(m.month)}</td>
+                                            <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--pos)', fontSize: 14 }}>+{formatMoney(m.income)}</td>
+                                            <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--text-2)', fontSize: 14 }}>{formatMoney(m.expenses)}</td>
+                                            <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', fontWeight: 600, fontSize: 14, color: m.balance >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
+                                                {m.balance >= 0 ? '+' : ''}{formatMoney(m.balance)}
+                                            </td>
+                                            <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', fontSize: 14, color: rate >= 0 ? 'var(--text)' : 'var(--neg)' }}>
+                                                {rate}%
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
-                </div>
+                </section>
 
             </div>
         </MainLayout>

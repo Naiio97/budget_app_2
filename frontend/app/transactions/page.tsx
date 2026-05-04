@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { Suspense, useEffect, useState, useRef, useMemo, useReducer } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
@@ -18,7 +18,32 @@ interface Category {
     is_active: boolean;
 }
 
-export default function TransactionsPage() {
+type TransactionAccumulatorState = {
+    items: Transaction[];
+    lastFetchedPage: number;
+};
+
+type TransactionAccumulatorAction = {
+    transactions: Transaction[];
+    page: number;
+    loading: boolean;
+};
+
+function transactionAccumulatorReducer(
+    state: TransactionAccumulatorState,
+    action: TransactionAccumulatorAction
+): TransactionAccumulatorState {
+    if (action.loading) return state;
+    if (action.page === 1) return { items: action.transactions, lastFetchedPage: 1 };
+    if (action.transactions.length > 0 && action.page > state.lastFetchedPage) {
+        const existingIds = new Set(state.items.map(t => t.id));
+        const newItems = action.transactions.filter(t => !existingIds.has(t.id));
+        return { items: [...state.items, ...newItems], lastFetchedPage: action.page };
+    }
+    return state;
+}
+
+function TransactionsPageContent() {
     const searchParams = useSearchParams();
     const initialAccount = searchParams.get('account_id') ?? '';
 
@@ -103,27 +128,14 @@ export default function TransactionsPage() {
     const accounts = dashData?.accounts || [];
     const monthlyStats = dashData?.monthly || { income: 0, expenses: 0 };
 
-    const [accumulatedTransactions, setAccumulatedTransactions] = useState<Transaction[]>([]);
-    const [lastFetchedPage, setLastFetchedPage] = useState(0);
+    const [{ items: accumulatedTransactions }, dispatchTransactionAccumulator] = useReducer(
+        transactionAccumulatorReducer,
+        { items: [], lastFetchedPage: 0 }
+    );
 
     useEffect(() => {
-        // Wait for the query to settle before touching the accumulator. This prevents wiping
-        // it during in-flight refetches where allTransactions transiently looks empty.
-        if (loading) return;
-        if (page === 1) {
-            // Allow empty results to overwrite (e.g. search returns nothing) — otherwise mobile
-            // shows stale results and the search appears broken.
-            setAccumulatedTransactions(allTransactions);
-            setLastFetchedPage(1);
-        } else if (allTransactions.length > 0 && page > lastFetchedPage) {
-            setAccumulatedTransactions(prev => {
-                const existingIds = new Set(prev.map(t => t.id));
-                const newItems = allTransactions.filter(t => !existingIds.has(t.id));
-                return [...prev, ...newItems];
-            });
-            setLastFetchedPage(page);
-        }
-    }, [allTransactions, page, lastFetchedPage, loading]);
+        dispatchTransactionAccumulator({ transactions: allTransactions, page, loading });
+    }, [allTransactions, page, loading]);
 
     const finalDisplayTransactions = isMobile
         ? accumulatedTransactions.slice(0, mobileVisible)
@@ -317,5 +329,19 @@ export default function TransactionsPage() {
 
             </div>
         </MainLayout>
+    );
+}
+
+export default function TransactionsPage() {
+    return (
+        <Suspense fallback={
+            <MainLayout>
+                <div className="page-container" style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+            </MainLayout>
+        }>
+            <TransactionsPageContent />
+        </Suspense>
     );
 }

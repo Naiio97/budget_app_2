@@ -26,7 +26,6 @@ interface MonthlyBudget {
 interface RecurringExpense { id: number; name: string; default_amount: number; is_auto_paid: boolean; match_pattern: string | null; category: string | null; order_index: number; is_active: boolean; }
 interface Envelope { id: number; name: string; amount: number; is_mine: boolean; note: string | null; }
 interface ManualAccount { id: number; name: string; balance: number; currency: string; my_balance: number; envelopes: Envelope[]; }
-interface BudgetEnvelope { id: number; category: string; amount: number; spent: number; percentage: number; }
 interface AnnualData {
     year: number;
     months: Array<{ month: number; year_month: string; income: number; expenses: number; investments: number; savings: number; remaining: number; }>;
@@ -37,7 +36,7 @@ interface AnnualData {
 }
 
 const MONTH_NAMES = ['Leden', 'Únor', 'Březen', 'Duben', 'Květen', 'Červen', 'Červenec', 'Srpen', 'Září', 'Říjen', 'Listopad', 'Prosinec'];
-type Tab = 'overview' | 'expenses' | 'envelopes' | 'income' | 'surplus' | 'accounts';
+type Tab = 'overview' | 'expenses' | 'accounts';
 
 const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -102,11 +101,6 @@ export default function RozpocetPage() {
         queryFn: () => fetch(`${API_BASE}/manual-accounts/`).then(r => r.json()),
     });
 
-    const { data: budgetEnvelopes = [] } = useQuery<BudgetEnvelope[]>({
-        queryKey: queryKeys.budgets,
-        queryFn: () => fetch(`${API_BASE}/budgets/`).then(r => r.json()),
-    });
-
     const { data: budget } = useQuery<MonthlyBudget>({
         queryKey: queryKeys.monthlyBudget(yearMonth),
         queryFn: () => fetch(`${API_BASE}/monthly-budget/${yearMonth}`).then(r => r.json()),
@@ -154,8 +148,7 @@ export default function RozpocetPage() {
             } finally { setIsAutoSyncing(false); }
         };
         run();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [budget?.id, yearMonth, viewMode, refreshBudget]);
+    }, [budget, yearMonth, viewMode, refreshBudget]);
 
     // ── helpers ──────────────────────────────────────────────────
 
@@ -295,10 +288,6 @@ export default function RozpocetPage() {
     const investmentAmount = budget?.investment_amount || 0;
     const netSavings = investmentAmount + (budget?.surplus_to_savings || 0);
     const savingsRate = totalIncome > 0 ? Math.round((netSavings / totalIncome) * 100) : 0;
-    const paidCount = budget?.expenses.filter(e => e.is_paid).length || 0;
-    const totalCount = budget?.expenses.length || 0;
-    const paidAmount = budget?.expenses.filter(e => e.is_paid).reduce((s, e) => s + e.my_amount, 0) || 0;
-    const paidPct = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
     const isOverBudget = remaining < 0;
     const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -327,64 +316,10 @@ export default function RozpocetPage() {
     const TABS: { key: Tab; label: string }[] = [
         { key: 'overview', label: 'Přehled' },
         { key: 'expenses', label: 'Pravidelné platby' },
-        { key: 'envelopes', label: 'Obálky' },
-        { key: 'income',   label: 'Příjmy' },
-        { key: 'surplus',  label: 'Přebytek' },
         { key: 'accounts', label: 'Spořící účty' },
     ];
 
     // ── tab content ──────────────────────────────────────────────
-
-    const renderEnvelopeRows = () => {
-        const rows = budgetEnvelopes.length > 0
-            ? budgetEnvelopes.map(env => ({
-                id: `budget-${env.id}`,
-                name: env.category,
-                spent: env.spent,
-                amount: env.amount,
-                pct: env.percentage,
-            }))
-            : (budget?.expenses || []).map(expense => ({
-                id: `expense-${expense.id}`,
-                name: expense.name,
-                spent: expense.my_amount,
-                amount: expense.amount,
-                pct: expense.amount > 0 ? (expense.my_amount / expense.amount) * 100 : 0,
-            }));
-
-        if (rows.length === 0) {
-            return (
-                <div style={{ padding: 'var(--spacing-lg)', color: 'var(--text-3)', fontSize: 13, textAlign: 'center' }}>
-                    Zatím tu nejsou žádné obálky.
-                </div>
-            );
-        }
-
-        return (
-            <div className="budget-envelope-list">
-                {rows.slice(0, 8).map(row => {
-                    const over = row.pct >= 100;
-                    return (
-                        <div key={row.id} className="budget-envelope-row">
-                            <div className="budget-envelope-top">
-                                <div>
-                                    <span className="budget-envelope-name">{row.name}</span>
-                                    {over && <span className="chip chip-danger" style={{ marginLeft: 8 }}>Překročeno</span>}
-                                </div>
-                                <span className="num budget-envelope-amount">{formatCurrency(row.spent)} / {formatCurrency(row.amount)}</span>
-                            </div>
-                            <div className="progress">
-                                <span style={{
-                                    width: `${Math.min(row.pct, 100)}%`,
-                                    background: over ? 'var(--neg)' : row.pct >= 80 ? 'var(--warn)' : 'var(--accent)',
-                                }} />
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        );
-    };
 
     const renderOverview = () => (
         <div className="budget-overview-grid">
@@ -408,32 +343,21 @@ export default function RozpocetPage() {
                                 </div>
                             </div>
                             <div className="num budget-payment-amount">{formatCurrency(expense.my_amount)}</div>
-                            <button className="btn btn-sm" onClick={() => toggleExpensePaid(expense.id, expense.is_paid)}>Zaplatit</button>
+                            <button className="btn btn-sm budget-payment-action" onClick={() => toggleExpensePaid(expense.id, expense.is_paid)}>Zaplatit</button>
                         </div>
                     ))}
                 </div>
             </div>
 
-            <div className="surface">
+            <div className="surface budget-plan-card">
                 <div className="card-head">
-                    <h3>Obálky</h3>
-                    <span className="muted small">{budgetEnvelopes.length || totalCount}</span>
+                    <h3>Měsíční plán</h3>
+                    <span className="muted small">{formatCurrency(totalIncome)} příjem</span>
                 </div>
-                <div className="card-body">
-                    {renderEnvelopeRows()}
+                <div className="card-body budget-plan-body">
+                    {renderIncome()}
+                    {renderSurplus()}
                 </div>
-            </div>
-        </div>
-    );
-
-    const renderEnvelopes = () => (
-        <div className="surface">
-            <div className="card-head">
-                <h3>Obálky</h3>
-                <button className="btn btn-sm" onClick={() => setActiveTab('expenses')}>Upravit platby</button>
-            </div>
-            <div className="card-body">
-                {renderEnvelopeRows()}
             </div>
         </div>
     );
@@ -549,8 +473,8 @@ export default function RozpocetPage() {
                             <h3>Struktura pravidelných výdajů</h3>
                             <span className="muted small">podíl z měsíce</span>
                         </div>
-                        <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                            {sorted.slice(0, 12).map(exp => {
+                        <div className="card-body budget-expense-structure-body">
+                            {sorted.map(exp => {
                                 const pct = Math.round((exp.my_amount / totalExpenses) * 100);
                                 return (
                                     <div key={exp.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -572,12 +496,12 @@ export default function RozpocetPage() {
     );
 
     const renderIncome = () => (
-        <div className="surface">
-            <div className="card-head">
+        <section className="budget-plan-section">
+            <div className="budget-plan-section-head">
                 <h3>{Icons.section.income} Příjmy</h3>
                 <button className="btn btn-sm" onClick={syncIncome}>{Icons.action.sync} Načíst</button>
             </div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="budget-plan-section-body">
                 {(budget?.income_items || []).map(item => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <input className="input" value={editingIncomeNames[item.id] ?? item.name}
@@ -607,13 +531,13 @@ export default function RozpocetPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </section>
     );
 
     const renderSurplus = () => (
-        <div className="surface">
-            <div className="card-head"><h3>{Icons.section.surplus} Přebytek & Spoření</h3></div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <section className="budget-plan-section">
+            <div className="budget-plan-section-head"><h3>{Icons.section.surplus} Přebytek & Spoření</h3></div>
+            <div className="budget-plan-section-body budget-surplus-body">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Investice</span>
                     <input type="number" className="input" placeholder="0"
@@ -650,20 +574,13 @@ export default function RozpocetPage() {
                         </div>
                     </div>
                 )}
-                <div style={{
-                    padding: 'var(--spacing-md)', textAlign: 'center',
-                    background: isOverBudget ? 'color-mix(in srgb, var(--neg) 8%, transparent)' : 'color-mix(in srgb, var(--pos) 8%, transparent)',
-                    borderRadius: 'var(--radius-md)',
-                    border: `0.5px solid ${isOverBudget ? 'color-mix(in srgb, var(--neg) 20%, transparent)' : 'color-mix(in srgb, var(--pos) 20%, transparent)'}`,
-                }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Zbylé peníze</div>
-                    <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', color: isOverBudget ? 'var(--neg)' : 'var(--pos)' }}>
-                        {formatCurrency(remaining)}
+                {isOverBudget && (
+                    <div style={{ color: 'var(--neg)', fontSize: 12 }}>
+                        {Icons.status.overBudget} Rozpočet je přečerpaný o {formatCurrency(Math.abs(remaining))}.
                     </div>
-                    {isOverBudget && <div style={{ fontSize: 12, color: 'var(--neg)', marginTop: 4 }}>{Icons.status.overBudget} Přečerpáno</div>}
-                </div>
+                )}
             </div>
-        </div>
+        </section>
     );
 
     const renderAccounts = () => (
@@ -869,8 +786,8 @@ export default function RozpocetPage() {
     };
 
     return (
-        <MainLayout>
-            <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
+        <MainLayout disableScroll={viewMode === 'month' && activeTab === 'expenses'}>
+            <div className={`page-container budget-page ${viewMode === 'month' && activeTab === 'expenses' ? 'budget-page-fit' : ''}`} style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
 
                 {/* ── Header ── */}
                 <div className="page-head">
@@ -977,9 +894,6 @@ export default function RozpocetPage() {
 
                         {activeTab === 'overview'  && renderOverview()}
                         {activeTab === 'expenses'  && renderExpenses()}
-                        {activeTab === 'envelopes' && renderEnvelopes()}
-                        {activeTab === 'income'    && renderIncome()}
-                        {activeTab === 'surplus'   && renderSurplus()}
                         {activeTab === 'accounts'  && renderAccounts()}
                     </>
                 )}

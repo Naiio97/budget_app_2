@@ -21,6 +21,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isSyncing, setIsSyncing] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+    const [hasMounted, setHasMounted] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
     const { accounts } = useAccounts();
     const queryClient = useQueryClient();
@@ -50,6 +51,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     ];
 
     useEffect(() => {
+        setHasMounted(true);
         const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
         const initial = saved ?? 'dark';
         setTheme(initial);
@@ -116,7 +118,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     };
 
     const getAccountHref = (account: { id: string; type: string }) => {
-        if (account.type === 'investment') return '/investments';
+        if (account.type === 'investment') return '/investments/trading212';
         if (account.type === 'manual_investment' || account.id.startsWith('manual-inv-'))
             return `/investments/manual/${account.id.replace('manual-inv-', '')}`;
         if (account.type === 'manual' || account.id.startsWith('manual-'))
@@ -173,7 +175,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 </button>
             </header>
 
-            <div className="layout">
+            <div className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
                 <main className="main-content">
                     {/* Hamburger for medium screens */}
                     <div className="compact-nav-header">
