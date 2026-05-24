@@ -12,7 +12,7 @@ Aplikace pro správu rozpočtu. Možnost rozchození lokálně. Nutné mít vlas
 * Trading 212
 
 ### URL
-[Budget App](https://budget-frontend.redfield-d4fd3af1.westeurope.azurecontainerapps.io)
+TBD
 
 ## DEV setup
 Pro spuštení je potřeba mít připravenou Postgres DB. Dále připravené api kliče pro GoCardles Api a Trading 212 Api. Nainstalovat Node, Python a Uvicorn. Api kliče vložit do .env. V projektu je k dispozici example.
