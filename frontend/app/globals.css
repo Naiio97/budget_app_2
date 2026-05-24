@@ -1033,6 +1033,15 @@ select.input {
 .budget-surplus-body {
   gap: 12px;
 }
+.budget-income-row,
+.budget-surplus-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.budget-surplus-row {
+  justify-content: space-between;
+}
 .budget-payment-list,
 .budget-envelope-list {
   display: flex;
@@ -1300,7 +1309,7 @@ select.input {
 }
 .recurring-edit-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 96px 96px 96px 126px 32px;
+  grid-template-columns: minmax(220px, 1fr) 96px 96px 96px 126px 82px;
   gap: 8px;
   align-items: center;
   padding: 0 0 12px 30px;
@@ -1351,6 +1360,9 @@ select.input {
   width: 32px;
   min-width: 32px;
   padding: 0;
+}
+.recurring-edit-row .expense-delete-btn {
+  color: var(--neg);
 }
 .budget-expenses-split {
   display: grid;
@@ -1484,6 +1496,61 @@ select.input {
 .settings-category-list,
 .settings-rules-list {
   flex: 1 1 auto;
+}
+
+.settings-account-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-account-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+}
+.settings-account-logo {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 20px;
+}
+.settings-account-copy { min-width: 0; }
+.settings-account-name {
+  display: block;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 560;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-account-rename {
+  flex-shrink: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 0;
+}
+.settings-account-meta {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-account-actions,
+.settings-account-edit {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 /* ══ ACCOUNT DETAIL ══════════════════════════════════════════ */
@@ -1928,6 +1995,77 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .budget-payment-meta {
     line-height: 1.25;
   }
+  .budget-plan-card .card-head {
+    align-items: center;
+    padding: 18px 20px 12px;
+  }
+  .budget-plan-body {
+    gap: 18px;
+  }
+  .budget-plan-section {
+    gap: 12px;
+    padding-bottom: 18px;
+  }
+  .budget-plan-section-head {
+    align-items: center;
+  }
+  .budget-plan-section-head .btn {
+    min-height: 40px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: var(--radius-full);
+  }
+  .budget-plan-section-body {
+    gap: 10px;
+  }
+  .budget-income-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(96px, 0.8fr) 40px;
+    gap: 8px;
+    align-items: center;
+  }
+  .budget-income-row .input,
+  .budget-income-row .btn,
+  .budget-surplus-row .input {
+    width: 100% !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    border-radius: var(--radius-full);
+    box-sizing: border-box;
+    font-size: 13px !important;
+  }
+  .budget-income-row .input {
+    padding: 0 12px !important;
+  }
+  .budget-income-row input[type="number"],
+  .budget-surplus-row input[type="number"] {
+    text-align: right !important;
+  }
+  .budget-income-row .btn-icon {
+    min-width: 40px;
+    padding: 0;
+  }
+  .budget-plan-section-body > .btn {
+    align-self: flex-start !important;
+    min-height: 40px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: var(--radius-full);
+  }
+  .budget-surplus-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 12px;
+    align-items: center;
+  }
+  .budget-surplus-row span {
+    min-width: 0;
+    line-height: 1.2;
+  }
+  .budget-savings-rate-card {
+    border-radius: 16px !important;
+    padding: 12px 14px !important;
+  }
   .budget-envelope-top { align-items: flex-start; flex-direction: column; gap: 4px; }
   .expense-summary-strip { grid-template-columns: 1fr 1fr; }
   .expense-summary-strip > :nth-child(2) { grid-column: 1 / -1; }
@@ -1975,6 +2113,18 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .recurring-payment-shell {
     border-bottom: 0.5px solid var(--border);
   }
+  .recurring-payment-shell.expanded {
+    margin: 8px 0;
+    padding: 0 12px 14px;
+    box-sizing: border-box;
+    width: 100%;
+    border: 0.5px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--accent) 5%, var(--surface-sunken));
+  }
+  .recurring-payment-shell.expanded .recurring-payment-row {
+    padding: 12px 0;
+  }
   .recurring-payment-row {
     grid-template-columns: 14px minmax(0, 1fr) auto 14px;
     grid-template-areas:
@@ -2021,21 +2171,57 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   .recurring-edit-row {
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
-    padding: 0 0 14px 24px;
+    gap: 10px 12px;
+    width: min(100%, 204px);
+    margin: 0 auto;
+    padding: 0;
+    box-sizing: border-box;
+    justify-items: stretch;
+  }
+  .recurring-edit-row > * {
+    min-width: 0;
+  }
+  .recurring-edit-row > div {
+    width: 100% !important;
+  }
+  .recurring-edit-row .custom-select-container {
+    width: 100% !important;
   }
   .recurring-edit-row .recurring-edit-name,
-  .recurring-edit-row .btn:not(.btn-icon),
-  .recurring-edit-row .recurring-edit-spacer {
+  .recurring-edit-row .recurring-edit-amount.mine {
     grid-column: 1 / -1;
   }
-  .recurring-edit-row .custom-select-trigger,
-  .recurring-edit-row [type="button"],
+  .recurring-edit-row > div > button,
   .recurring-edit-row .btn,
   .recurring-edit-name,
   .recurring-edit-amount {
-    min-height: 38px;
-    height: 38px;
+    width: 100% !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    border-radius: var(--radius-full) !important;
+    box-sizing: border-box;
+    font-size: 16px !important;
+  }
+  .recurring-edit-row .btn {
+    font-size: 13px !important;
+  }
+  .recurring-edit-row .recurring-edit-name,
+  .recurring-edit-row .recurring-edit-amount {
+    padding: 0 14px;
+  }
+  .recurring-edit-row .recurring-edit-amount {
+    text-align: center;
+  }
+  .recurring-edit-row .btn:not(.btn-icon) {
+    margin-top: 0;
+  }
+  .recurring-edit-row .expense-delete-btn {
+    grid-column: auto;
+    justify-self: stretch;
+    color: var(--text);
+    background: var(--surface-sunken);
+    border-color: var(--border);
+    opacity: 1;
   }
   .budget-page-fit {
     height: auto;
@@ -2048,9 +2234,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     flex: none;
     min-height: auto;
     overflow: visible;
+    max-width: 100%;
   }
   .budget-page-fit {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    max-width: 100%;
+    overflow-x: hidden;
   }
   .budget-page-fit .recurring-payments-card,
   .budget-page-fit .recurring-payments-body {
@@ -2117,6 +2306,88 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .settings-add-rule-card .card-body,
   .settings-rules-card .card-body {
     padding: 16px 24px 22px;
+  }
+  .settings-account-list {
+    gap: 10px;
+  }
+  .settings-account-row {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 10px;
+    min-height: 58px;
+    padding: 10px;
+    border-radius: 14px;
+    position: relative;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+  .settings-account-row.editing {
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: start;
+  }
+  .settings-account-logo {
+    width: 28px;
+    height: 28px;
+  }
+  .settings-account-name {
+    font-size: 13.5px;
+    line-height: 1.18;
+  }
+  .settings-account-meta {
+    font-size: 11.5px;
+  }
+  .settings-account-actions {
+    gap: 6px;
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translate(120%, -50%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+  }
+  .settings-account-row.swiped {
+    padding-right: 126px;
+  }
+  .settings-account-row.swiped .settings-account-actions {
+    transform: translate(0, -50%);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .settings-account-actions .btn {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+  }
+  .settings-account-rename {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: var(--radius-full);
+  }
+  .settings-account-edit {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-items: center;
+  }
+  .settings-account-edit .input {
+    grid-column: 1 / -1;
+  }
+  .settings-account-edit .input,
+  .settings-account-edit .btn {
+    height: 40px;
+    min-height: 40px;
+    border-radius: var(--radius-full);
+  }
+  .settings-account-edit .input {
+    width: 100%;
+    min-width: 0;
+    padding: 0 14px;
+    font-size: 16px !important;
   }
   .settings-category-manager {
     flex: none;

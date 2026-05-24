@@ -430,7 +430,6 @@ export default function RozpocetPage() {
                                                         if (expense.my_amount_override === null) saveCustomOverride(expense.id, Math.round(expense.my_amount));
                                                     }
                                                 }}
-                                                style={{ width: 96 }}
                                                 options={[{ value: '100', label: '100%' }, { value: '50', label: '50%' }, { value: 'custom', label: 'Vlastní' }]}
                                             />
                                             <input type="number" className="input recurring-edit-amount"
@@ -447,13 +446,12 @@ export default function RozpocetPage() {
                                                     title="Moje část"
                                                 />
                                             )}
-                                            {expense.my_percentage === 100 && expense.my_amount_override === null && (
-                                                <span className="recurring-edit-spacer" />
-                                            )}
                                             <button className="btn btn-sm" onClick={() => toggleExpensePaid(expense.id, expense.is_paid)}>
                                                 {expense.is_paid ? 'Označit čekající' : 'Zaplatit'}
                                             </button>
-                                            <button onClick={() => deleteMonthlyExpense(expense.id)} className="btn btn-icon btn-ghost btn-sm expense-delete-btn">{Icons.action.delete}</button>
+                                            <button onClick={() => deleteMonthlyExpense(expense.id)} className="btn btn-ghost btn-sm expense-delete-btn">
+                                                {Icons.action.delete} Smazat
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -503,7 +501,7 @@ export default function RozpocetPage() {
             </div>
             <div className="budget-plan-section-body">
                 {(budget?.income_items || []).map(item => (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div key={item.id} className="budget-income-row">
                         <input className="input" value={editingIncomeNames[item.id] ?? item.name}
                             onChange={(e) => setEditingIncomeNames(p => ({ ...p, [item.id]: e.target.value }))}
                             onBlur={() => commitIncomeName(item)}
@@ -538,7 +536,7 @@ export default function RozpocetPage() {
         <section className="budget-plan-section">
             <div className="budget-plan-section-head"><h3>{Icons.section.surplus} Přebytek & Spoření</h3></div>
             <div className="budget-plan-section-body budget-surplus-body">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="budget-surplus-row">
                     <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Investice</span>
                     <input type="number" className="input" placeholder="0"
                         value={editingBudgetFields['investment_amount'] ?? ((budget?.investment_amount || 0) === 0 ? '' : String(budget?.investment_amount))}
@@ -547,7 +545,7 @@ export default function RozpocetPage() {
                         style={{ width: 110, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
                     />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="budget-surplus-row">
                     <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Spořící účet</span>
                     <input type="number" className="input" placeholder="0"
                         value={editingBudgetFields['surplus_to_savings'] ?? ((budget?.surplus_to_savings || 0) === 0 ? '' : String(budget?.surplus_to_savings))}
@@ -557,7 +555,7 @@ export default function RozpocetPage() {
                     />
                 </div>
                 {totalIncome > 0 && (
-                    <div style={{ padding: '12px 14px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                    <div className="budget-savings-rate-card" style={{ padding: '12px 14px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
                             <span style={{ color: 'var(--text-2)' }}>Spořící sazba</span>
                             <span style={{ fontWeight: 600, color: savingsRate >= 15 ? 'var(--pos)' : savingsRate >= 10 ? 'var(--warn)' : 'var(--neg)' }}>

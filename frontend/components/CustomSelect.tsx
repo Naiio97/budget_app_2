@@ -46,11 +46,16 @@ export default function CustomSelect({
         () => false,
     );
 
-    useLayoutEffect(() => {
-        if (!isOpen || !buttonRef.current) return;
+    const updateDropdownPosition = useCallback(() => {
+        if (!buttonRef.current) return;
         const rect = buttonRef.current.getBoundingClientRect();
         setDropdownPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
-    }, [isOpen]);
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        updateDropdownPosition();
+    }, [isOpen, updateDropdownPosition]);
 
     const selectedOption = options.find(o => o.value === value);
     const filteredOptions = searchable && search
@@ -61,6 +66,7 @@ export default function CustomSelect({
 
     const handleOpen = () => {
         if (disabled) return;
+        if (!isOpen) updateDropdownPosition();
         setIsOpen(prev => !prev);
     };
 
@@ -70,8 +76,14 @@ export default function CustomSelect({
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
         };
         document.addEventListener('mousedown', handleMouseDown);
-        return () => document.removeEventListener('mousedown', handleMouseDown);
-    }, [isOpen, close]);
+        window.addEventListener('resize', updateDropdownPosition);
+        window.addEventListener('scroll', updateDropdownPosition, true);
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('resize', updateDropdownPosition);
+            window.removeEventListener('scroll', updateDropdownPosition, true);
+        };
+    }, [isOpen, close, updateDropdownPosition]);
 
     useEffect(() => {
         if (isOpen && searchable && searchRef.current) searchRef.current.focus();
@@ -156,7 +168,7 @@ export default function CustomSelect({
     ) : null;
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', ...style }}>
+        <div ref={containerRef} className="custom-select-container" style={{ position: 'relative', ...style }}>
             <button
                 ref={buttonRef}
                 type="button"

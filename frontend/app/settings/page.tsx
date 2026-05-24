@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
@@ -334,6 +334,8 @@ export default function SettingsPage() {
     const [editingAccount, setEditingAccount] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [processingAccount, setProcessingAccount] = useState<string | null>(null);
+    const [swipedAccount, setSwipedAccount] = useState<string | null>(null);
+    const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
     // Banks
     const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -552,6 +554,24 @@ export default function SettingsPage() {
         return new Date(dateStr).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
+    const startAccountSwipe = (event: React.TouchEvent, accountId: string) => {
+        if (editingAccount) return;
+        const touch = event.touches[0];
+        swipeStart.current = { x: touch.clientX, y: touch.clientY };
+        if (swipedAccount && swipedAccount !== accountId) setSwipedAccount(null);
+    };
+
+    const endAccountSwipe = (event: React.TouchEvent, accountId: string) => {
+        const start = swipeStart.current;
+        swipeStart.current = null;
+        if (!start || editingAccount) return;
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        if (Math.abs(dx) < 36 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+        setSwipedAccount(dx < 0 ? accountId : null);
+    };
+
     const getBankLogo = (institution: string | undefined) => {
         if (!institution) return null;
         const inst = institution.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -597,46 +617,48 @@ export default function SettingsPage() {
                             {accounts.length === 0 ? (
                                 <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Zatím žádné připojené účty.</div>
                             ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div className="settings-account-list">
                                     {accounts.map(acc => {
                                         const logo = getBankLogo(acc.institution);
                                         const visible = acc.is_visible !== false;
                                         return (
-                                            <div key={acc.id} style={{
-                                                display: 'flex', alignItems: 'center', gap: 12,
-                                                padding: '10px 12px',
-                                                background: 'var(--surface-sunken)',
-                                                borderRadius: 'var(--radius-sm)',
-                                                opacity: processingAccount === acc.id ? 0.5 : visible ? 1 : 0.6,
-                                            }}>
+                                            <div
+                                                key={acc.id}
+                                                className={`settings-account-row ${editingAccount === acc.id ? 'editing' : ''} ${swipedAccount === acc.id ? 'swiped' : ''}`}
+                                                onTouchStart={(event) => startAccountSwipe(event, acc.id)}
+                                                onTouchEnd={(event) => endAccountSwipe(event, acc.id)}
+                                                style={{ opacity: processingAccount === acc.id ? 0.5 : visible ? 1 : 0.6 }}
+                                            >
                                                 {logo ? (
-                                                    <Image src={logo} alt={acc.name} width={28} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} />
+                                                    <Image className="settings-account-logo" src={logo} alt={acc.name} width={28} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} />
                                                 ) : (
-                                                    <span style={{ fontSize: 20 }}>{acc.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment}</span>
+                                                    <span className="settings-account-logo">{acc.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment}</span>
                                                 )}
                                                 {editingAccount === acc.id ? (
-                                                    <div style={{ flex: 1, display: 'flex', gap: 6 }}>
+                                                    <div className="settings-account-edit">
                                                         <input className="input" value={editName} autoFocus onChange={e => setEditName(e.target.value)} style={{ flex: 1 }} />
                                                         <button className="btn btn-sm btn-primary" onClick={() => handleRename(acc.id)}>OK</button>
                                                         <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>✕</button>
                                                     </div>
                                                 ) : (
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <div style={{ fontWeight: 500, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <div className="settings-account-copy">
+                                                        <div className="settings-account-name">
                                                             {acc.name}
-                                                            <button onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: 12 }}>{Icons.action.edit}</button>
                                                         </div>
-                                                        <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                                                        <div className="settings-account-meta">
                                                             {acc.institution || acc.type}{!visible && ' · skryto'}
                                                         </div>
                                                     </div>
                                                 )}
-                                                <div style={{ display: 'flex', gap: 4 }}>
-                                                    <button className="btn btn-sm" onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)} title={visible ? 'Skrýt' : 'Zobrazit'}>
-                                                        {visible ? Icons.action.visible : Icons.action.hidden}
-                                                    </button>
-                                                    <button className="btn btn-sm" onClick={() => handleDeleteAccount(acc.id)} style={{ color: 'var(--neg)' }} title="Smazat">{Icons.action.delete}</button>
-                                                </div>
+                                                {editingAccount !== acc.id && (
+                                                    <div className="settings-account-actions">
+                                                        <button className="btn btn-sm settings-account-rename" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); setSwipedAccount(null); }} title="Přejmenovat">{Icons.action.edit}</button>
+                                                        <button className="btn btn-sm" onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)} title={visible ? 'Skrýt' : 'Zobrazit'}>
+                                                            {visible ? Icons.action.visible : Icons.action.hidden}
+                                                        </button>
+                                                        <button className="btn btn-sm" onClick={() => handleDeleteAccount(acc.id)} style={{ color: 'var(--neg)' }} title="Smazat">{Icons.action.delete}</button>
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
