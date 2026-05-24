@@ -46,11 +46,16 @@ export default function CustomSelect({
         () => false,
     );
 
-    useLayoutEffect(() => {
-        if (!isOpen || !buttonRef.current) return;
+    const updateDropdownPosition = useCallback(() => {
+        if (!buttonRef.current) return;
         const rect = buttonRef.current.getBoundingClientRect();
         setDropdownPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
-    }, [isOpen]);
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        updateDropdownPosition();
+    }, [isOpen, updateDropdownPosition]);
 
     const selectedOption = options.find(o => o.value === value);
     const filteredOptions = searchable && search
@@ -61,6 +66,7 @@ export default function CustomSelect({
 
     const handleOpen = () => {
         if (disabled) return;
+        if (!isOpen) updateDropdownPosition();
         setIsOpen(prev => !prev);
     };
 
@@ -70,8 +76,14 @@ export default function CustomSelect({
             if (containerRef.current && !containerRef.current.contains(e.target as Node)) close();
         };
         document.addEventListener('mousedown', handleMouseDown);
-        return () => document.removeEventListener('mousedown', handleMouseDown);
-    }, [isOpen, close]);
+        window.addEventListener('resize', updateDropdownPosition);
+        window.addEventListener('scroll', updateDropdownPosition, true);
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('resize', updateDropdownPosition);
+            window.removeEventListener('scroll', updateDropdownPosition, true);
+        };
+    }, [isOpen, close, updateDropdownPosition]);
 
     useEffect(() => {
         if (isOpen && searchable && searchRef.current) searchRef.current.focus();
@@ -90,14 +102,14 @@ export default function CustomSelect({
             left: dropdownPos.left,
             width: dropdownPos.width,
             zIndex: 999999,
-            background: '#1e293b',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: '10px',
-            boxShadow: '0 16px 48px rgba(0, 0, 0, 0.6)',
+            background: 'var(--surface-strong)',
+            border: '0.5px solid var(--border-strong)',
+            borderRadius: 'var(--radius-md)',
+            boxShadow: 'var(--shadow-lg)',
             overflow: 'hidden',
         }}>
             {searchable && (
-                <div style={{ padding: '8px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <div style={{ padding: '8px', borderBottom: '0.5px solid var(--border)' }}>
                     <input
                         ref={searchRef}
                         type="text"
@@ -106,19 +118,19 @@ export default function CustomSelect({
                         placeholder={searchPlaceholder}
                         style={{
                             width: '100%', padding: '8px 12px',
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: '8px', color: 'var(--text-primary)',
+                            background: 'var(--surface-sunken)',
+                            border: '0.5px solid var(--border)',
+                            borderRadius: 'var(--radius-sm)', color: 'var(--text)',
                             fontSize: '0.85rem', outline: 'none', boxSizing: 'border-box',
                         }}
-                        onFocus={(e) => { e.target.style.borderColor = 'var(--accent-primary)'; }}
-                        onBlur={(e) => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)'; }}
+                        onFocus={(e) => { e.target.style.borderColor = 'var(--accent)'; }}
+                        onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
                     />
                 </div>
             )}
             <div style={{ overflowY: 'auto', maxHeight: searchable ? '224px' : '280px', padding: '4px' }}>
                 {filteredOptions.length === 0 ? (
-                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-3)', fontSize: '0.85rem' }}>
                         Žádné výsledky
                     </div>
                 ) : filteredOptions.map((option) => {
@@ -130,13 +142,13 @@ export default function CustomSelect({
                             onMouseDown={(e) => { e.preventDefault(); handleSelect(option.value); }}
                             style={{
                                 width: '100%', padding: '9px 12px', display: 'flex', alignItems: 'center', gap: '8px',
-                                background: isSelected ? 'rgba(0, 122, 255, 0.15)' : 'transparent',
-                                border: 'none', borderRadius: '8px',
-                                color: isSelected ? 'var(--accent-primary)' : 'var(--text-primary)',
+                                background: isSelected ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'transparent',
+                                border: 'none', borderRadius: 'var(--radius-sm)',
+                                color: isSelected ? 'var(--accent)' : 'var(--text)',
                                 fontSize: '0.875rem', cursor: 'pointer', textAlign: 'left',
                                 transition: 'background 0.1s ease',
                             }}
-                            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'; }}
+                            onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'var(--surface-sunken)'; }}
                             onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                         >
                             {option.icon && <span style={{ fontSize: '1rem', flexShrink: 0 }}>{option.icon}</span>}
@@ -145,7 +157,7 @@ export default function CustomSelect({
                             </span>
                             {isSelected && (
                                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
-                                    <path d="M2 7L5.5 10.5L12 3.5" stroke="var(--accent-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                    <path d="M2 7L5.5 10.5L12 3.5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             )}
                         </button>
@@ -156,7 +168,7 @@ export default function CustomSelect({
     ) : null;
 
     return (
-        <div ref={containerRef} style={{ position: 'relative', ...style }}>
+        <div ref={containerRef} className="custom-select-container" style={{ position: 'relative', ...style }}>
             <button
                 ref={buttonRef}
                 type="button"
@@ -165,15 +177,14 @@ export default function CustomSelect({
                 style={{
                     width: '100%', padding: compact ? '4px 8px' : '10px 16px', display: 'flex', alignItems: 'center',
                     justifyContent: 'space-between', gap: '8px',
-                    background: 'rgba(0, 0, 0, 0.25)',
-                    border: `1px solid ${isOpen ? 'var(--accent-primary)' : 'var(--glass-border-light)'}`,
+                    background: 'var(--surface-sunken)',
+                    border: `0.5px solid ${isOpen ? 'var(--accent)' : 'var(--border)'}`,
                     borderRadius: 'var(--radius-md)',
-                    color: selectedOption ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    color: selectedOption ? 'var(--text)' : 'var(--text-3)',
                     fontSize: compact ? '0.875rem' : '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
-                    backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
                     transition: 'all 0.15s ease-out', outline: 'none',
                     opacity: disabled ? 0.5 : 1,
-                    boxShadow: isOpen ? '0 0 0 3px rgba(0, 122, 255, 0.2)' : 'none',
+                    boxShadow: isOpen ? '0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent)' : 'none',
                 }}
             >
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

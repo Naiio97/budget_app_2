@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
@@ -18,6 +18,7 @@ import {
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { POSITION_COLOR_PALETTE, getPositionColor, setPositionColor } from '@/lib/positionColors';
 import {
     ResponsiveContainer,
     AreaChart,
@@ -88,6 +89,10 @@ export default function ManualInvestmentDetailPage() {
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState('');
 
+    // Per-position color overrides (localStorage). Map position id → hex color.
+    const [colorVersion, setColorVersion] = useState(0);
+    const [colorPickerForId, setColorPickerForId] = useState<number | null>(null);
+
     const { data: account, isLoading } = useQuery({
         queryKey: queryKeys.manualInvestment(id),
         queryFn: () => getManualInvestment(id),
@@ -97,6 +102,37 @@ export default function ManualInvestmentDetailPage() {
         queryKey: queryKeys.manualInvestmentHistory(id),
         queryFn: () => getManualInvestmentHistory(id),
     });
+
+    const colors = useMemo(() => {
+        void colorVersion;
+        const next: Record<number, string> = {};
+        for (const pos of account?.positions ?? []) {
+            const stored = getPositionColor('manual', pos.id);
+            if (stored) next[pos.id] = stored;
+        }
+        return next;
+    }, [account?.positions, colorVersion]);
+
+    // Close color picker on outside click / Escape.
+    useEffect(() => {
+        if (colorPickerForId == null) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setColorPickerForId(null); };
+        const onClick = () => setColorPickerForId(null);
+        document.addEventListener('keydown', onKey);
+        document.addEventListener('click', onClick);
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            document.removeEventListener('click', onClick);
+        };
+    }, [colorPickerForId]);
+
+    const setPosColor = (posId: number, color: string | null) => {
+        setPositionColor('manual', posId, color);
+        setColorVersion(v => v + 1);
+    };
+
+    const colorForIndex = (posId: number, index: number) =>
+        colors[posId] ?? COLORS[index % COLORS.length];
 
     const invalidate = () => {
         qc.invalidateQueries({ queryKey: queryKeys.manualInvestment(id) });
@@ -169,7 +205,7 @@ export default function ManualInvestmentDetailPage() {
         return <MainLayout><div style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--text-secondary)' }}>Načítám…</div></MainLayout>;
     }
 
-    const pieData = account.positions.map(p => ({ name: p.name, value: p.current_value }));
+    const pieData = account.positions.map(p => ({ id: p.id, name: p.name, value: p.current_value }));
 
     return (
         <MainLayout>
@@ -237,7 +273,7 @@ export default function ManualInvestmentDetailPage() {
                                 <ResponsiveContainer width="100%" height={180}>
                                     <PieChart>
                                         <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} dataKey="value" strokeWidth={0}>
-                                            {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                            {pieData.map((p, i) => <Cell key={p.id} fill={colorForIndex(p.id, i)} />)}
                                         </Pie>
                                         <Tooltip
                                             contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
@@ -247,8 +283,8 @@ export default function ManualInvestmentDetailPage() {
                                 </ResponsiveContainer>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
                                     {pieData.map((p, i) => (
-                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                                            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: COLORS[i % COLORS.length], flexShrink: 0 }} />
+                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: colorForIndex(p.id, i), flexShrink: 0 }} />
                                             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                                             <span className="text-secondary">{account.total_value ? ((p.value / account.total_value) * 100).toFixed(1) : 0} %</span>
                                         </div>
@@ -289,7 +325,7 @@ export default function ManualInvestmentDetailPage() {
                         )}
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            {account.positions.map(pos => (
+                            {account.positions.map((pos, posIndex) => (
                                 <div key={pos.id}>
                                     {editingId === pos.id ? (
                                         <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-sm)', padding: 'var(--spacing-md)' }}>
@@ -320,7 +356,69 @@ export default function ManualInvestmentDetailPage() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div style={{ display: 'flex', gap: '4px' }}>
+                                                <div style={{ display: 'flex', gap: '4px', position: 'relative' }}>
+                                                    <button
+                                                        className="btn"
+                                                        onClick={(e) => { e.stopPropagation(); setColorPickerForId(prev => prev === pos.id ? null : pos.id); }}
+                                                        style={{ padding: '4px 8px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                                        title="Změnit barvu"
+                                                        aria-label="Změnit barvu pozice"
+                                                    >
+                                                        <span style={{
+                                                            width: 12, height: 12, borderRadius: '50%',
+                                                            background: colorForIndex(pos.id, posIndex),
+                                                            display: 'inline-block',
+                                                            border: '1px solid rgba(0,0,0,0.1)',
+                                                        }} />
+                                                    </button>
+                                                    {colorPickerForId === pos.id && (
+                                                        <div style={{
+                                                            position: 'absolute', top: 'calc(100% + 6px)', right: 0,
+                                                            zIndex: 10,
+                                                            background: 'var(--surface-strong)',
+                                                            border: '0.5px solid var(--border)',
+                                                            borderRadius: 'var(--radius-md)',
+                                                            padding: 10,
+                                                            boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                                                            minWidth: 200,
+                                                        }} onClick={e => e.stopPropagation()}>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+                                                                {POSITION_COLOR_PALETTE.map(c => {
+                                                                    const isActive = colors[pos.id] === c.value;
+                                                                    return (
+                                                                        <button
+                                                                            key={c.value}
+                                                                            type="button"
+                                                                            onClick={() => { setPosColor(pos.id, c.value); setColorPickerForId(null); }}
+                                                                            title={c.name}
+                                                                            aria-label={c.name}
+                                                                            style={{
+                                                                                width: 24, height: 24, borderRadius: '50%',
+                                                                                background: c.value,
+                                                                                border: isActive ? '2px solid var(--text)' : '2px solid transparent',
+                                                                                cursor: 'pointer',
+                                                                                padding: 0,
+                                                                            }}
+                                                                        />
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                            {colors[pos.id] && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => { setPosColor(pos.id, null); setColorPickerForId(null); }}
+                                                                    style={{
+                                                                        marginTop: 8, width: '100%', padding: '4px 8px',
+                                                                        fontSize: '0.75rem', background: 'transparent',
+                                                                        border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)',
+                                                                        color: 'var(--text-2)', cursor: 'pointer',
+                                                                    }}
+                                                                >
+                                                                    Resetovat na výchozí
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     <button className="btn" onClick={() => startEdit(pos)} style={{ padding: '4px 8px', fontSize: '0.78rem' }}>{Icons.action.edit}</button>
                                                     <button className="btn" onClick={() => { if (confirm(`Smazat pozici "${pos.name}"?`)) deleteMutation.mutate(pos.id); }} style={{ padding: '4px 8px', fontSize: '0.78rem', color: 'var(--accent-danger)' }}>✕</button>
                                                 </div>

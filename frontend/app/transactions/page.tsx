@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { Suspense, useEffect, useState, useRef, useMemo, useReducer } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
-import GlassCard from '@/components/GlassCard';
 import CustomSelect from '@/components/CustomSelect';
 import { Transaction, getTransactions, getDashboard } from '@/lib/api';
+import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
@@ -17,22 +18,48 @@ interface Category {
     is_active: boolean;
 }
 
-export default function TransactionsPage() {
-    // Filters & Pagination
+type TransactionAccumulatorState = {
+    items: Transaction[];
+    lastFetchedPage: number;
+};
+
+type TransactionAccumulatorAction = {
+    transactions: Transaction[];
+    page: number;
+    loading: boolean;
+};
+
+function transactionAccumulatorReducer(
+    state: TransactionAccumulatorState,
+    action: TransactionAccumulatorAction
+): TransactionAccumulatorState {
+    if (action.loading) return state;
+    if (action.page === 1) return { items: action.transactions, lastFetchedPage: 1 };
+    if (action.transactions.length > 0 && action.page > state.lastFetchedPage) {
+        const existingIds = new Set(state.items.map(t => t.id));
+        const newItems = action.transactions.filter(t => !existingIds.has(t.id));
+        return { items: [...state.items, ...newItems], lastFetchedPage: action.page };
+    }
+    return state;
+}
+
+function TransactionsPageContent() {
+    const searchParams = useSearchParams();
+    const initialAccount = searchParams.get('account_id') ?? '';
+
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('');
-    const [selectedAccount, setSelectedAccount] = useState<string>('');
+    const [selectedAccount, setSelectedAccount] = useState<string>(initialAccount);
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [amountType, setAmountType] = useState<string>('');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState<number>(20);
 
-    // Mobile infinite scroll
     const [mobileVisible, setMobileVisible] = useState(10);
     const [isMobile, setIsMobile] = useState(false);
     const sentinelRef = useRef<HTMLDivElement>(null);
 
-    // Detect mobile
     useEffect(() => {
         const check = () => setIsMobile(window.innerWidth <= 768);
         check();
@@ -40,7 +67,6 @@ export default function TransactionsPage() {
         return () => window.removeEventListener('resize', check);
     }, []);
 
-    // Debounce search
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
@@ -50,7 +76,11 @@ export default function TransactionsPage() {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    // Compute date range from selected month
+    const resetFilters = () => {
+        setPage(1);
+        setMobileVisible(10);
+    };
+
     const getDateRange = () => {
         if (!selectedMonth) return { date_from: undefined, date_to: undefined };
         const [year, month] = selectedMonth.split('-').map(Number);
@@ -64,6 +94,7 @@ export default function TransactionsPage() {
 
     const txFilters = {
         page,
+        limit: pageSize,
         search: debouncedSearch || undefined,
         category: selectedCategory || undefined,
         account_id: selectedAccount || undefined,
@@ -74,7 +105,7 @@ export default function TransactionsPage() {
 
     const { data: txData, isLoading: loading } = useQuery({
         queryKey: queryKeys.transactions(txFilters),
-        queryFn: () => getTransactions({ ...txFilters, limit: 20 }),
+        queryFn: () => getTransactions(txFilters),
     });
 
     const { data: dashData } = useQuery({
@@ -88,7 +119,7 @@ export default function TransactionsPage() {
             fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io'}/categories/`)
                 .then(r => r.json())
                 .then(d => Array.isArray(d) ? d : []),
-        staleTime: 5 * 60 * 1000, // kategorie se mění zřídka
+        staleTime: 5 * 60 * 1000,
     });
 
     const allTransactions = useMemo(() => txData?.items ?? [], [txData]);
@@ -97,27 +128,15 @@ export default function TransactionsPage() {
     const accounts = dashData?.accounts || [];
     const monthlyStats = dashData?.monthly || { income: 0, expenses: 0 };
 
-    const [accumulatedTransactions, setAccumulatedTransactions] = useState<Transaction[]>([]);
-    const [lastFetchedPage, setLastFetchedPage] = useState(0);
+    const [{ items: accumulatedTransactions }, dispatchTransactionAccumulator] = useReducer(
+        transactionAccumulatorReducer,
+        { items: [], lastFetchedPage: 0 }
+    );
 
-    // Accumulate transactions as pages load on mobile.
     useEffect(() => {
-        if (allTransactions.length === 0) return;
-        if (page === 1) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setAccumulatedTransactions(allTransactions);
-            setLastFetchedPage(1);
-        } else if (page > lastFetchedPage) {
-            setAccumulatedTransactions(prev => {
-                const existingIds = new Set(prev.map(t => t.id));
-                const newItems = allTransactions.filter(t => !existingIds.has(t.id));
-                return [...prev, ...newItems];
-            });
-            setLastFetchedPage(page);
-        }
-    }, [allTransactions, page, lastFetchedPage]);
+        dispatchTransactionAccumulator({ transactions: allTransactions, page, loading });
+    }, [allTransactions, page, loading]);
 
-    // The actual displayed transactions
     const finalDisplayTransactions = isMobile
         ? accumulatedTransactions.slice(0, mobileVisible)
         : allTransactions;
@@ -126,7 +145,6 @@ export default function TransactionsPage() {
         mobileVisible < accumulatedTransactions.length || page < totalPages
     );
 
-    // Mobile: IntersectionObserver for infinite scroll
     useEffect(() => {
         if (!isMobile || loading || !sentinelRef.current) return;
         const observer = new IntersectionObserver(
@@ -157,63 +175,65 @@ export default function TransactionsPage() {
         return months;
     };
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency: 'CZK',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
-    };
+    const subText = [
+        `${totalItems} ${totalItems === 1 ? 'transakce' : totalItems >= 2 && totalItems <= 4 ? 'transakce' : 'transakcí'}`,
+        monthlyStats.income > 0 ? `+${formatCurrency(monthlyStats.income)} příjmy` : null,
+        monthlyStats.expenses > 0 ? `${formatCurrency(monthlyStats.expenses)} výdaje` : null,
+    ].filter(Boolean).join(' · ');
 
     return (
         <MainLayout>
-            <div className="page-container">
-                <div style={{ marginBottom: 'var(--spacing-md)', flexShrink: 0 }}>
-                    <h1 style={{ fontSize: '1.5rem', margin: 0 }}>Transakce</h1>
+            <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
+
+                {/* Page header */}
+                <div className="page-head">
+                    <div>
+                        <h1>Transakce</h1>
+                        <div className="sub">{subText}</div>
+                    </div>
                 </div>
 
-                {/* Compact Filters */}
-                <GlassCard className="animate-fade-in" style={{ marginBottom: 'var(--spacing-md)', padding: 'var(--spacing-md)', flexShrink: 0, zIndex: 10, position: 'relative' }}>
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 'var(--spacing-md)',
-                        paddingBottom: '4px'
-                    }}>
-                        <div style={{ flex: 1, minWidth: '150px' }}>
+                {/* Filter bar */}
+                <div className="surface" style={{ padding: 'var(--spacing-md)', flexShrink: 0 }}>
+                    {/* Row 1: search + type seg */}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ position: 'relative', flex: '1 1 200px' }}>
+                            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)', fontSize: 14, pointerEvents: 'none' }}>
+                                {Icons.action.search}
+                            </span>
                             <input
                                 type="text"
                                 className="input"
-                                placeholder={`${Icons.action.search} Hledat...`}
+                                placeholder="Hledat transakce..."
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{ padding: '10px 16px', fontSize: '0.9rem' }}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                style={{ paddingLeft: 36 }}
                             />
                         </div>
-                        <div style={{ width: '180px' }}>
+                        <div className="seg">
+                            {([['', 'Vše'], ['income', 'Příjmy'], ['expense', 'Výdaje']] as [string, string][]).map(([val, label]) => (
+                                <div
+                                    key={val}
+                                    className={`seg-item ${amountType === val ? 'active' : ''}`}
+                                    onClick={() => { setAmountType(val); resetFilters(); }}
+                                >
+                                    {label}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Row 2: dropdowns */}
+                    <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 160px' }}>
                             <CustomSelect
-                                options={getMonthOptions().map(m => ({
-                                    value: m.value,
-                                    label: m.label,
-                                }))}
+                                options={getMonthOptions().map(m => ({ value: m.value, label: m.label }))}
                                 value={selectedMonth}
-                                onChange={(val) => { setSelectedMonth(val); setPage(1); setMobileVisible(10); }}
+                                onChange={val => { setSelectedMonth(val); resetFilters(); }}
                                 placeholder="Všechny měsíce"
                             />
                         </div>
-                        <div style={{ width: '150px' }}>
-                            <CustomSelect
-                                options={[
-                                    { value: 'income', label: 'Příjmy', icon: Icons.section.income },
-                                    { value: 'expense', label: 'Výdaje', icon: '💸' },
-                                ]}
-                                value={amountType}
-                                onChange={(val) => { setAmountType(val); setPage(1); setMobileVisible(10); }}
-                                placeholder="Vše"
-                            />
-                        </div>
-                        <div style={{ width: '180px' }}>
+                        <div style={{ flex: '1 1 160px' }}>
                             <CustomSelect
                                 options={categoriesData.filter((c: Category) => c.is_active).map((cat: Category) => ({
                                     value: cat.name,
@@ -221,104 +241,107 @@ export default function TransactionsPage() {
                                     icon: cat.icon,
                                 }))}
                                 value={selectedCategory}
-                                onChange={(val) => { setSelectedCategory(val); setPage(1); setMobileVisible(10); }}
+                                onChange={val => { setSelectedCategory(val); resetFilters(); }}
                                 placeholder="Všechny kategorie"
-                                searchable={true}
-                                searchPlaceholder={`${Icons.action.search} Hledat kategorii...`}
+                                searchable
+                                searchPlaceholder="Hledat kategorii..."
                             />
                         </div>
-                        <div style={{ width: '180px' }}>
+                        <div style={{ flex: '1 1 160px' }}>
                             <CustomSelect
-                                options={accounts.map(acc => ({
-                                    value: acc.id,
-                                    label: acc.name,
-                                }))}
+                                options={accounts.map(acc => ({ value: acc.id, label: acc.name }))}
                                 value={selectedAccount}
-                                onChange={(val) => { setSelectedAccount(val); setPage(1); setMobileVisible(10); }}
+                                onChange={val => { setSelectedAccount(val); resetFilters(); }}
                                 placeholder="Všechny účty"
                             />
                         </div>
                     </div>
-                </GlassCard>
-
-                {/* Summary Stats Bar */}
-                <div className="tx-summary-bar animate-fade-in">
-                    <div className="tx-summary-item">
-                        <span className="tx-summary-label">Položek</span>
-                        <span className="tx-summary-value">{totalItems}</span>
-                    </div>
-                    <div className="tx-summary-divider" />
-                    <div className="tx-summary-item">
-                        <span className="tx-summary-label">Příjmy</span>
-                        <span className="tx-summary-value" style={{ color: 'var(--accent-success)' }}>+{formatCurrency(monthlyStats.income)}</span>
-                    </div>
-                    <div className="tx-summary-divider" />
-                    <div className="tx-summary-item">
-                        <span className="tx-summary-label">Výdaje</span>
-                        <span className="tx-summary-value" style={{ color: 'var(--accent-danger)' }}>{formatCurrency(monthlyStats.expenses)}</span>
-                    </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 'calc(var(--spacing-xl) * 2)' }}>
-                    <GlassCard hover={false} style={{ display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
-                        <div style={{ paddingBottom: 'var(--spacing-md)' }}>
+                {/* Transaction list */}
+                <div className="surface">
+                    <div className="card-body-nopad">
+                        {loading && page === 1 ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-xl)' }}>
+                                <div style={{ width: 28, height: 28, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                            </div>
+                        ) : (
                             <TransactionList transactions={finalDisplayTransactions} showAccount />
+                        )}
+                    </div>
+
+                    {/* Mobile infinite scroll */}
+                    {isMobile && !loading && (
+                        <>
+                            {finalMobileHasMore && <div ref={sentinelRef} style={{ height: 1 }} />}
+                            {!finalMobileHasMore && accumulatedTransactions.length > 0 && (
+                                <div style={{ padding: 'var(--spacing-md)', textAlign: 'center', fontSize: 12, color: 'var(--text-3)' }}>
+                                    Zobrazeny všechny transakce
+                                </div>
+                            )}
+                        </>
+                    )}
+                    {isMobile && loading && page > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, padding: 'var(--spacing-md)', fontSize: 13, color: 'var(--text-3)' }}>
+                            <div style={{ width: 16, height: 16, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                            Načítám další...
                         </div>
+                    )}
 
-                        {/* Mobile: Infinite scroll sentinel + loading */}
-                        {isMobile && !loading && (
-                            <>
-                                {finalMobileHasMore && <div ref={sentinelRef} style={{ height: '1px' }} />}
-                                {!finalMobileHasMore && accumulatedTransactions.length > 0 && (
-                                    <div className="tx-mobile-end">
-                                        Zobrazeny všechny transakce
-                                    </div>
-                                )}
-                            </>
-                        )}
-                        {isMobile && loading && page > 1 && (
-                            <div className="tx-mobile-loader">
-                                <div className="tx-mobile-spinner" />
-                                <span>Načítám další...</span>
+                    {/* Desktop pagination */}
+                    {!isMobile && (
+                        <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            gap: 'var(--spacing-lg)', padding: 'var(--spacing-md) var(--spacing-lg)',
+                            borderTop: '0.5px solid var(--border)',
+                            flexWrap: 'wrap',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)' }}>
+                                <span>Na stránku:</span>
+                                <div className="seg">
+                                    {[5, 10, 20, 50, 100].map(size => (
+                                        <div
+                                            key={size}
+                                            className={`seg-item ${pageSize === size ? 'active' : ''}`}
+                                            onClick={() => { setPageSize(size); setPage(1); }}
+                                        >
+                                            {size}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        )}
-
-                        {/* Desktop: Pagination Controls */}
-                        {!isMobile && totalPages > 1 && (
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                gap: 'var(--spacing-lg)',
-                                paddingTop: 'var(--spacing-md)',
-                                marginTop: 'auto',
-                                borderTop: '1px solid rgba(255,255,255,0.1)',
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    className="btn"
-                                    disabled={page <= 1}
-                                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                                    style={{ opacity: page <= 1 ? 0.5 : 1 }}
-                                >
-                                    ← Předchozí
-                                </button>
-                                <span className="text-secondary" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                                    Stránka {page} z {totalPages}
-                                </span>
-                                <button
-                                    className="btn"
-                                    disabled={page >= totalPages}
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                    style={{ opacity: page >= totalPages ? 0.5 : 1 }}
-                                >
-                                    Další →
-                                </button>
-                            </div>
-                        )}
-                    </GlassCard>
+                            {totalPages > 1 ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)' }}>
+                                    <button className="btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ opacity: page <= 1 ? 0.4 : 1 }}>
+                                        ← Předchozí
+                                    </button>
+                                    <span style={{ fontSize: 13, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+                                        {page} / {totalPages}
+                                    </span>
+                                    <button className="btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ opacity: page >= totalPages ? 0.4 : 1 }}>
+                                        Další →
+                                    </button>
+                                </div>
+                            ) : <span />}
+                        </div>
+                    )}
                 </div>
+
             </div>
         </MainLayout>
+    );
+}
+
+export default function TransactionsPage() {
+    return (
+        <Suspense fallback={
+            <MainLayout>
+                <div className="page-container" style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+                </div>
+            </MainLayout>
+        }>
+            <TransactionsPageContent />
+        </Suspense>
     );
 }

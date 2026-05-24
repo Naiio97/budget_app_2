@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -153,10 +153,12 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         )
         contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
     
-    # Get transactions for last 30 days for calculations
-    date_30_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    # Get transactions for the CURRENT CALENDAR MONTH (not last 30 days — UI labels these
+    # as "tento měsíc" so they must match what the user sees on a calendar).
+    today = datetime.now()
+    month_start = today.replace(day=1).strftime("%Y-%m-%d")
     all_tx_result = await db.execute(
-        select(TransactionModel).where(TransactionModel.date >= date_30_days_ago).limit(500)
+        select(TransactionModel).where(TransactionModel.date >= month_start).limit(1000)
     )
     all_tx = all_tx_result.scalars().all()
     
@@ -164,11 +166,19 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank" and not tx.is_excluded)
     expenses = sum(abs(tx.amount) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank" and not tx.is_excluded)
     
-    # Calculate categories (excluding internal/family transfers)
+    # Calculate categories (only true expense categories — exclude income categories
+    # like Salary/Dividend even if a misclassified negative tx slips through)
+    income_cat_result = await db.execute(
+        select(CategoryModel.name).where(CategoryModel.is_income == True)
+    )
+    income_category_names = {row[0] for row in income_cat_result.all()}
+
     categories = {}
     for tx in all_tx:
         if tx.amount < 0 and not tx.is_excluded:
             cat = tx.category or "Other"
+            if cat in income_category_names:
+                continue
             if cat not in categories:
                 categories[cat] = 0
             categories[cat] += abs(tx.amount)
@@ -414,42 +424,51 @@ async def get_monthly_report(
     db: AsyncSession = Depends(get_db)
 ):
     """Get monthly report with income/expenses and category breakdown"""
-    
+
+    # Income category names — excluded from the expense-by-category breakdown so
+    # misclassified Salary/Dividend negatives don't pollute the chart.
+    income_cat_result = await db.execute(
+        select(CategoryModel.name).where(CategoryModel.is_income == True)
+    )
+    income_category_names = {row[0] for row in income_cat_result.all()}
+
     # Get transactions grouped by month
     result = await db.execute(
         select(TransactionModel).where(TransactionModel.account_type == "bank")
     )
     transactions = result.scalars().all()
-    
+
     # Group by month
     monthly_data = {}
     category_data = {}
-    
+
     for tx in transactions:
         if not tx.date:
             continue
-        
+
         # Skip excluded transactions (internal/family transfers) from totals
         if tx.is_excluded:
             continue
-            
+
         month = tx.date[:7]  # YYYY-MM
-        
+
         if month not in monthly_data:
             monthly_data[month] = {"income": 0, "expenses": 0}
-        
+
         if tx.amount >= 0:
             monthly_data[month]["income"] += tx.amount
         else:
             monthly_data[month]["expenses"] += abs(tx.amount)
-        
-        # Category breakdown
-        cat = tx.category or "Other"
-        if month not in category_data:
-            category_data[month] = {}
-        if cat not in category_data[month]:
-            category_data[month][cat] = 0
-        if tx.amount < 0:  # Only expenses for category breakdown
+
+        # Category breakdown — only true expense categories
+        if tx.amount < 0:
+            cat = tx.category or "Other"
+            if cat in income_category_names:
+                continue
+            if month not in category_data:
+                category_data[month] = {}
+            if cat not in category_data[month]:
+                category_data[month][cat] = 0
             category_data[month][cat] += abs(tx.amount)
     
     # Sort by month and limit to requested months
@@ -478,10 +497,11 @@ async def get_monthly_report(
                     "amount": round(amount, 2)
                 })
     
-    # Get all unique categories for chart
+    # Categories that actually appear in the displayed window (avoid phantom legend entries)
     all_categories = set()
-    for month_cats in category_data.values():
-        all_categories.update(month_cats.keys())
+    for month in sorted_months:
+        if month in category_data:
+            all_categories.update(category_data[month].keys())
     
     return {
         "monthly_totals": monthly_totals,

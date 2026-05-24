@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryKeys';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
@@ -14,99 +15,98 @@ interface Category {
     name: string;
     icon: string;
     color: string;
+    is_income?: boolean;
+    is_active?: boolean;
 }
 
-// Fallback colors
 const FALLBACK_COLORS: Record<string, string> = {
-    'Food': '#ef4444',
-    'Transport': '#f97316',
-    'Utilities': '#eab308',
-    'Entertainment': '#22c55e',
-    'Shopping': '#14b8a6',
-    'Investment': '#3b82f6',
-    'Dividend': '#8b5cf6',
-    'Salary': '#10b981',
-    'Internal Transfer': '#6b7280',
-    'Family Transfer': '#6b7280',
-    'Other': '#6b7280',
+    'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
+    'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
+    'Dividend': '#8b5cf6', 'Salary': '#10b981', 'Subscription': '#030303',
+    'Installments': '#4b4c95', 'Insurance': '#e5c52a', 'Supermarkets': '#e69eb0',
+    'ATM': '#f28f64',
+    'Internal Transfer': '#6b7280', 'Family Transfer': '#6b7280', 'Other': '#6b7280',
+};
+
+const FALLBACK_ICONS: Record<string, string> = {
+    'Restaurant': '🍔', 'Food': '🛒', 'Transport': '🚗', 'Utilities': '💡',
+    'Entertainment': '🎬', 'Shopping': '🛒', 'Investment': '📈',
+    'Salary': '💰', 'Dividend': '💵', 'Subscription': '📱',
+    'Installments': '📦', 'Insurance': '🏥', 'Supermarkets': '🍔',
+    'ATM': '💵', 'Other': '📦',
 };
 
 export default function CategoryChart({ categories, currency = 'CZK' }: CategoryChartProps) {
-    const [categoryColors, setCategoryColors] = useState<Record<string, string>>(FALLBACK_COLORS);
+    const { data: categoryList = [] } = useQuery<Category[]>({
+        queryKey: queryKeys.categories,
+        queryFn: () =>
+            fetch(`${API_BASE}/categories/`)
+                .then(r => r.json())
+                .then(d => Array.isArray(d) ? d : []),
+        staleTime: 5 * 60 * 1000,
+    });
 
-    useEffect(() => {
-        fetch(`${API_BASE}/categories/`)
-            .then(res => res.json())
-            .then((data: Category[]) => {
-                const safeData = Array.isArray(data) ? data : [];
-                const colors = safeData.reduce((acc, cat) => {
-                    acc[cat.name] = cat.color;
-                    return acc;
-                }, { ...FALLBACK_COLORS } as Record<string, string>);
-                setCategoryColors(colors);
-            })
-            .catch(err => console.error('Failed to load categories:', err));
-    }, []);
+    const meta = categoryList.reduce((acc, cat) => {
+        acc[cat.name] = { color: cat.color, icon: cat.icon };
+        return acc;
+    }, {} as Record<string, { color: string; icon: string }>);
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('cs-CZ', {
-            style: 'currency',
-            currency,
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(amount);
-    };
+    const getColor = (name: string) => meta[name]?.color || FALLBACK_COLORS[name] || '#6b7280';
+    const getIcon = (name: string) => meta[name]?.icon || FALLBACK_ICONS[name] || '📦';
 
-    const total = Object.values(categories).reduce((sum, val) => sum + val, 0);
-    const sortedCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]);
+    const fmt = (amount: number) =>
+        new Intl.NumberFormat('cs-CZ', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
-    if (sortedCategories.length === 0) {
+    const sorted = Object.entries(categories)
+        .filter(([, v]) => v > 0)
+        .sort((a, b) => b[1] - a[1]);
+
+    if (sorted.length === 0) {
         return (
-            <div className="chart-container">
-                <p>Žádná data k zobrazení</p>
+            <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-3)', fontSize: 13 }}>
+                Žádné výdaje k zobrazení
             </div>
         );
     }
 
+    const max = sorted[0][1];
+
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-            {/* Simple bar chart */}
-            <div style={{ display: 'flex', height: '12px', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                {sortedCategories.map(([category, amount]) => (
-                    <div
-                        key={category}
-                        style={{
-                            width: `${(amount / total) * 100}%`,
-                            backgroundColor: categoryColors[category] || categoryColors['Other'] || '#6b7280',
-                            transition: 'width var(--transition-normal)',
-                        }}
-                        title={`${category}: ${formatCurrency(amount)}`}
-                    />
-                ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Stacked bar at top */}
+            <div style={{ display: 'flex', height: 8, borderRadius: 'var(--radius-full)', overflow: 'hidden', gap: 1 }}>
+                {sorted.slice(0, 8).map(([name, amount]) => {
+                    const total = sorted.reduce((s, [, v]) => s + v, 0);
+                    return (
+                        <div key={name}
+                            style={{ width: `${(amount / total) * 100}%`, background: getColor(name), transition: 'width 0.5s' }}
+                            title={`${name}: ${fmt(amount)}`}
+                        />
+                    );
+                })}
             </div>
 
-            {/* Legend */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-md)' }}>
-                {sortedCategories.map(([category, amount]) => (
-                    <div key={category} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs)' }}>
-                        <div
-                            style={{
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '4px',
-                                backgroundColor: categoryColors[category] || categoryColors['Other'] || '#6b7280',
-                            }}
-                        />
-                        <span style={{ fontSize: '0.875rem' }}>
-                            {category}
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                            {formatCurrency(amount)}
-                        </span>
+            {/* Category rows */}
+            {sorted.slice(0, 7).map(([name, amount]) => (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                        background: getColor(name) + '22',
+                        display: 'grid', placeItems: 'center', fontSize: 14,
+                    }}>
+                        {getIcon(name)}
                     </div>
-                ))}
-            </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 13, fontWeight: 510, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                            <span className="num" style={{ fontSize: 12, color: 'var(--text-2)', flexShrink: 0, marginLeft: 8 }}>{fmt(amount)}</span>
+                        </div>
+                        <div className="progress">
+                            <span style={{ width: `${(amount / max) * 100}%`, background: getColor(name) }} />
+                        </div>
+                    </div>
+                </div>
+            ))}
         </div>
     );
 }
-
