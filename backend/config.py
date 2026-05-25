@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     trading212_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
 
+    # Auth (shared HS256 secret with frontend Auth.js)
+    # Empty string means /auth/* endpoints will reject — set in .env before enabling auth.
+    auth_secret: str = ""
+    auth_jwt_ttl_hours: int = 24
+    # Comma-separated in .env, e.g. AUTH_ALLOWED_OAUTH_PROVIDERS=google,apple
+    auth_allowed_oauth_providers: list[str] = ["google", "apple"]
+
     # Konfigurace Pydanticu
     model_config = SettingsConfigDict(
         env_file=".env",
