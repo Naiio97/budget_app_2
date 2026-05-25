@@ -20,6 +20,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const pathname = usePathname();
     const [isSyncing, setIsSyncing] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
+    const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [hasMounted, setHasMounted] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -74,6 +75,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
     useEffect(() => {
         setIsCompactNavOpen(false);
+        setIsMobileToolsOpen(false);
     }, [pathname]);
 
     const handleSync = async () => {
@@ -177,6 +179,17 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
             <div className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
                 <main className="main-content">
+                    {isMobile && (
+                        <button
+                            type="button"
+                            className="mobile-tools-button"
+                            onClick={() => setIsMobileToolsOpen(true)}
+                            aria-label="Otevřít menu"
+                        >
+                            ☰
+                        </button>
+                    )}
+
                     {/* Hamburger for medium screens */}
                     <div className="compact-nav-header">
                         <button
@@ -308,18 +321,103 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
                 {/* Mobile bottom navigation */}
                 {isMobile && (
-                    <nav className="bottom-nav">
-                        {bottomNavItems.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className={`bottom-nav-item ${pathname === item.href ? 'active' : ''}`}
-                            >
-                                <span className="bottom-nav-icon">{item.icon}</span>
-                                <span className="bottom-nav-label">{item.label}</span>
-                            </Link>
-                        ))}
-                    </nav>
+                    <>
+                        <div
+                            className={`mobile-tools-overlay ${isMobileToolsOpen ? 'open' : ''}`}
+                            onClick={() => setIsMobileToolsOpen(false)}
+                        />
+                        <aside className={`mobile-tools-drawer ${isMobileToolsOpen ? 'open' : ''}`} aria-hidden={!isMobileToolsOpen}>
+                            <div className="mobile-tools-head">
+                                <div>
+                                    <div className="mobile-tools-title-row">
+                                        <strong>Menu</strong>
+                                        <button
+                                            type="button"
+                                            className="mobile-theme-mini"
+                                            onClick={toggleTheme}
+                                            aria-label="Přepnout motiv"
+                                        >
+                                            {theme === 'dark' ? '☀️' : '🌙'}
+                                        </button>
+                                    </div>
+                                    <span>{accounts.length} {accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}</span>
+                                </div>
+                                <button className="btn btn-sm btn-icon" onClick={() => setIsMobileToolsOpen(false)} aria-label="Zavřít">✕</button>
+                            </div>
+
+                            <div className="mobile-tools-section">
+                                <div className="mobile-tools-kpi">
+                                    <span>Čisté jmění</span>
+                                    <strong className="num">{formatCurrency(totalBalance)}</strong>
+                                </div>
+                                <button className="btn btn-primary mobile-sync-btn" onClick={handleSync} disabled={isSyncing}>
+                                    {isSyncing ? 'Synchronizuji...' : `${Icons.action.sync} Synchronizovat`}
+                                </button>
+                                {syncStatus?.last_sync && (
+                                    <div className="mobile-tools-sync-meta">
+                                        Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mobile-tools-section">
+                                <div className="mobile-tools-title">Účty</div>
+                                <div className="mobile-account-list">
+                                    {accounts.length === 0 ? (
+                                        <div className="mobile-empty">Žádné účty</div>
+                                    ) : accounts.map((account) => {
+                                        const logoUrl = getBankLogo(account.institution);
+                                        return (
+                                            <Link
+                                                key={account.id}
+                                                href={getAccountHref(account)}
+                                                className="mobile-account-row"
+                                                onClick={() => setIsMobileToolsOpen(false)}
+                                            >
+                                                {logoUrl ? (
+                                                    <span className="mobile-account-logo bank">
+                                                        <Image src={logoUrl} alt={account.institution || account.name} width={28} height={28} />
+                                                    </span>
+                                                ) : (
+                                                    <span className="mobile-account-logo" style={{ background: getAccentColor(account.type) }}>
+                                                        {getInitials(account.name)}
+                                                    </span>
+                                                )}
+                                                <span className="mobile-account-copy">
+                                                    <strong>{account.name}</strong>
+                                                    <span>{account.currency}</span>
+                                                </span>
+                                                <span className="num mobile-account-balance">{formatCurrency(account.balance, account.currency)}</span>
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="mobile-tools-section">
+                                <div className="mobile-tools-title">Rychlé akce</div>
+                                <div className="mobile-quick-grid">
+                                    <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.settings} Nastavení</Link>
+                                    <Link href="/transactions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.transactions} Transakce</Link>
+                                    <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.reports} Přehledy</Link>
+                                    <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>+ Účet</Link>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <nav className="bottom-nav">
+                            {bottomNavItems.map((item) => (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={`bottom-nav-item ${pathname === item.href ? 'active' : ''}`}
+                                >
+                                    <span className="bottom-nav-icon">{item.icon}</span>
+                                    <span className="bottom-nav-label">{item.label}</span>
+                                </Link>
+                            ))}
+                        </nav>
+                    </>
                 )}
             </div>
         </div>
