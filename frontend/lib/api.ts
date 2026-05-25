@@ -1,7 +1,82 @@
-import * as Mocks from './mock-data';
+// Backend API client.
+//
+// One internal `apiFetch` helper handles the real network — it attaches the
+// backend JWT from the Auth.js session and redirects to /login on 401.
+//
+// Demo mode lives in a cookie/localStorage flag (see lib/demo-mode.ts) and is
+// checked at runtime, not at build time. In demo mode:
+//   - GETs go through `fetchApi`, which returns canned data from mock-data.ts
+//   - Mutations go through `apiMutate`, which returns a synthetic 200 OK
+//     without hitting the backend, so the UI feels alive without persisting.
 
-const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+import { getSession } from "next-auth/react";
+import { isDemoMode } from "./demo-mode";
+import * as Mocks from "./mock-data";
+
+const API_BASE =
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io";
+
+// 10s cache so we don't hit getSession() on every request — it goes through
+// Next.js's /api/auth/session endpoint which has its own server round-trip.
+let cachedToken: string | null = null;
+let tokenExpiresAt = 0;
+const TOKEN_CACHE_MS = 10_000;
+
+async function getBackendToken(): Promise<string | null> {
+    if (typeof window === "undefined") return null;
+    const now = Date.now();
+    if (cachedToken && tokenExpiresAt > now) return cachedToken;
+    try {
+        const session = await getSession();
+        cachedToken = (session as { backendToken?: string } | null)?.backendToken ?? null;
+    } catch {
+        cachedToken = null;
+    }
+    tokenExpiresAt = now + TOKEN_CACHE_MS;
+    return cachedToken;
+}
+
+export function clearBackendTokenCache(): void {
+    cachedToken = null;
+    tokenExpiresAt = 0;
+}
+
+async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    const headers = new Headers(init.headers);
+    if (init.body && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+    const token = await getBackendToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    const res = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        headers,
+        cache: init.cache ?? "no-store",
+    });
+    if (res.status === 401 && typeof window !== "undefined") {
+        const from = window.location.pathname + window.location.search;
+        window.location.href = `/login?from=${encodeURIComponent(from)}`;
+    }
+    return res;
+}
+
+// For mutations: in demo mode, fake a 200 so the UI doesn't surface errors.
+// The data isn't persisted anywhere — that's the contract of demo.
+async function apiMutate<T = { status: string }>(
+    path: string,
+    init: RequestInit,
+    demoResponse?: T
+): Promise<Response> {
+    if (isDemoMode()) {
+        const body = JSON.stringify(demoResponse ?? { status: "ok" });
+        return new Response(body, {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+        });
+    }
+    return apiFetch(path, init);
+}
 
 export interface Account {
     id: string;
@@ -69,9 +144,9 @@ export interface Portfolio {
 }
 
 async function fetchApi<T>(endpoint: string): Promise<T> {
-    if (USE_MOCKS) {
-        console.log('[MOCK API] GET', endpoint);
-        await new Promise(r => setTimeout(r, 400)); // Simulace zpoždění sítě
+    if (isDemoMode()) {
+        console.log('[DEMO API] GET', endpoint);
+        await new Promise(r => setTimeout(r, 200));
 
         if (endpoint.startsWith('/dashboard/balance-history')) return Mocks.MOCK_BALANCE_HISTORY as unknown as T;
         if (endpoint.startsWith('/dashboard/net-worth-history')) return Mocks.MOCK_NET_WORTH as unknown as T;
@@ -93,12 +168,10 @@ async function fetchApi<T>(endpoint: string): Promise<T> {
         if (endpoint.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 } as unknown as T;
         if (endpoint.startsWith('/settings/api-keys')) return Mocks.MOCK_API_KEYS as unknown as T;
 
-        console.warn('[MOCK API] Unknown generic endpoint', endpoint);
+        console.warn('[DEMO API] Unknown generic endpoint', endpoint);
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-        cache: 'no-store',
-    });
+    const response = await apiFetch(endpoint);
 
     if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -176,31 +249,29 @@ export async function getInstitutions(country: string = 'CZ'): Promise<{ institu
 }
 
 export async function connectBank(institutionId: string, redirectUrl: string): Promise<{ link: string; requisition_id: string }> {
-    const response = await fetch(`${API_BASE}/accounts/connect/bank`, {
+    const response = await apiMutate(`/accounts/connect/bank`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ institution_id: institutionId, redirect_url: redirectUrl }),
-    });
+    }, { link: '#demo', requisition_id: 'demo' });
 
     if (!response.ok) throw new Error('Failed to connect bank');
     return response.json();
 }
 
 export async function updateAccount(id: string, data: { name?: string; is_visible?: boolean }): Promise<{ status: string; id: string }> {
-    const response = await fetch(`${API_BASE}/accounts/${id}`, {
+    const response = await apiMutate(`/accounts/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-    });
+    }, { status: 'updated', id });
 
     if (!response.ok) throw new Error('Failed to update account');
     return response.json();
 }
 
 export async function deleteAccount(id: string): Promise<{ status: string; id: string }> {
-    const response = await fetch(`${API_BASE}/accounts/${id}`, {
+    const response = await apiMutate(`/accounts/${id}`, {
         method: 'DELETE',
-    });
+    }, { status: 'deleted', id });
 
     if (!response.ok) throw new Error('Failed to delete account');
     return response.json();
@@ -222,11 +293,11 @@ export interface SyncResult {
 }
 
 export async function syncData(): Promise<SyncResult> {
-    if (USE_MOCKS) {
+    if (isDemoMode()) {
         await new Promise(r => setTimeout(r, 1000));
         return { status: 'completed', accounts_synced: 3, transactions_synced: 42 };
     }
-    const response = await fetch(`${API_BASE}/sync/`, {
+    const response = await apiFetch(`/sync/`, {
         method: 'POST',
     });
 
@@ -258,11 +329,10 @@ export async function getApiKeys(): Promise<ApiKeysResponse> {
 }
 
 export async function saveApiKeys(keys: ApiKeysRequest): Promise<{ status: string; updated_keys: string[] }> {
-    const response = await fetch(`${API_BASE}/settings/api-keys`, {
+    const response = await apiMutate(`/settings/api-keys`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(keys),
-    });
+    }, { status: 'saved', updated_keys: Object.keys(keys) });
 
     if (!response.ok) throw new Error('Failed to save API keys');
     return response.json();
@@ -424,19 +494,18 @@ export interface Contact {
 }
 
 export async function saveContact(iban: string, name: string, note?: string): Promise<Contact> {
-    const response = await fetch(`${API_BASE}/contacts/${encodeURIComponent(iban)}`, {
+    const response = await apiMutate(`/contacts/${encodeURIComponent(iban)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, note: note ?? null }),
-    });
+    }, { iban, name, source: 'manual' as const, note: note ?? null });
     if (!response.ok) throw new Error('Failed to save contact');
     return response.json();
 }
 
 export async function deleteContact(iban: string): Promise<{ deleted: string }> {
-    const response = await fetch(`${API_BASE}/contacts/${encodeURIComponent(iban)}`, {
+    const response = await apiMutate(`/contacts/${encodeURIComponent(iban)}`, {
         method: 'DELETE',
-    });
+    }, { deleted: iban });
     if (!response.ok) throw new Error('Failed to delete contact');
     return response.json();
 }
@@ -488,9 +557,8 @@ export async function getBudgetOverview(): Promise<BudgetOverview> {
 }
 
 export async function createBudget(data: { category: string; amount: number }): Promise<Budget> {
-    const response = await fetch(`${API_BASE}/budgets/`, {
+    const response = await apiMutate(`/budgets/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create budget');
@@ -498,9 +566,8 @@ export async function createBudget(data: { category: string; amount: number }): 
 }
 
 export async function updateBudget(id: number, data: { category?: string; amount?: number; is_active?: boolean }): Promise<Budget> {
-    const response = await fetch(`${API_BASE}/budgets/${id}`, {
+    const response = await apiMutate(`/budgets/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update budget');
@@ -508,9 +575,9 @@ export async function updateBudget(id: number, data: { category?: string; amount
 }
 
 export async function deleteBudget(id: number): Promise<{ status: string; id: number }> {
-    const response = await fetch(`${API_BASE}/budgets/${id}`, {
+    const response = await apiMutate(`/budgets/${id}`, {
         method: 'DELETE',
-    });
+    }, { status: 'deleted', id });
     if (!response.ok) throw new Error('Failed to delete budget');
     return response.json();
 }
@@ -520,9 +587,8 @@ export async function getGoals(): Promise<SavingsGoal[]> {
 }
 
 export async function createGoal(data: { name: string; target_amount: number; deadline?: string }): Promise<SavingsGoal> {
-    const response = await fetch(`${API_BASE}/budgets/goals`, {
+    const response = await apiMutate(`/budgets/goals`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create goal');
@@ -530,9 +596,8 @@ export async function createGoal(data: { name: string; target_amount: number; de
 }
 
 export async function updateGoal(id: number, data: { name?: string; target_amount?: number; current_amount?: number; add_amount?: number; deadline?: string; is_completed?: boolean }): Promise<SavingsGoal> {
-    const response = await fetch(`${API_BASE}/budgets/goals/${id}`, {
+    const response = await apiMutate(`/budgets/goals/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update goal');
@@ -540,9 +605,9 @@ export async function updateGoal(id: number, data: { name?: string; target_amoun
 }
 
 export async function deleteGoal(id: number): Promise<{ status: string; id: number }> {
-    const response = await fetch(`${API_BASE}/budgets/goals/${id}`, {
+    const response = await apiMutate(`/budgets/goals/${id}`, {
         method: 'DELETE',
-    });
+    }, { status: 'deleted', id });
     if (!response.ok) throw new Error('Failed to delete goal');
     return response.json();
 }
@@ -581,21 +646,20 @@ export interface ManualInvestmentHistoryPoint {
 }
 
 export async function getManualInvestments(): Promise<ManualInvestmentAccount[]> {
-    const r = await fetch(`${API_BASE}/manual-investments/`);
+    const r = await apiFetch(`/manual-investments/`);
     if (!r.ok) throw new Error('Failed to fetch manual investments');
     return r.json();
 }
 
 export async function getManualInvestment(id: number): Promise<ManualInvestmentAccount> {
-    const r = await fetch(`${API_BASE}/manual-investments/${id}`);
+    const r = await apiFetch(`/manual-investments/${id}`);
     if (!r.ok) throw new Error('Failed to fetch manual investment');
     return r.json();
 }
 
 export async function createManualInvestment(data: { name: string; currency?: string; note?: string }): Promise<ManualInvestmentAccount> {
-    const r = await fetch(`${API_BASE}/manual-investments/`, {
+    const r = await apiMutate(`/manual-investments/`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!r.ok) throw new Error('Failed to create manual investment');
@@ -603,9 +667,8 @@ export async function createManualInvestment(data: { name: string; currency?: st
 }
 
 export async function updateManualInvestment(id: number, data: { name?: string; currency?: string; note?: string; is_visible?: boolean }): Promise<ManualInvestmentAccount> {
-    const r = await fetch(`${API_BASE}/manual-investments/${id}`, {
+    const r = await apiMutate(`/manual-investments/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!r.ok) throw new Error('Failed to update manual investment');
@@ -613,20 +676,19 @@ export async function updateManualInvestment(id: number, data: { name?: string; 
 }
 
 export async function deleteManualInvestment(id: number): Promise<void> {
-    const r = await fetch(`${API_BASE}/manual-investments/${id}`, { method: 'DELETE' });
+    const r = await apiMutate(`/manual-investments/${id}`, { method: 'DELETE' });
     if (!r.ok) throw new Error('Failed to delete manual investment');
 }
 
 export async function getManualInvestmentHistory(id: number): Promise<ManualInvestmentHistoryPoint[]> {
-    const r = await fetch(`${API_BASE}/manual-investments/${id}/history`);
+    const r = await apiFetch(`/manual-investments/${id}/history`);
     if (!r.ok) throw new Error('Failed to fetch history');
     return r.json();
 }
 
 export async function createManualInvestmentPosition(accountId: number, data: { name: string; quantity?: number | null; avg_buy_price?: number | null; current_value: number; currency?: string; note?: string | null }): Promise<ManualInvestmentPosition> {
-    const r = await fetch(`${API_BASE}/manual-investments/${accountId}/positions`, {
+    const r = await apiMutate(`/manual-investments/${accountId}/positions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!r.ok) throw new Error('Failed to create position');
@@ -634,9 +696,8 @@ export async function createManualInvestmentPosition(accountId: number, data: { 
 }
 
 export async function updateManualInvestmentPosition(accountId: number, positionId: number, data: { name?: string; quantity?: number | null; avg_buy_price?: number | null; current_value?: number; currency?: string; note?: string | null }): Promise<ManualInvestmentPosition> {
-    const r = await fetch(`${API_BASE}/manual-investments/${accountId}/positions/${positionId}`, {
+    const r = await apiMutate(`/manual-investments/${accountId}/positions/${positionId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     });
     if (!r.ok) throw new Error('Failed to update position');
@@ -644,6 +705,6 @@ export async function updateManualInvestmentPosition(accountId: number, position
 }
 
 export async function deleteManualInvestmentPosition(accountId: number, positionId: number): Promise<void> {
-    const r = await fetch(`${API_BASE}/manual-investments/${accountId}/positions/${positionId}`, { method: 'DELETE' });
+    const r = await apiMutate(`/manual-investments/${accountId}/positions/${positionId}`, { method: 'DELETE' });
     if (!r.ok) throw new Error('Failed to delete position');
 }
