@@ -5,8 +5,15 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+
+from auth import get_current_user
 from database import get_db
-from models import ManualInvestmentAccountModel, ManualInvestmentPositionModel, ManualInvestmentSnapshotModel
+from models import (
+    ManualInvestmentAccountModel,
+    ManualInvestmentPositionModel,
+    ManualInvestmentSnapshotModel,
+    UserModel,
+)
 
 router = APIRouter()
 
@@ -39,8 +46,8 @@ class Position(BaseModel):
     current_value: float
     currency: str
     note: Optional[str]
-    invested: Optional[float]   # qty * avg_buy_price, if both present
-    pnl: Optional[float]        # current_value - invested
+    invested: Optional[float]
+    pnl: Optional[float]
     pnl_pct: Optional[float]
 
     class Config:
@@ -141,24 +148,70 @@ async def _save_snapshot(db: AsyncSession, account_id: int, total_value: float) 
         ))
 
 
+async def _get_user_account(
+    db: AsyncSession, user_id: int, account_id: int, with_positions: bool = False
+) -> ManualInvestmentAccountModel:
+    stmt = select(ManualInvestmentAccountModel).where(
+        ManualInvestmentAccountModel.id == account_id,
+        ManualInvestmentAccountModel.user_id == user_id,
+    )
+    if with_positions:
+        stmt = stmt.options(selectinload(ManualInvestmentAccountModel.positions))
+    result = await db.execute(stmt)
+    acc = result.scalar_one_or_none()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return acc
+
+
+async def _get_user_position(
+    db: AsyncSession, user_id: int, account_id: int, position_id: int
+) -> ManualInvestmentPositionModel:
+    result = await db.execute(
+        select(ManualInvestmentPositionModel)
+        .join(ManualInvestmentAccountModel, ManualInvestmentPositionModel.account_id == ManualInvestmentAccountModel.id)
+        .where(
+            ManualInvestmentPositionModel.id == position_id,
+            ManualInvestmentPositionModel.account_id == account_id,
+            ManualInvestmentAccountModel.user_id == user_id,
+        )
+    )
+    pos = result.scalar_one_or_none()
+    if not pos:
+        raise HTTPException(status_code=404, detail="Position not found")
+    return pos
+
+
 # === Account endpoints ===
 
 @router.get("/", response_model=List[ManualInvestmentAccount])
-async def list_accounts(db: AsyncSession = Depends(get_db)):
+async def list_accounts(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(
         select(ManualInvestmentAccountModel)
         .options(selectinload(ManualInvestmentAccountModel.positions))
+        .where(ManualInvestmentAccountModel.user_id == current_user.id)
     )
     return [_build_account(a) for a in result.scalars().all()]
 
 
 @router.post("/", response_model=ManualInvestmentAccount)
-async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)):
-    acc = ManualInvestmentAccountModel(name=data.name, currency=data.currency, note=data.note)
+async def create_account(
+    data: AccountCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    acc = ManualInvestmentAccountModel(
+        user_id=current_user.id,
+        name=data.name,
+        currency=data.currency,
+        note=data.note,
+    )
     db.add(acc)
     await db.commit()
     await db.refresh(acc)
-    # Nový účet nemá žádné pozice — nevstupujeme do lazy relationship
     return ManualInvestmentAccount(
         id=acc.id,
         name=acc.name,
@@ -174,28 +227,23 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/{account_id}", response_model=ManualInvestmentAccount)
-async def get_account(account_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ManualInvestmentAccountModel)
-        .options(selectinload(ManualInvestmentAccountModel.positions))
-        .where(ManualInvestmentAccountModel.id == account_id)
-    )
-    acc = result.scalar_one_or_none()
-    if not acc:
-        raise HTTPException(status_code=404, detail="Account not found")
+async def get_account(
+    account_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    acc = await _get_user_account(db, current_user.id, account_id, with_positions=True)
     return _build_account(acc)
 
 
 @router.put("/{account_id}", response_model=ManualInvestmentAccount)
-async def update_account(account_id: int, data: AccountUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(ManualInvestmentAccountModel)
-        .options(selectinload(ManualInvestmentAccountModel.positions))
-        .where(ManualInvestmentAccountModel.id == account_id)
-    )
-    acc = result.scalar_one_or_none()
-    if not acc:
-        raise HTTPException(status_code=404, detail="Account not found")
+async def update_account(
+    account_id: int,
+    data: AccountUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    acc = await _get_user_account(db, current_user.id, account_id, with_positions=True)
     if data.name is not None:
         acc.name = data.name
     if data.currency is not None:
@@ -210,10 +258,12 @@ async def update_account(account_id: int, data: AccountUpdate, db: AsyncSession 
 
 
 @router.delete("/{account_id}")
-async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
-    acc = await db.get(ManualInvestmentAccountModel, account_id)
-    if not acc:
-        raise HTTPException(status_code=404, detail="Account not found")
+async def delete_account(
+    account_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    acc = await _get_user_account(db, current_user.id, account_id)
     await db.delete(acc)
     await db.commit()
     return {"status": "deleted", "id": account_id}
@@ -222,7 +272,12 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
 # === History endpoint ===
 
 @router.get("/{account_id}/history", response_model=List[HistoryPoint])
-async def get_history(account_id: int, db: AsyncSession = Depends(get_db)):
+async def get_history(
+    account_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_user_account(db, current_user.id, account_id)
     result = await db.execute(
         select(ManualInvestmentSnapshotModel)
         .where(ManualInvestmentSnapshotModel.account_id == account_id)
@@ -234,10 +289,13 @@ async def get_history(account_id: int, db: AsyncSession = Depends(get_db)):
 # === Position endpoints ===
 
 @router.post("/{account_id}/positions", response_model=Position)
-async def create_position(account_id: int, data: PositionCreate, db: AsyncSession = Depends(get_db)):
-    acc = await db.get(ManualInvestmentAccountModel, account_id)
-    if not acc:
-        raise HTTPException(status_code=404, detail="Account not found")
+async def create_position(
+    account_id: int,
+    data: PositionCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_user_account(db, current_user.id, account_id)
     pos = ManualInvestmentPositionModel(
         account_id=account_id,
         name=data.name,
@@ -248,8 +306,7 @@ async def create_position(account_id: int, data: PositionCreate, db: AsyncSessio
         note=data.note,
     )
     db.add(pos)
-    await db.flush()  # get pos.id before snapshot
-    # Recalculate total and save snapshot
+    await db.flush()
     all_pos_result = await db.execute(
         select(ManualInvestmentPositionModel).where(ManualInvestmentPositionModel.account_id == account_id)
     )
@@ -261,10 +318,14 @@ async def create_position(account_id: int, data: PositionCreate, db: AsyncSessio
 
 
 @router.put("/{account_id}/positions/{position_id}", response_model=Position)
-async def update_position(account_id: int, position_id: int, data: PositionUpdate, db: AsyncSession = Depends(get_db)):
-    pos = await db.get(ManualInvestmentPositionModel, position_id)
-    if not pos or pos.account_id != account_id:
-        raise HTTPException(status_code=404, detail="Position not found")
+async def update_position(
+    account_id: int,
+    position_id: int,
+    data: PositionUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    pos = await _get_user_position(db, current_user.id, account_id, position_id)
     if data.name is not None:
         pos.name = data.name
     if data.quantity is not None:
@@ -289,10 +350,13 @@ async def update_position(account_id: int, position_id: int, data: PositionUpdat
 
 
 @router.delete("/{account_id}/positions/{position_id}")
-async def delete_position(account_id: int, position_id: int, db: AsyncSession = Depends(get_db)):
-    pos = await db.get(ManualInvestmentPositionModel, position_id)
-    if not pos or pos.account_id != account_id:
-        raise HTTPException(status_code=404, detail="Position not found")
+async def delete_position(
+    account_id: int,
+    position_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    pos = await _get_user_position(db, current_user.id, account_id, position_id)
     await db.delete(pos)
     await db.flush()
     all_pos_result = await db.execute(

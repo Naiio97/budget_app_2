@@ -8,10 +8,11 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+from auth import get_current_user
 from database import get_db
 from models import (
     MonthlyBudgetModel, MonthlyIncomeItemModel, RecurringExpenseModel, MonthlyExpenseModel,
-    ManualAccountModel, ManualAccountItemModel, TransactionModel
+    ManualAccountModel, ManualAccountItemModel, TransactionModel, UserModel
 )
 
 router = APIRouter(tags=["Budget & Expenses"])
@@ -20,7 +21,7 @@ router = APIRouter(tags=["Budget & Expenses"])
 # === Pydantic Models ===
 
 class MonthlyBudgetCreate(BaseModel):
-    year_month: str  # "2025-01"
+    year_month: str
     investment_amount: float = 0.0
     surplus_to_savings: float = 0.0
 
@@ -55,7 +56,7 @@ class MonthlyExpenseResponse(BaseModel):
     name: str
     amount: float
     my_percentage: int = 100
-    my_amount: float = 0  # Effective: my_amount_override ?? amount * my_percentage / 100
+    my_amount: float = 0
     my_amount_override: Optional[float] = None
     is_paid: bool
     is_auto_paid: bool
@@ -111,7 +112,7 @@ class RecurringExpenseResponse(BaseModel):
 class MonthlyExpenseUpdate(BaseModel):
     amount: Optional[float] = None
     my_percentage: Optional[int] = None
-    my_amount_override: Optional[float] = None  # Přímé zadání v Kč; -1 = reset (zpět na percentage)
+    my_amount_override: Optional[float] = None
     is_paid: Optional[bool] = None
     name: Optional[str] = None
 
@@ -147,16 +148,29 @@ class ManualAccountResponse(BaseModel):
     currency: str
     items: List[ManualAccountItemResponse]
     items_total: float
-    available_balance: float  # balance - items_total
+    available_balance: float
 
 
-# === Monthly Budget Endpoints ===
+# === Helpers (all enforce per-user ownership) ===
+
+async def _get_user_budget(db: AsyncSession, user_id: int, year_month: str) -> Optional[MonthlyBudgetModel]:
+    result = await db.execute(
+        select(MonthlyBudgetModel).where(
+            MonthlyBudgetModel.user_id == user_id,
+            MonthlyBudgetModel.year_month == year_month,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def _require_budget(db: AsyncSession, user_id: int, year_month: str) -> MonthlyBudgetModel:
+    budget = await _get_user_budget(db, user_id, year_month)
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    return budget
+
 
 async def _create_default_salary_row(budget: MonthlyBudgetModel, db: AsyncSession) -> None:
-    """Výchozí „Výplata" řádek — vloží se jen při prvním vytvoření rozpočtu.
-
-    Uživatel ho může smazat; do dalších měsíců se ale vygeneruje znovu jako default.
-    """
     db.add(MonthlyIncomeItemModel(
         budget_id=budget.id,
         name="Výplata",
@@ -177,17 +191,17 @@ async def _load_income_items(budget_id: int, db: AsyncSession) -> List[MonthlyIn
 
 
 @router.get("/monthly-budget/{year_month}", response_model=MonthlyBudgetResponse)
-async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)):
+async def get_monthly_budget(
+    year_month: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Získat rozpočet pro měsíc (vytvoří nový pokud neexistuje)"""
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
+    budget = await _get_user_budget(db, current_user.id, year_month)
 
     is_fresh = False
     if not budget:
-        # Vytvoř prázdný rozpočet — uživatel si zkopíruje z minula nebo přidá ručně.
-        budget = MonthlyBudgetModel(year_month=year_month)
+        budget = MonthlyBudgetModel(user_id=current_user.id, year_month=year_month)
         db.add(budget)
         await db.commit()
         await db.refresh(budget)
@@ -243,15 +257,14 @@ async def get_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)
 
 
 @router.put("/monthly-budget/{year_month}")
-async def update_monthly_budget(year_month: str, data: MonthlyBudgetUpdate, db: AsyncSession = Depends(get_db)):
-    """Aktualizovat měsíční rozpočet (investice, spořící, uzavření)."""
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
-
-    if not budget:
-        raise HTTPException(status_code=404, detail="Budget not found")
+async def update_monthly_budget(
+    year_month: str,
+    data: MonthlyBudgetUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aktualizovat měsíční rozpočet."""
+    budget = await _require_budget(db, current_user.id, year_month)
 
     if data.investment_amount is not None:
         budget.investment_amount = data.investment_amount
@@ -267,16 +280,15 @@ async def update_monthly_budget(year_month: str, data: MonthlyBudgetUpdate, db: 
 # === Income Items Endpoints ===
 
 @router.post("/monthly-budget/{year_month}/income-items", response_model=IncomeItemResponse)
-async def add_income_item(year_month: str, data: IncomeItemCreate, db: AsyncSession = Depends(get_db)):
-    """Přidat nový řádek příjmu (např. Bokovka, Dividendy)."""
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
-    if not budget:
-        raise HTTPException(status_code=404, detail="Budget not found")
+async def add_income_item(
+    year_month: str,
+    data: IncomeItemCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Přidat nový řádek příjmu."""
+    budget = await _require_budget(db, current_user.id, year_month)
 
-    # Pokud je tento řádek označený jako salary, zruš flag z ostatních — jediný salary row v měsíci.
     if data.is_salary:
         existing = await db.execute(
             select(MonthlyIncomeItemModel)
@@ -312,12 +324,31 @@ async def add_income_item(year_month: str, data: IncomeItemCreate, db: AsyncSess
     )
 
 
-@router.put("/monthly-income-items/{item_id}")
-async def update_income_item(item_id: int, data: IncomeItemUpdate, db: AsyncSession = Depends(get_db)):
-    """Přejmenovat / upravit částku řádku příjmu."""
-    item = await db.get(MonthlyIncomeItemModel, item_id)
+async def _get_user_income_item(db: AsyncSession, user_id: int, item_id: int) -> MonthlyIncomeItemModel:
+    """Look up an income item only if it belongs to a budget owned by the user."""
+    result = await db.execute(
+        select(MonthlyIncomeItemModel)
+        .join(MonthlyBudgetModel, MonthlyIncomeItemModel.budget_id == MonthlyBudgetModel.id)
+        .where(
+            MonthlyIncomeItemModel.id == item_id,
+            MonthlyBudgetModel.user_id == user_id,
+        )
+    )
+    item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Income item not found")
+    return item
+
+
+@router.put("/monthly-income-items/{item_id}")
+async def update_income_item(
+    item_id: int,
+    data: IncomeItemUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Přejmenovat / upravit částku řádku příjmu."""
+    item = await _get_user_income_item(db, current_user.id, item_id)
     if data.name is not None:
         name = data.name.strip()
         if not name:
@@ -330,83 +361,71 @@ async def update_income_item(item_id: int, data: IncomeItemUpdate, db: AsyncSess
 
 
 @router.delete("/monthly-income-items/{item_id}")
-async def delete_income_item(item_id: int, db: AsyncSession = Depends(get_db)):
-    """Smazat řádek příjmu. Výplata při sync-income vznikne, pokud už v daném měsíci neexistuje."""
-    item = await db.get(MonthlyIncomeItemModel, item_id)
-    if not item:
-        raise HTTPException(status_code=404, detail="Income item not found")
+async def delete_income_item(
+    item_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Smazat řádek příjmu."""
+    item = await _get_user_income_item(db, current_user.id, item_id)
     await db.delete(item)
     await db.commit()
     return {"status": "deleted"}
 
 
 @router.delete("/monthly-budget/{year_month}")
-async def delete_monthly_budget(year_month: str, db: AsyncSession = Depends(get_db)):
+async def delete_monthly_budget(
+    year_month: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Smazat měsíční rozpočet včetně všech výdajů"""
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
-    
-    if not budget:
-        raise HTTPException(status_code=404, detail="Budget not found")
-    
-    # Delete all monthly expenses for this budget
+    budget = await _require_budget(db, current_user.id, year_month)
+
     await db.execute(
         MonthlyExpenseModel.__table__.delete().where(MonthlyExpenseModel.budget_id == budget.id)
     )
-    
-    # Delete the budget itself
+
     await db.delete(budget)
     await db.commit()
-    
+
     return {"status": "deleted", "year_month": year_month}
 
 
 @router.post("/monthly-budget/{year_month}/copy-previous")
-async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(get_db)):
+async def copy_from_previous_month(
+    year_month: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Zkopírovat výdaje z předchozího měsíce"""
-    # Parse year_month to get previous month
     year, month = map(int, year_month.split("-"))
     if month == 1:
         prev_year, prev_month = year - 1, 12
     else:
         prev_year, prev_month = year, month - 1
     prev_year_month = f"{prev_year:04d}-{prev_month:02d}"
-    
-    # Get previous budget
-    prev_result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == prev_year_month)
-    )
-    prev_budget = prev_result.scalar_one_or_none()
-    
+
+    prev_budget = await _get_user_budget(db, current_user.id, prev_year_month)
     if not prev_budget:
         raise HTTPException(status_code=404, detail="Předchozí měsíc neexistuje")
-    
-    # Get or create current budget
-    curr_result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    curr_budget = curr_result.scalar_one_or_none()
-    
+
+    curr_budget = await _get_user_budget(db, current_user.id, year_month)
     if not curr_budget:
-        curr_budget = MonthlyBudgetModel(year_month=year_month)
+        curr_budget = MonthlyBudgetModel(user_id=current_user.id, year_month=year_month)
         db.add(curr_budget)
         await db.commit()
         await db.refresh(curr_budget)
-    
-    # Delete existing expenses for current month
+
     await db.execute(
         MonthlyExpenseModel.__table__.delete().where(MonthlyExpenseModel.budget_id == curr_budget.id)
     )
-    
-    # Get previous month expenses
+
     prev_expenses_result = await db.execute(
         select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == prev_budget.id).order_by(MonthlyExpenseModel.id)
     )
     prev_expenses = prev_expenses_result.scalars().all()
-    
-    # Copy expenses to current month
+
     copied_count = 0
     for exp in prev_expenses:
         new_expense = MonthlyExpenseModel(
@@ -417,13 +436,11 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
             my_percentage=exp.my_percentage or 100,
             my_amount_override=exp.my_amount_override,
             is_auto_paid=exp.is_auto_paid,
-            is_paid=False  # Reset paid status for new month
+            is_paid=False
         )
         db.add(new_expense)
         copied_count += 1
 
-    # Copy income item structure (names, is_salary), replacing anything existing.
-    # Částky se nekopírují — salary se stejně natahuje ze sync-income, ostatní zadává uživatel znovu.
     await db.execute(
         MonthlyIncomeItemModel.__table__.delete().where(MonthlyIncomeItemModel.budget_id == curr_budget.id)
     )
@@ -448,37 +465,33 @@ async def copy_from_previous_month(year_month: str, db: AsyncSession = Depends(g
 
 
 @router.post("/monthly-budget/{year_month}/match-transactions")
-async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)):
+async def match_transactions(
+    year_month: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Automaticky spárovat výdaje s transakcemi"""
-    # Get budget
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
-    
-    if not budget:
-        raise HTTPException(status_code=404, detail="Budget not found")
-    
-    # Get all expenses for this month
+    budget = await _require_budget(db, current_user.id, year_month)
+
     expenses_result = await db.execute(
         select(MonthlyExpenseModel).where(MonthlyExpenseModel.budget_id == budget.id).order_by(MonthlyExpenseModel.id)
     )
     expenses = expenses_result.scalars().all()
-    
-    # Get all recurring expenses with patterns (for matching by name)
+
     recurring_result = await db.execute(
-        select(RecurringExpenseModel).where(RecurringExpenseModel.match_pattern != None)
+        select(RecurringExpenseModel).where(
+            RecurringExpenseModel.user_id == current_user.id,
+            RecurringExpenseModel.match_pattern != None,
+        )
     )
     recurring_expenses = recurring_result.scalars().all()
-    
-    # Build pattern lookup by expense name
+
     pattern_by_name = {}
     for rec in recurring_expenses:
         pattern_by_name[rec.name.lower()] = rec.match_pattern.lower()
         if rec.id:
             pattern_by_name[f"id_{rec.id}"] = rec.match_pattern.lower()
-    
-    # Get transactions for this month
+
     start_date = f"{year_month}-01"
     if year_month.endswith("-12"):
         year = int(year_month[:4]) + 1
@@ -486,41 +499,39 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
     else:
         year, month = map(int, year_month.split("-"))
         end_date = f"{year:04d}-{month+1:02d}-01"
-    
+
     tx_result = await db.execute(
         select(TransactionModel)
+        .where(TransactionModel.user_id == current_user.id)
         .where(TransactionModel.date >= start_date)
         .where(TransactionModel.date < end_date)
-        .where(TransactionModel.amount < 0)  # Only expenses
+        .where(TransactionModel.amount < 0)
     )
     transactions = tx_result.scalars().all()
-    
-    # Build category lookup from recurring expenses
+
     category_by_name = {}
     for rec in recurring_expenses:
         if rec.category:
             category_by_name[rec.name.lower()] = rec.category
-    
-    # Track used transactions to avoid double-matching
+
     used_tx_ids = set()
-    
+
     matched_count = 0
     matched_by_amount = 0
     matched_by_category = 0
-    
+
     for expense in expenses:
         if expense.is_paid:
             continue
-        
+
         matched = False
-        
-        # === Strategy 1: Pattern matching ===
+
         pattern = None
         if expense.recurring_expense_id:
             pattern = pattern_by_name.get(f"id_{expense.recurring_expense_id}")
         if not pattern:
             pattern = pattern_by_name.get(expense.name.lower())
-        
+
         if pattern:
             for tx in transactions:
                 if tx.id in used_tx_ids:
@@ -532,14 +543,13 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
                     matched_count += 1
                     matched = True
                     break
-        
+
         if matched:
             continue
-        
-        # === Strategy 2: Exact amount match (within 5% tolerance) ===
+
         expense_amount = abs(expense.amount)
-        tolerance = expense_amount * 0.05  # 5% tolerance
-        
+        tolerance = expense_amount * 0.05
+
         for tx in transactions:
             if tx.id in used_tx_ids:
                 continue
@@ -551,14 +561,13 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
                 matched_by_amount += 1
                 matched = True
                 break
-        
+
         if matched:
             continue
-        
-        # === Strategy 3: Category + approximate amount (within 20%) ===
+
         expense_category = category_by_name.get(expense.name.lower())
         if expense_category:
-            tolerance_wide = expense_amount * 0.20  # 20% tolerance
+            tolerance_wide = expense_amount * 0.20
             for tx in transactions:
                 if tx.id in used_tx_ids:
                     continue
@@ -570,10 +579,10 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
                         used_tx_ids.add(tx.id)
                         matched_by_category += 1
                         break
-    
+
     await db.commit()
     return {
-        "status": "matched", 
+        "status": "matched",
         "matched_count": matched_count + matched_by_amount + matched_by_category,
         "details": {
             "by_pattern": matched_count,
@@ -584,37 +593,32 @@ async def match_transactions(year_month: str, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/monthly-budget/{year_month}/sync-income")
-async def sync_income_from_transactions(year_month: str, db: AsyncSession = Depends(get_db)):
+async def sync_income_from_transactions(
+    year_month: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Automaticky načíst výplatu z transakcí označených jako Salary"""
-    # Get or create budget
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
-    
+    budget = await _get_user_budget(db, current_user.id, year_month)
     if not budget:
-        budget = MonthlyBudgetModel(year_month=year_month)
+        budget = MonthlyBudgetModel(user_id=current_user.id, year_month=year_month)
         db.add(budget)
         await db.commit()
         await db.refresh(budget)
-    
+
     start_date = f"{year_month}-01"
+    salary_window_end = f"{year_month}-11"
 
-    # Výplata pravidelně přichází mezi 5.–8. dnem měsíce (posouvá se podle víkendů/svátků).
-    # Hledáme jen v prvních 10 dnech, aby se tatáž transakce nezapočítala do dvou měsíců.
-    salary_window_end = f"{year_month}-11"  # exclusive: do 10. včetně
-
-    # Find salary transactions in first 10 days of the month
     salary_result = await db.execute(
         select(func.sum(TransactionModel.amount))
+        .where(TransactionModel.user_id == current_user.id)
         .where(TransactionModel.date >= start_date)
         .where(TransactionModel.date < salary_window_end)
         .where(TransactionModel.category == "Salary")
-        .where(TransactionModel.amount > 0)  # Only positive (income)
+        .where(TransactionModel.amount > 0)
     )
     salary_total = salary_result.scalar() or 0
 
-    # Najdi salary řádek; pokud uživatel smazal, vytvoř znovu (default Výplata).
     existing_result = await db.execute(
         select(MonthlyIncomeItemModel)
         .where(MonthlyIncomeItemModel.budget_id == budget.id)
@@ -647,13 +651,18 @@ async def sync_income_from_transactions(year_month: str, db: AsyncSession = Depe
 # === Recurring Expenses Endpoints ===
 
 @router.get("/recurring-expenses", response_model=List[RecurringExpenseResponse])
-async def get_recurring_expenses(db: AsyncSession = Depends(get_db)):
+async def get_recurring_expenses(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Seznam pravidelných výdajů"""
     result = await db.execute(
-        select(RecurringExpenseModel).order_by(RecurringExpenseModel.order_index)
+        select(RecurringExpenseModel)
+        .where(RecurringExpenseModel.user_id == current_user.id)
+        .order_by(RecurringExpenseModel.order_index)
     )
     expenses = result.scalars().all()
-    
+
     return [RecurringExpenseResponse(
         id=e.id,
         name=e.name,
@@ -668,13 +677,20 @@ async def get_recurring_expenses(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/recurring-expenses", response_model=RecurringExpenseResponse)
-async def create_recurring_expense(data: RecurringExpenseCreate, db: AsyncSession = Depends(get_db)):
+async def create_recurring_expense(
+    data: RecurringExpenseCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Vytvořit nový pravidelný výdaj"""
-    # Get max order_index
-    result = await db.execute(select(func.max(RecurringExpenseModel.order_index)))
+    result = await db.execute(
+        select(func.max(RecurringExpenseModel.order_index))
+        .where(RecurringExpenseModel.user_id == current_user.id)
+    )
     max_index = result.scalar() or 0
-    
+
     expense = RecurringExpenseModel(
+        user_id=current_user.id,
         name=data.name,
         default_amount=data.default_amount,
         my_percentage=data.my_percentage,
@@ -686,7 +702,7 @@ async def create_recurring_expense(data: RecurringExpenseCreate, db: AsyncSessio
     db.add(expense)
     await db.commit()
     await db.refresh(expense)
-    
+
     return RecurringExpenseResponse(
         id=expense.id,
         name=expense.name,
@@ -700,17 +716,31 @@ async def create_recurring_expense(data: RecurringExpenseCreate, db: AsyncSessio
     )
 
 
-@router.put("/recurring-expenses/{expense_id}")
-async def update_recurring_expense(expense_id: int, data: RecurringExpenseUpdate, db: AsyncSession = Depends(get_db)):
-    """Upravit pravidelný výdaj"""
+async def _get_user_recurring_expense(
+    db: AsyncSession, user_id: int, expense_id: int
+) -> RecurringExpenseModel:
     result = await db.execute(
-        select(RecurringExpenseModel).where(RecurringExpenseModel.id == expense_id)
+        select(RecurringExpenseModel).where(
+            RecurringExpenseModel.id == expense_id,
+            RecurringExpenseModel.user_id == user_id,
+        )
     )
     expense = result.scalar_one_or_none()
-    
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
-    
+    return expense
+
+
+@router.put("/recurring-expenses/{expense_id}")
+async def update_recurring_expense(
+    expense_id: int,
+    data: RecurringExpenseUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upravit pravidelný výdaj"""
+    expense = await _get_user_recurring_expense(db, current_user.id, expense_id)
+
     if data.name is not None:
         expense.name = data.name
     if data.default_amount is not None:
@@ -727,22 +757,19 @@ async def update_recurring_expense(expense_id: int, data: RecurringExpenseUpdate
         expense.order_index = data.order_index
     if data.is_active is not None:
         expense.is_active = data.is_active
-    
+
     await db.commit()
     return {"status": "updated"}
 
 
 @router.delete("/recurring-expenses/{expense_id}")
-async def delete_recurring_expense(expense_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_recurring_expense(
+    expense_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Smazat pravidelný výdaj"""
-    result = await db.execute(
-        select(RecurringExpenseModel).where(RecurringExpenseModel.id == expense_id)
-    )
-    expense = result.scalar_one_or_none()
-    
-    if not expense:
-        raise HTTPException(status_code=404, detail="Expense not found")
-    
+    expense = await _get_user_recurring_expense(db, current_user.id, expense_id)
     await db.delete(expense)
     await db.commit()
     return {"status": "deleted"}
@@ -750,22 +777,38 @@ async def delete_recurring_expense(expense_id: int, db: AsyncSession = Depends(g
 
 # === Monthly Expense Endpoints ===
 
-@router.put("/monthly-expenses/{expense_id}")
-async def update_monthly_expense(expense_id: int, data: MonthlyExpenseUpdate, db: AsyncSession = Depends(get_db)):
-    """Upravit výdaj v měsíci"""
+async def _get_user_monthly_expense(
+    db: AsyncSession, user_id: int, expense_id: int
+) -> MonthlyExpenseModel:
     result = await db.execute(
-        select(MonthlyExpenseModel).where(MonthlyExpenseModel.id == expense_id)
+        select(MonthlyExpenseModel)
+        .join(MonthlyBudgetModel, MonthlyExpenseModel.budget_id == MonthlyBudgetModel.id)
+        .where(
+            MonthlyExpenseModel.id == expense_id,
+            MonthlyBudgetModel.user_id == user_id,
+        )
     )
     expense = result.scalar_one_or_none()
-    
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
-    
+    return expense
+
+
+@router.put("/monthly-expenses/{expense_id}")
+async def update_monthly_expense(
+    expense_id: int,
+    data: MonthlyExpenseUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upravit výdaj v měsíci"""
+    expense = await _get_user_monthly_expense(db, current_user.id, expense_id)
+
     if data.amount is not None:
         expense.amount = data.amount
     if data.my_percentage is not None:
         expense.my_percentage = data.my_percentage
-        expense.my_amount_override = None  # reset override when switching to % mode
+        expense.my_amount_override = None
     if data.my_amount_override is not None:
         expense.my_amount_override = data.my_amount_override if data.my_amount_override >= 0 else None
     if data.is_paid is not None:
@@ -778,16 +821,15 @@ async def update_monthly_expense(expense_id: int, data: MonthlyExpenseUpdate, db
 
 
 @router.post("/monthly-budget/{year_month}/expenses")
-async def add_monthly_expense(year_month: str, data: RecurringExpenseCreate, db: AsyncSession = Depends(get_db)):
+async def add_monthly_expense(
+    year_month: str,
+    data: RecurringExpenseCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Přidat jednorázový výdaj do měsíce"""
-    result = await db.execute(
-        select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-    )
-    budget = result.scalar_one_or_none()
-    
-    if not budget:
-        raise HTTPException(status_code=404, detail="Budget not found")
-    
+    budget = await _require_budget(db, current_user.id, year_month)
+
     expense = MonthlyExpenseModel(
         budget_id=budget.id,
         name=data.name,
@@ -798,21 +840,18 @@ async def add_monthly_expense(year_month: str, data: RecurringExpenseCreate, db:
     db.add(expense)
     await db.commit()
     await db.refresh(expense)
-    
+
     return {"status": "created", "id": expense.id}
 
 
 @router.delete("/monthly-expenses/{expense_id}")
-async def delete_monthly_expense(expense_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_monthly_expense(
+    expense_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Smazat výdaj z měsíce"""
-    result = await db.execute(
-        select(MonthlyExpenseModel).where(MonthlyExpenseModel.id == expense_id)
-    )
-    expense = result.scalar_one_or_none()
-    
-    if not expense:
-        raise HTTPException(status_code=404, detail="Expense not found")
-    
+    expense = await _get_user_monthly_expense(db, current_user.id, expense_id)
     await db.delete(expense)
     await db.commit()
     return {"status": "deleted"}
@@ -821,11 +860,16 @@ async def delete_monthly_expense(expense_id: int, db: AsyncSession = Depends(get
 # === Manual Account Endpoints ===
 
 @router.get("/", response_model=List[ManualAccountResponse])
-async def get_manual_accounts(db: AsyncSession = Depends(get_db)):
+async def get_manual_accounts(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Seznam manuálních účtů"""
-    result = await db.execute(select(ManualAccountModel))
+    result = await db.execute(
+        select(ManualAccountModel).where(ManualAccountModel.user_id == current_user.id)
+    )
     accounts = result.scalars().all()
-    
+
     responses = []
     for acc in accounts:
         items_result = await db.execute(
@@ -833,7 +877,7 @@ async def get_manual_accounts(db: AsyncSession = Depends(get_db)):
         )
         items = items_result.scalars().all()
         items_total = sum(i.amount for i in items)
-        
+
         responses.append(ManualAccountResponse(
             id=acc.id,
             name=acc.name,
@@ -848,14 +892,19 @@ async def get_manual_accounts(db: AsyncSession = Depends(get_db)):
             items_total=items_total,
             available_balance=acc.balance - items_total
         ))
-    
+
     return responses
 
 
 @router.post("/", response_model=ManualAccountResponse)
-async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = Depends(get_db)):
+async def create_manual_account(
+    data: ManualAccountCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Vytvořit manuální účet"""
     account = ManualAccountModel(
+        user_id=current_user.id,
         name=data.name,
         balance=data.balance,
         currency=data.currency
@@ -863,7 +912,7 @@ async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = De
     db.add(account)
     await db.commit()
     await db.refresh(account)
-    
+
     return ManualAccountResponse(
         id=account.id,
         name=account.name,
@@ -875,53 +924,63 @@ async def create_manual_account(data: ManualAccountCreate, db: AsyncSession = De
     )
 
 
-@router.put("/{account_id}")
-async def update_manual_account_budget(account_id: int, data: ManualAccountUpdate, db: AsyncSession = Depends(get_db)):
-    """Aktualizovat manuální účet"""
+async def _get_user_manual_account(
+    db: AsyncSession, user_id: int, account_id: int
+) -> ManualAccountModel:
     result = await db.execute(
-        select(ManualAccountModel).where(ManualAccountModel.id == account_id)
+        select(ManualAccountModel).where(
+            ManualAccountModel.id == account_id,
+            ManualAccountModel.user_id == user_id,
+        )
     )
     account = result.scalar_one_or_none()
-    
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    
+    return account
+
+
+@router.put("/{account_id}")
+async def update_manual_account_budget(
+    account_id: int,
+    data: ManualAccountUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Aktualizovat manuální účet"""
+    account = await _get_user_manual_account(db, current_user.id, account_id)
+
     if data.name is not None:
         account.name = data.name
     if data.balance is not None:
         account.balance = data.balance
-    
+
     await db.commit()
     return {"status": "updated"}
 
 
 @router.delete("/{account_id}")
-async def delete_manual_account(account_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_manual_account(
+    account_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Smazat manuální účet"""
-    result = await db.execute(
-        select(ManualAccountModel).where(ManualAccountModel.id == account_id)
-    )
-    account = result.scalar_one_or_none()
-    
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
-    
+    account = await _get_user_manual_account(db, current_user.id, account_id)
     await db.delete(account)
     await db.commit()
     return {"status": "deleted"}
 
 
 @router.post("/{account_id}/items")
-async def add_manual_account_item(account_id: int, data: ManualAccountItemCreate, db: AsyncSession = Depends(get_db)):
+async def add_manual_account_item(
+    account_id: int,
+    data: ManualAccountItemCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Přidat položku na manuální účet"""
-    result = await db.execute(
-        select(ManualAccountModel).where(ManualAccountModel.id == account_id)
-    )
-    account = result.scalar_one_or_none()
-    
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
-    
+    await _get_user_manual_account(db, current_user.id, account_id)
+
     item = ManualAccountItemModel(
         account_id=account_id,
         name=data.name,
@@ -931,46 +990,56 @@ async def add_manual_account_item(account_id: int, data: ManualAccountItemCreate
     db.add(item)
     await db.commit()
     await db.refresh(item)
-    
+
     return {"status": "created", "id": item.id}
 
 
-@router.put("/{account_id}/items/{item_id}")
-async def update_manual_account_item(account_id: int, item_id: int, data: ManualAccountItemCreate, db: AsyncSession = Depends(get_db)):
-    """Upravit položku na manuálním účtu"""
+async def _get_user_manual_item(
+    db: AsyncSession, user_id: int, account_id: int, item_id: int
+) -> ManualAccountItemModel:
     result = await db.execute(
-        select(ManualAccountItemModel).where(
+        select(ManualAccountItemModel)
+        .join(ManualAccountModel, ManualAccountItemModel.account_id == ManualAccountModel.id)
+        .where(
             ManualAccountItemModel.id == item_id,
-            ManualAccountItemModel.account_id == account_id
+            ManualAccountItemModel.account_id == account_id,
+            ManualAccountModel.user_id == user_id,
         )
     )
     item = result.scalar_one_or_none()
-    
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    
+    return item
+
+
+@router.put("/{account_id}/items/{item_id}")
+async def update_manual_account_item(
+    account_id: int,
+    item_id: int,
+    data: ManualAccountItemCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upravit položku na manuálním účtu"""
+    item = await _get_user_manual_item(db, current_user.id, account_id, item_id)
+
     item.name = data.name
     item.amount = data.amount
     item.note = data.note
-    
+
     await db.commit()
     return {"status": "updated"}
 
 
 @router.delete("/{account_id}/items/{item_id}")
-async def delete_manual_account_item(account_id: int, item_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_manual_account_item(
+    account_id: int,
+    item_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Smazat položku z manuálního účtu"""
-    result = await db.execute(
-        select(ManualAccountItemModel).where(
-            ManualAccountItemModel.id == item_id,
-            ManualAccountItemModel.account_id == account_id
-        )
-    )
-    item = result.scalar_one_or_none()
-    
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    
+    item = await _get_user_manual_item(db, current_user.id, account_id, item_id)
     await db.delete(item)
     await db.commit()
     return {"status": "deleted"}
@@ -978,8 +1047,7 @@ async def delete_manual_account_item(account_id: int, item_id: int, db: AsyncSes
 
 # === Annual Overview ===
 
-async def _compute_year_totals(year: int, db: AsyncSession):
-    """Spočítej roční součty pro daný rok (bez expense breakdown)."""
+async def _compute_year_totals(year: int, user_id: int, db: AsyncSession):
     total_income = 0
     total_expenses = 0
     total_investments = 0
@@ -987,10 +1055,7 @@ async def _compute_year_totals(year: int, db: AsyncSession):
 
     for month in range(1, 13):
         year_month = f"{year:04d}-{month:02d}"
-        result = await db.execute(
-            select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-        )
-        budget = result.scalar_one_or_none()
+        budget = await _get_user_budget(db, user_id, year_month)
         if not budget:
             continue
 
@@ -1020,7 +1085,11 @@ async def _compute_year_totals(year: int, db: AsyncSession):
 
 
 @router.get("/annual-overview/{year}")
-async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
+async def get_annual_overview(
+    year: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Roční přehled"""
     months_data = []
     total_income = 0
@@ -1031,10 +1100,7 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
     for month in range(1, 13):
         year_month = f"{year:04d}-{month:02d}"
 
-        result = await db.execute(
-            select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-        )
-        budget = result.scalar_one_or_none()
+        budget = await _get_user_budget(db, current_user.id, year_month)
 
         if budget:
             expenses_result = await db.execute(
@@ -1074,14 +1140,10 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
                 "remaining": 0
             })
 
-    # Get expense breakdown by category
     expense_breakdown = {}
     for month in range(1, 13):
         year_month = f"{year:04d}-{month:02d}"
-        result = await db.execute(
-            select(MonthlyBudgetModel).where(MonthlyBudgetModel.year_month == year_month)
-        )
-        budget = result.scalar_one_or_none()
+        budget = await _get_user_budget(db, current_user.id, year_month)
 
         if budget:
             expenses_result = await db.execute(
@@ -1094,7 +1156,7 @@ async def get_annual_overview(year: int, db: AsyncSession = Depends(get_db)):
                     expense_breakdown[exp.name] = 0
                 expense_breakdown[exp.name] += exp.amount
 
-    previous_year_totals = await _compute_year_totals(year - 1, db)
+    previous_year_totals = await _compute_year_totals(year - 1, current_user.id, db)
 
     return {
         "year": year,

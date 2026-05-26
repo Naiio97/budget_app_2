@@ -5,8 +5,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
+from auth import get_current_user
 from database import get_db
-from models import BudgetModel, SavingsGoalModel, TransactionModel
+from models import BudgetModel, SavingsGoalModel, TransactionModel, UserModel
 
 router = APIRouter()
 
@@ -31,7 +32,7 @@ class BudgetResponse(BaseModel):
     amount: float
     currency: str
     is_active: bool
-    spent: float = 0.0  # Calculated from transactions
+    spent: float = 0.0
     percentage: float = 0.0
 
 
@@ -46,7 +47,7 @@ class GoalUpdate(BaseModel):
     name: Optional[str] = None
     target_amount: Optional[float] = None
     current_amount: Optional[float] = None
-    add_amount: Optional[float] = None  # Add to current amount
+    add_amount: Optional[float] = None
     deadline: Optional[str] = None
     is_completed: Optional[bool] = None
 
@@ -62,13 +63,10 @@ class GoalResponse(BaseModel):
     percentage: float = 0.0
 
 
-# === Helper Functions ===
-
 def get_current_month_range():
     """Get start and end date of current month in YYYY-MM-DD format"""
     now = datetime.utcnow()
     start = now.replace(day=1).strftime("%Y-%m-%d")
-    # Get last day of month
     if now.month == 12:
         end = now.replace(year=now.year + 1, month=1, day=1)
     else:
@@ -77,36 +75,43 @@ def get_current_month_range():
     return start, end
 
 
-async def get_category_spending(db: AsyncSession, category: str) -> float:
-    """Get total spending for a category in current month"""
+async def get_category_spending(db: AsyncSession, user_id: int, category: str) -> float:
+    """Get total spending for a category in current month (user-scoped)"""
     start, end = get_current_month_range()
-    
+
     result = await db.execute(
         select(func.sum(TransactionModel.amount))
+        .where(TransactionModel.user_id == user_id)
         .where(TransactionModel.category == category)
         .where(TransactionModel.date >= start)
         .where(TransactionModel.date < end)
-        .where(TransactionModel.amount < 0)  # Only expenses
+        .where(TransactionModel.amount < 0)
     )
     total = result.scalar() or 0
-    return abs(total)  # Return positive number
+    return abs(total)
 
 
 # === Budget Endpoints ===
 
 @router.get("/", response_model=List[BudgetResponse])
-async def get_budgets(db: AsyncSession = Depends(get_db)):
+async def get_budgets(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get all budgets with current spending"""
     result = await db.execute(
-        select(BudgetModel).where(BudgetModel.is_active == True)
+        select(BudgetModel).where(
+            BudgetModel.user_id == current_user.id,
+            BudgetModel.is_active == True,
+        )
     )
     budgets = result.scalars().all()
-    
+
     response = []
     for budget in budgets:
-        spent = await get_category_spending(db, budget.category)
+        spent = await get_category_spending(db, current_user.id, budget.category)
         percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
-        
+
         response.append(BudgetResponse(
             id=budget.id,
             category=budget.category,
@@ -116,21 +121,28 @@ async def get_budgets(db: AsyncSession = Depends(get_db)):
             spent=spent,
             percentage=round(percentage, 1)
         ))
-    
+
     return response
 
 
 @router.post("/", response_model=BudgetResponse)
-async def create_budget(budget: BudgetCreate, db: AsyncSession = Depends(get_db)):
+async def create_budget(
+    budget: BudgetCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new budget"""
-    # Check if budget for this category already exists
     existing = await db.execute(
-        select(BudgetModel).where(BudgetModel.category == budget.category)
+        select(BudgetModel).where(
+            BudgetModel.user_id == current_user.id,
+            BudgetModel.category == budget.category,
+        )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail=f"Budget for category '{budget.category}' already exists")
-    
+
     new_budget = BudgetModel(
+        user_id=current_user.id,
         category=budget.category,
         amount=budget.amount,
         currency=budget.currency
@@ -138,10 +150,10 @@ async def create_budget(budget: BudgetCreate, db: AsyncSession = Depends(get_db)
     db.add(new_budget)
     await db.commit()
     await db.refresh(new_budget)
-    
-    spent = await get_category_spending(db, new_budget.category)
+
+    spent = await get_category_spending(db, current_user.id, new_budget.category)
     percentage = (spent / new_budget.amount * 100) if new_budget.amount > 0 else 0
-    
+
     return BudgetResponse(
         id=new_budget.id,
         category=new_budget.category,
@@ -153,26 +165,42 @@ async def create_budget(budget: BudgetCreate, db: AsyncSession = Depends(get_db)
     )
 
 
-@router.put("/{budget_id}", response_model=BudgetResponse)
-async def update_budget(budget_id: int, budget: BudgetUpdate, db: AsyncSession = Depends(get_db)):
-    """Update a budget"""
-    db_budget = await db.get(BudgetModel, budget_id)
+async def _get_user_budget(db: AsyncSession, budget_id: int, user_id: int) -> BudgetModel:
+    result = await db.execute(
+        select(BudgetModel).where(
+            BudgetModel.id == budget_id,
+            BudgetModel.user_id == user_id,
+        )
+    )
+    db_budget = result.scalar_one_or_none()
     if not db_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-    
+    return db_budget
+
+
+@router.put("/{budget_id}", response_model=BudgetResponse)
+async def update_budget(
+    budget_id: int,
+    budget: BudgetUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a budget"""
+    db_budget = await _get_user_budget(db, budget_id, current_user.id)
+
     if budget.category is not None:
         db_budget.category = budget.category
     if budget.amount is not None:
         db_budget.amount = budget.amount
     if budget.is_active is not None:
         db_budget.is_active = budget.is_active
-    
+
     await db.commit()
     await db.refresh(db_budget)
-    
-    spent = await get_category_spending(db, db_budget.category)
+
+    spent = await get_category_spending(db, current_user.id, db_budget.category)
     percentage = (spent / db_budget.amount * 100) if db_budget.amount > 0 else 0
-    
+
     return BudgetResponse(
         id=db_budget.id,
         category=db_budget.category,
@@ -185,56 +213,61 @@ async def update_budget(budget_id: int, budget: BudgetUpdate, db: AsyncSession =
 
 
 @router.delete("/{budget_id}")
-async def delete_budget(budget_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_budget(
+    budget_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a budget"""
-    db_budget = await db.get(BudgetModel, budget_id)
-    if not db_budget:
-        raise HTTPException(status_code=404, detail="Budget not found")
-    
+    db_budget = await _get_user_budget(db, budget_id, current_user.id)
     await db.delete(db_budget)
     await db.commit()
-    
     return {"status": "deleted", "id": budget_id}
 
 
 @router.get("/overview")
-async def get_budget_overview(db: AsyncSession = Depends(get_db)):
+async def get_budget_overview(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get budget overview for current month (for dashboard widget)"""
     result = await db.execute(
-        select(BudgetModel).where(BudgetModel.is_active == True)
+        select(BudgetModel).where(
+            BudgetModel.user_id == current_user.id,
+            BudgetModel.is_active == True,
+        )
     )
     budgets = result.scalars().all()
-    
+
     total_budget = 0
     total_spent = 0
     categories = []
-    
+
     for budget in budgets:
-        spent = await get_category_spending(db, budget.category)
+        spent = await get_category_spending(db, current_user.id, budget.category)
         percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
-        
+
         total_budget += budget.amount
         total_spent += spent
-        
+
         categories.append({
             "category": budget.category,
             "amount": budget.amount,
             "spent": spent,
             "percentage": round(percentage, 1)
         })
-    
-    # Sort by percentage (highest first)
+
     categories.sort(key=lambda x: x["percentage"], reverse=True)
-    
+
     now = datetime.utcnow()
-    
+
     return {
         "month": now.strftime("%Y-%m"),
         "month_name": now.strftime("%B %Y"),
         "total_budget": total_budget,
         "total_spent": total_spent,
         "total_percentage": round((total_spent / total_budget * 100) if total_budget > 0 else 0, 1),
-        "categories": categories[:5],  # Top 5 for widget
+        "categories": categories[:5],
         "categories_count": len(categories)
     }
 
@@ -242,13 +275,18 @@ async def get_budget_overview(db: AsyncSession = Depends(get_db)):
 # === Savings Goals Endpoints ===
 
 @router.get("/goals", response_model=List[GoalResponse])
-async def get_goals(db: AsyncSession = Depends(get_db)):
+async def get_goals(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get all savings goals"""
     result = await db.execute(
-        select(SavingsGoalModel).order_by(SavingsGoalModel.is_completed, SavingsGoalModel.created_at.desc())
+        select(SavingsGoalModel)
+        .where(SavingsGoalModel.user_id == current_user.id)
+        .order_by(SavingsGoalModel.is_completed, SavingsGoalModel.created_at.desc())
     )
     goals = result.scalars().all()
-    
+
     return [
         GoalResponse(
             id=goal.id,
@@ -265,9 +303,14 @@ async def get_goals(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/goals", response_model=GoalResponse)
-async def create_goal(goal: GoalCreate, db: AsyncSession = Depends(get_db)):
+async def create_goal(
+    goal: GoalCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new savings goal"""
     new_goal = SavingsGoalModel(
+        user_id=current_user.id,
         name=goal.name,
         target_amount=goal.target_amount,
         currency=goal.currency,
@@ -276,7 +319,7 @@ async def create_goal(goal: GoalCreate, db: AsyncSession = Depends(get_db)):
     db.add(new_goal)
     await db.commit()
     await db.refresh(new_goal)
-    
+
     return GoalResponse(
         id=new_goal.id,
         name=new_goal.name,
@@ -289,13 +332,29 @@ async def create_goal(goal: GoalCreate, db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.put("/goals/{goal_id}", response_model=GoalResponse)
-async def update_goal(goal_id: int, goal: GoalUpdate, db: AsyncSession = Depends(get_db)):
-    """Update a savings goal"""
-    db_goal = await db.get(SavingsGoalModel, goal_id)
+async def _get_user_goal(db: AsyncSession, goal_id: int, user_id: int) -> SavingsGoalModel:
+    result = await db.execute(
+        select(SavingsGoalModel).where(
+            SavingsGoalModel.id == goal_id,
+            SavingsGoalModel.user_id == user_id,
+        )
+    )
+    db_goal = result.scalar_one_or_none()
     if not db_goal:
         raise HTTPException(status_code=404, detail="Goal not found")
-    
+    return db_goal
+
+
+@router.put("/goals/{goal_id}", response_model=GoalResponse)
+async def update_goal(
+    goal_id: int,
+    goal: GoalUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a savings goal"""
+    db_goal = await _get_user_goal(db, goal_id, current_user.id)
+
     if goal.name is not None:
         db_goal.name = goal.name
     if goal.target_amount is not None:
@@ -308,14 +367,13 @@ async def update_goal(goal_id: int, goal: GoalUpdate, db: AsyncSession = Depends
         db_goal.deadline = goal.deadline
     if goal.is_completed is not None:
         db_goal.is_completed = goal.is_completed
-    
-    # Auto-complete if target reached
+
     if db_goal.current_amount >= db_goal.target_amount:
         db_goal.is_completed = True
-    
+
     await db.commit()
     await db.refresh(db_goal)
-    
+
     return GoalResponse(
         id=db_goal.id,
         name=db_goal.name,
@@ -329,13 +387,13 @@ async def update_goal(goal_id: int, goal: GoalUpdate, db: AsyncSession = Depends
 
 
 @router.delete("/goals/{goal_id}")
-async def delete_goal(goal_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_goal(
+    goal_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a savings goal"""
-    db_goal = await db.get(SavingsGoalModel, goal_id)
-    if not db_goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
-    
+    db_goal = await _get_user_goal(db, goal_id, current_user.id)
     await db.delete(db_goal)
     await db.commit()
-    
     return {"status": "deleted", "id": goal_id}

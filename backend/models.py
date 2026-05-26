@@ -82,13 +82,12 @@ class SyncStatusModel(Base):
 
 
 class SettingsModel(Base):
-    """Application settings (API keys, preferences). user_id added for future
-    multi-tenancy; PK stays on `key` for now — composite PK swap deferred to the
-    auth-enforcement PR so existing `db.get(SettingsModel, key)` calls keep working."""
+    """Per-user application settings. Composite PK (user_id, key) — each user
+    has their own setting namespace."""
     __tablename__ = "settings"
 
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     key = Column(String, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     value = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -135,18 +134,22 @@ class CategoryRuleModel(Base):
 
 
 class CategoryModel(Base):
-    """User-defined transaction categories"""
+    """User-defined transaction categories. Name is unique per user."""
     __tablename__ = "categories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    name = Column(String, nullable=False, unique=True)  # "Food", "Transport", etc.
+    name = Column(String, nullable=False)  # "Food", "Transport", etc.
     icon = Column(String, default="📦")  # Emoji icon
     color = Column(String, default="#6366f1")  # Hex color for charts
     order_index = Column(Integer, default=0)  # Display order
     is_income = Column(Boolean, default=False)  # True for income categories like Salary
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_categories_user_name"),
+    )
 
 
 # === Monthly Budget Tracker Models ===
@@ -161,7 +164,7 @@ class MonthlyBudgetModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    year_month = Column(String, nullable=False, unique=True)  # "2025-01"
+    year_month = Column(String, nullable=False)  # "2025-01"
 
     # Investice (manuální částka tento měsíc)
     investment_amount = Column(Float, default=0.0)
@@ -171,6 +174,10 @@ class MonthlyBudgetModel(Base):
 
     is_closed = Column(Boolean, default=False)  # Měsíc uzavřen
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "year_month", name="uq_monthly_budgets_user_year_month"),
+    )
 
     # Relationships
     expenses = relationship("MonthlyExpenseModel", back_populates="budget", cascade="all, delete-orphan")
@@ -267,19 +274,17 @@ class ManualAccountItemModel(Base):
 
 
 class ContactModel(Base):
-    """Address book entry mapping IBAN/account to counterparty name.
+    """Address book entry mapping IBAN/account to counterparty name. Scoped per
+    user — same IBAN can appear in multiple users' address books with different
+    names. Composite PK (user_id, iban).
 
     Fills in display names for transactions where the bank doesn't provide
     creditorName/debtorName (typical for standing orders, utility bills).
-
-    user_id added for future multi-tenancy; PK stays on `iban` for now —
-    composite PK swap deferred to the auth-enforcement PR so existing
-    `db.get(ContactModel, iban)` calls keep working.
     """
     __tablename__ = "contacts"
 
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     iban = Column(String, primary_key=True)  # Normalized (uppercase, no spaces)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)
     source = Column(String, default="manual")  # "auto" (learned from bank data) | "manual" (user-entered)
     note = Column(String, nullable=True)
@@ -288,12 +293,13 @@ class ContactModel(Base):
 
 
 class PortfolioSnapshotModel(Base):
-    """Daily snapshot of Trading 212 portfolio value — used for real history chart"""
+    """Daily snapshot of Trading 212 portfolio value — used for real history chart.
+    One snapshot per (user, date)."""
     __tablename__ = "portfolio_snapshots"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    snapshot_date = Column(String, nullable=False, unique=True)  # YYYY-MM-DD, one per day (upsert)
+    snapshot_date = Column(String, nullable=False)  # YYYY-MM-DD, one per day (upsert)
     total_value_czk = Column(Float, nullable=False)
     invested_czk = Column(Float, nullable=True)   # cash.invested * rate
     result_czk = Column(Float, nullable=True)      # cash.result * rate (unrealized P&L)
@@ -302,6 +308,10 @@ class PortfolioSnapshotModel(Base):
     exchange_rate = Column(Float, nullable=True)
     positions_count = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "snapshot_date", name="uq_portfolio_snapshots_user_date"),
+    )
 
 
 class ManualInvestmentAccountModel(Base):

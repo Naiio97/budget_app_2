@@ -4,8 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional
+
+from auth import get_current_user
 from database import get_db
-from models import CategoryModel
+from models import CategoryModel, UserModel
 
 router = APIRouter(prefix="", tags=["categories"])
 
@@ -36,7 +38,6 @@ class CategoryResponse(BaseModel):
     is_active: bool
 
 
-# Default categories to seed
 DEFAULT_CATEGORIES = [
     {"name": "Food", "icon": "🍔", "color": "#ef4444", "is_income": False},
     {"name": "Transport", "icon": "🚗", "color": "#f97316", "is_income": False},
@@ -51,18 +52,38 @@ DEFAULT_CATEGORIES = [
 ]
 
 
-@router.get("/", response_model=List[CategoryResponse])
-async def get_categories(db: AsyncSession = Depends(get_db)):
-    """Get all categories, seeding defaults if none exist"""
+async def _get_user_category(
+    db: AsyncSession, user_id: int, category_id: int
+) -> CategoryModel:
     result = await db.execute(
-        select(CategoryModel).order_by(CategoryModel.order_index, CategoryModel.name)
+        select(CategoryModel).where(
+            CategoryModel.id == category_id,
+            CategoryModel.user_id == user_id,
+        )
+    )
+    category = result.scalar_one_or_none()
+    if not category:
+        raise HTTPException(status_code=404, detail="Kategorie nenalezena")
+    return category
+
+
+@router.get("/", response_model=List[CategoryResponse])
+async def get_categories(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get all categories for the user, seeding defaults on first call"""
+    result = await db.execute(
+        select(CategoryModel)
+        .where(CategoryModel.user_id == current_user.id)
+        .order_by(CategoryModel.order_index, CategoryModel.name)
     )
     categories = result.scalars().all()
-    
-    # Seed default categories if none exist
+
     if not categories:
         for idx, cat in enumerate(DEFAULT_CATEGORIES):
             new_cat = CategoryModel(
+                user_id=current_user.id,
                 name=cat["name"],
                 icon=cat["icon"],
                 color=cat["color"],
@@ -71,32 +92,41 @@ async def get_categories(db: AsyncSession = Depends(get_db)):
             )
             db.add(new_cat)
         await db.commit()
-        
-        # Fetch again
+
         result = await db.execute(
-            select(CategoryModel).order_by(CategoryModel.order_index, CategoryModel.name)
+            select(CategoryModel)
+            .where(CategoryModel.user_id == current_user.id)
+            .order_by(CategoryModel.order_index, CategoryModel.name)
         )
         categories = result.scalars().all()
-    
+
     return categories
 
 
 @router.post("/", response_model=CategoryResponse)
-async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_db)):
+async def create_category(
+    data: CategoryCreate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new category"""
-    # Check if name already exists
     existing = await db.execute(
-        select(CategoryModel).where(CategoryModel.name == data.name)
+        select(CategoryModel).where(
+            CategoryModel.user_id == current_user.id,
+            CategoryModel.name == data.name,
+        )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Kategorie s tímto názvem již existuje")
-    
-    # Get max order_index
-    result = await db.execute(select(CategoryModel))
+
+    result = await db.execute(
+        select(CategoryModel).where(CategoryModel.user_id == current_user.id)
+    )
     all_cats = result.scalars().all()
     max_order = max((c.order_index for c in all_cats), default=-1) + 1
-    
+
     category = CategoryModel(
+        user_id=current_user.id,
         name=data.name,
         icon=data.icon,
         color=data.color,
@@ -110,26 +140,27 @@ async def create_category(data: CategoryCreate, db: AsyncSession = Depends(get_d
 
 
 @router.put("/{category_id}", response_model=CategoryResponse)
-async def update_category(category_id: int, data: CategoryUpdate, db: AsyncSession = Depends(get_db)):
+async def update_category(
+    category_id: int,
+    data: CategoryUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Update a category"""
-    result = await db.execute(
-        select(CategoryModel).where(CategoryModel.id == category_id)
-    )
-    category = result.scalar_one_or_none()
-    
-    if not category:
-        raise HTTPException(status_code=404, detail="Kategorie nenalezena")
-    
+    category = await _get_user_category(db, current_user.id, category_id)
+
     if data.name is not None:
-        # Check if new name conflicts with existing
         if data.name != category.name:
             existing = await db.execute(
-                select(CategoryModel).where(CategoryModel.name == data.name)
+                select(CategoryModel).where(
+                    CategoryModel.user_id == current_user.id,
+                    CategoryModel.name == data.name,
+                )
             )
             if existing.scalar_one_or_none():
                 raise HTTPException(status_code=400, detail="Kategorie s tímto názvem již existuje")
         category.name = data.name
-    
+
     if data.icon is not None:
         category.icon = data.icon
     if data.color is not None:
@@ -140,40 +171,43 @@ async def update_category(category_id: int, data: CategoryUpdate, db: AsyncSessi
         category.order_index = data.order_index
     if data.is_active is not None:
         category.is_active = data.is_active
-    
+
     await db.commit()
     await db.refresh(category)
     return category
 
 
 @router.delete("/{category_id}")
-async def delete_category(category_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_category(
+    category_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a category (or deactivate if in use)"""
-    result = await db.execute(
-        select(CategoryModel).where(CategoryModel.id == category_id)
-    )
-    category = result.scalar_one_or_none()
-    
-    if not category:
-        raise HTTPException(status_code=404, detail="Kategorie nenalezena")
-    
-    # Instead of hard delete, just deactivate
+    category = await _get_user_category(db, current_user.id, category_id)
     category.is_active = False
     await db.commit()
-    
+
     return {"status": "deleted", "id": category_id}
 
 
 @router.post("/reorder")
-async def reorder_categories(order: List[int], db: AsyncSession = Depends(get_db)):
+async def reorder_categories(
+    order: List[int],
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Reorder categories by providing list of category IDs in desired order"""
     for idx, cat_id in enumerate(order):
         result = await db.execute(
-            select(CategoryModel).where(CategoryModel.id == cat_id)
+            select(CategoryModel).where(
+                CategoryModel.id == cat_id,
+                CategoryModel.user_id == current_user.id,
+            )
         )
         category = result.scalar_one_or_none()
         if category:
             category.order_index = idx
-    
+
     await db.commit()
     return {"status": "reordered"}
