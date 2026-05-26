@@ -139,3 +139,94 @@
     color: var(--text-3);
     line-height: 1.5;
 }
+
+.login-mode-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    background: var(--surface-sunken);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 18px;
+}
+
+.login-mode-switch button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.login-mode-switch button:hover:not(:disabled):not(.active) {
+    color: var(--text);
+}
+
+.login-mode-switch button.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.login-mode-switch button:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.login-input {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 12px;
+    border: 0.5px solid var(--border);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font-size: 14px;
+    padding: 0 14px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.login-input:focus {
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    background: var(--surface);
+}
+
+.login-input:disabled {
+    opacity: 0.6;
+}
+
+.login-error {
+    margin-top: 2px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--neg) 12%, transparent);
+    color: var(--neg);
+    font-size: 12.5px;
+    text-align: left;
+}
+
+.login-btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    margin-top: 4px;
+}
+
+.login-btn-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, #000 8%, var(--accent));
+    border-color: color-mix(in srgb, #000 8%, var(--accent));
+}
