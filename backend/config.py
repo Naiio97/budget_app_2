@@ -22,13 +22,23 @@ class Settings(BaseSettings):
     # Empty string means /auth/* endpoints will reject — set in .env before enabling auth.
     auth_secret: str = ""
     auth_jwt_ttl_hours: int = 24
-    # Comma-separated in .env, e.g. AUTH_ALLOWED_OAUTH_PROVIDERS=google,apple
-    auth_allowed_oauth_providers: list[str] = ["google", "apple"]
+    # Stored as a comma-separated string in .env (e.g. "google,apple") so
+    # pydantic-settings doesn't try to JSON-decode it. Use the
+    # `auth_allowed_oauth_providers` property below for a real list.
+    auth_allowed_oauth_providers_raw: str = Field(
+        default="google,apple",
+        alias="auth_allowed_oauth_providers",
+    )
+
+    @property
+    def auth_allowed_oauth_providers(self) -> list[str]:
+        return [p.strip() for p in self.auth_allowed_oauth_providers_raw.split(",") if p.strip()]
 
     # Konfigurace Pydanticu
     model_config = SettingsConfigDict(
         env_file=".env",
-        extra="ignore"  # Klíčové: ignoruje věci v .env, které tu nejsou definované
+        extra="ignore",  # Klíčové: ignoruje věci v .env, které tu nejsou definované
+        populate_by_name=True,  # let the alias and field name both work
     )
 @lru_cache()
 def get_settings() -> Settings:
