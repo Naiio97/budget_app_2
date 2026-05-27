@@ -16,6 +16,24 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 // import Apple from "next-auth/providers/apple";
 
+// Module augmentation — Auth.js v5 strips custom fields off User/JWT/Session
+// unless they're declared here. Without this, `backendToken` returned from
+// authorize() silently never reaches the jwt callback.
+declare module "next-auth" {
+    interface Session {
+        backendToken?: string;
+    }
+    interface User {
+        backendToken?: string;
+    }
+}
+declare module "next-auth/jwt" {
+    interface JWT {
+        backendToken?: string;
+        backendUser?: unknown;
+    }
+}
+
 const BACKEND_URL =
     process.env.NEXT_PUBLIC_API_URL ||
     process.env.BACKEND_URL ||
@@ -67,15 +85,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     callbacks: {
         async jwt({ token, account, profile, user }) {
-            // Credentials flow: authorize() already minted backendToken on the user.
-            if (account?.provider === "credentials" && user) {
-                const maybeToken = (user as { backendToken?: string }).backendToken;
-                if (maybeToken) token.backendToken = maybeToken;
-                return token;
+            // Credentials flow: authorize() stashed the backend JWT on `user`.
+            // Both providers reach this branch via `user` on initial sign-in.
+            if (user?.backendToken) {
+                token.backendToken = user.backendToken;
             }
-            // OAuth flow: exchange the provider identity for our backend JWT.
-            // `account` is only populated on the initial sign-in callback.
-            if (account && profile) {
+
+            // OAuth flow: we don't get a backend JWT from the provider — exchange
+            // the OIDC identity at /auth/oauth-upsert. `account` is only set on
+            // the initial sign-in callback.
+            if (account && profile && !token.backendToken) {
                 try {
                     const res = await fetch(`${BACKEND_URL}/auth/oauth-upsert`, {
                         method: "POST",
@@ -110,7 +129,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
         async session({ session, token }) {
             if (token.backendToken) {
-                (session as { backendToken?: string }).backendToken = token.backendToken as string;
+                session.backendToken = token.backendToken;
             }
             return session;
         },

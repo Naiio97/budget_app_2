@@ -307,8 +307,8 @@ export default function RozpocetPage() {
     };
 
     const prevMonthIncome = selectedMonth === 1
-        ? prevYearData?.months.find(m => m.month === 12)?.income ?? 0
-        : annualData?.months.find(m => m.month === selectedMonth - 1)?.income ?? 0;
+        ? prevYearData?.months?.find(m => m.month === 12)?.income ?? 0
+        : annualData?.months?.find(m => m.month === selectedMonth - 1)?.income ?? 0;
     const incomeDelta = totalIncome - prevMonthIncome;
 
     // ── tabs ─────────────────────────────────────────────────────

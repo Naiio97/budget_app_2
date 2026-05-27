@@ -29,7 +29,7 @@ async function getBackendToken(): Promise<string | null> {
     if (cachedToken && tokenExpiresAt > now) return cachedToken;
     try {
         const session = await getSession();
-        cachedToken = (session as { backendToken?: string } | null)?.backendToken ?? null;
+        cachedToken = session?.backendToken ?? null;
     } catch {
         cachedToken = null;
     }

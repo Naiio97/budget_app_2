@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { enterDemo } from "@/lib/demo-mode";
+import { clearBackendTokenCache } from "@/lib/api";
 import "./login.css";
 
 type Mode = "login" | "register";
@@ -86,6 +87,10 @@ export default function LoginPage() {
                 setPending(null);
                 return;
             }
+            // Force the next /api/auth/session read to include our brand-new
+            // backendToken — without this the cached null sticks for 10s and
+            // every API call in that window comes back 401.
+            clearBackendTokenCache();
             router.push(from);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Něco se pokazilo.");
