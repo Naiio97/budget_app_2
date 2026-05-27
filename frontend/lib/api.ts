@@ -55,8 +55,15 @@ async function apiFetch(path: string, init: RequestInit = {}): Promise<Response>
         cache: init.cache ?? "no-store",
     });
     if (res.status === 401 && typeof window !== "undefined") {
-        const from = window.location.pathname + window.location.search;
-        window.location.href = `/login?from=${encodeURIComponent(from)}`;
+        // Skip the redirect when we're already on /login — global providers
+        // (AccountsProvider's getDashboard query) keep firing here while the
+        // user is signed out, and bouncing /login → /login?from=<encoded URL>
+        // recursively nests the URL until the address bar explodes.
+        // Use just pathname (no search) so we never encode the previous from.
+        const { pathname } = window.location;
+        if (!pathname.startsWith("/login")) {
+            window.location.href = `/login?from=${encodeURIComponent(pathname)}`;
+        }
     }
     return res;
 }
