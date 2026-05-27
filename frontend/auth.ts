@@ -54,25 +54,39 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 password: { label: "Heslo", type: "password" },
             },
             async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) return null;
-                const res = await fetch(`${BACKEND_URL}/auth/login`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        email: credentials.email,
-                        password: credentials.password,
-                    }),
-                });
-                if (!res.ok) return null;
-                const data = await res.json();
-                // Stash backendToken on the user — picked up by jwt callback below.
-                return {
-                    id: String(data.user.id),
-                    email: data.user.email,
-                    name: data.user.name,
-                    image: data.user.image_url,
-                    backendToken: data.access_token,
-                } as unknown as { id: string; email: string };
+                if (!credentials?.email || !credentials?.password) {
+                    console.error("[auth] credentials missing email or password");
+                    return null;
+                }
+                try {
+                    const res = await fetch(`${BACKEND_URL}/auth/login`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            email: credentials.email,
+                            password: credentials.password,
+                        }),
+                    });
+                    if (!res.ok) {
+                        // Surface the real reason in the Next dev console so a
+                        // CredentialsSignin error in the browser isn't a black box
+                        // (most common: 429 rate limit, 401 wrong password).
+                        const body = await res.text().catch(() => "");
+                        console.error(`[auth] POST /auth/login -> ${res.status}: ${body}`);
+                        return null;
+                    }
+                    const data = await res.json();
+                    return {
+                        id: String(data.user.id),
+                        email: data.user.email,
+                        name: data.user.name,
+                        image: data.user.image_url,
+                        backendToken: data.access_token,
+                    };
+                } catch (err) {
+                    console.error("[auth] POST /auth/login threw:", err);
+                    return null;
+                }
             },
         }),
     ],

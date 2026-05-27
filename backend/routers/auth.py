@@ -133,7 +133,7 @@ async def oauth_upsert(
 
 
 @router.post("/register", response_model=TokenResponse)
-@limiter.limit("3/hour")
+@limiter.limit("20/hour")
 async def register(
     request: Request,
     body: RegisterRequest,
@@ -194,7 +194,7 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def login(
     request: Request,
     body: LoginRequest,
