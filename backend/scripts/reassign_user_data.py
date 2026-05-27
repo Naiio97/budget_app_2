@@ -58,6 +58,16 @@ CONFLICTING_TABLES: dict[str, list[str]] = {
     "contacts": ["iban"],  # composite PK is (user_id, iban)
 }
 
+# Child tables whose FK doesn't have ON DELETE CASCADE in the DB schema —
+# must be cleaned manually before deleting their parent during conflict
+# resolution. Format: parent_table -> [(child_table, fk_column)]
+CHILD_TABLES: dict[str, list[tuple[str, str]]] = {
+    "monthly_budgets": [
+        ("monthly_income_items", "budget_id"),
+        ("monthly_expenses", "budget_id"),
+    ],
+}
+
 # Composite-PK tables that aren't in OWNED_TABLES_SIMPLE.
 EXTRA_OWNED: list[str] = ["settings", "contacts", "categories"]
 
@@ -82,6 +92,23 @@ async def main(src: int, dst: int) -> None:
         # 1) Drop target rows that would violate per-user uniques after the move.
         for table, cols in CONFLICTING_TABLES.items():
             col_list = ", ".join(cols)
+            # If this parent has children without ON DELETE CASCADE, delete the
+            # children first (limited to children of the rows we're about to drop).
+            for child_table, fk_col in CHILD_TABLES.get(table, []):
+                child_sql = text(f"""
+                    DELETE FROM {child_table}
+                    WHERE {fk_col} IN (
+                      SELECT id FROM {table}
+                      WHERE user_id = :dst
+                        AND ({col_list}) IN (
+                          SELECT {col_list} FROM {table} WHERE user_id = :src
+                        )
+                    )
+                """)
+                child_res = await conn.execute(child_sql, {"src": src, "dst": dst})
+                if child_res.rowcount:
+                    print(f"  cleared {child_res.rowcount} child rows from {child_table}")
+
             # Delete target rows whose (cols) match a source row's (cols).
             sql = text(f"""
                 DELETE FROM {table}
