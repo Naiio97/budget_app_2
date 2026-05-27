@@ -1,14 +1,37 @@
-from sqlalchemy import Column, String, Float, DateTime, Text, Integer, Boolean, ForeignKey
+from sqlalchemy import Column, String, Float, DateTime, Text, Integer, Boolean, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
 
+class UserModel(Base):
+    """Application user. OAuth-first (Google/Apple); password_hash kept nullable for
+    future email/password fallback (argon2id when populated)."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    name = Column(String, nullable=True)
+    image_url = Column(String, nullable=True)
+    provider = Column(String, nullable=False, default="email")  # "google" | "apple" | "email"
+    provider_id = Column(String, nullable=True, index=True)  # OAuth subject ID
+    password_hash = Column(String, nullable=True)  # argon2id; null for OAuth-only users
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_id", name="uq_users_provider_provider_id"),
+    )
+
+
 class AccountModel(Base):
     """Connected bank/investment account"""
     __tablename__ = "accounts"
-    
+
     id = Column(String, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False, default="Account")
     type = Column(String, nullable=False)  # "bank" or "investment"
     balance = Column(Float, default=0.0)
@@ -25,8 +48,9 @@ class AccountModel(Base):
 class TransactionModel(Base):
     """Transaction from bank or investment account"""
     __tablename__ = "transactions"
-    
+
     id = Column(String, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id = Column(String, ForeignKey("accounts.id"), nullable=False)
     date = Column(String, nullable=False)  # YYYY-MM-DD
     description = Column(String, nullable=False)
@@ -46,8 +70,9 @@ class TransactionModel(Base):
 class SyncStatusModel(Base):
     """Synchronization status tracking"""
     __tablename__ = "sync_status"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     status = Column(String, default="running")  # "running", "completed", "failed"
@@ -57,9 +82,11 @@ class SyncStatusModel(Base):
 
 
 class SettingsModel(Base):
-    """Application settings (API keys, preferences)"""
+    """Per-user application settings. Composite PK (user_id, key) — each user
+    has their own setting namespace."""
     __tablename__ = "settings"
-    
+
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -68,8 +95,9 @@ class SettingsModel(Base):
 class BudgetModel(Base):
     """Monthly budget per category"""
     __tablename__ = "budgets"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     category = Column(String, nullable=False)  # "Food", "Transport", etc.
     amount = Column(Float, nullable=False)  # Monthly limit in CZK
     currency = Column(String, default="CZK")
@@ -80,8 +108,9 @@ class BudgetModel(Base):
 class SavingsGoalModel(Base):
     """Savings goal with target amount"""
     __tablename__ = "savings_goals"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)  # "Dovolená", "Nové auto"
     target_amount = Column(Float, nullable=False)
     current_amount = Column(Float, default=0.0)
@@ -94,8 +123,9 @@ class SavingsGoalModel(Base):
 class CategoryRuleModel(Base):
     """Category rule for automatic transaction categorization"""
     __tablename__ = "category_rules"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     pattern = Column(String, nullable=False)  # Text pattern to match (lowercase)
     category = Column(String, nullable=False)  # Target category (Food, Transport, etc.)
     is_user_defined = Column(Boolean, default=True)  # True = user created, False = learned
@@ -104,17 +134,22 @@ class CategoryRuleModel(Base):
 
 
 class CategoryModel(Base):
-    """User-defined transaction categories"""
+    """User-defined transaction categories. Name is unique per user."""
     __tablename__ = "categories"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False, unique=True)  # "Food", "Transport", etc.
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)  # "Food", "Transport", etc.
     icon = Column(String, default="📦")  # Emoji icon
     color = Column(String, default="#6366f1")  # Hex color for charts
     order_index = Column(Integer, default=0)  # Display order
     is_income = Column(Boolean, default=False)  # True for income categories like Salary
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_categories_user_name"),
+    )
 
 
 # === Monthly Budget Tracker Models ===
@@ -128,7 +163,8 @@ class MonthlyBudgetModel(Base):
     __tablename__ = "monthly_budgets"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    year_month = Column(String, nullable=False, unique=True)  # "2025-01"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    year_month = Column(String, nullable=False)  # "2025-01"
 
     # Investice (manuální částka tento měsíc)
     investment_amount = Column(Float, default=0.0)
@@ -138,6 +174,10 @@ class MonthlyBudgetModel(Base):
 
     is_closed = Column(Boolean, default=False)  # Měsíc uzavřen
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "year_month", name="uq_monthly_budgets_user_year_month"),
+    )
 
     # Relationships
     expenses = relationship("MonthlyExpenseModel", back_populates="budget", cascade="all, delete-orphan")
@@ -166,8 +206,9 @@ class MonthlyIncomeItemModel(Base):
 class RecurringExpenseModel(Base):
     """Šablona pravidelného měsíčního výdaje"""
     __tablename__ = "recurring_expenses"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)  # "Nájem + Služby", "Netflix"
     default_amount = Column(Float, nullable=False)
     my_percentage = Column(Integer, default=100)  # Můj podíl v % (50 = platím půlku)
@@ -202,8 +243,9 @@ class MonthlyExpenseModel(Base):
 class ManualAccountModel(Base):
     """Manuálně sledovaný účet (spořící účet bez API)"""
     __tablename__ = "manual_accounts"
-    
+
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)  # "Spořící účet"
     account_number = Column(String, nullable=True)  # "2049290001/6000" for internal transfer detection
     balance = Column(Float, default=0.0)
@@ -232,13 +274,16 @@ class ManualAccountItemModel(Base):
 
 
 class ContactModel(Base):
-    """Address book entry mapping IBAN/account to counterparty name.
+    """Address book entry mapping IBAN/account to counterparty name. Scoped per
+    user — same IBAN can appear in multiple users' address books with different
+    names. Composite PK (user_id, iban).
 
     Fills in display names for transactions where the bank doesn't provide
     creditorName/debtorName (typical for standing orders, utility bills).
     """
     __tablename__ = "contacts"
 
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     iban = Column(String, primary_key=True)  # Normalized (uppercase, no spaces)
     name = Column(String, nullable=False)
     source = Column(String, default="manual")  # "auto" (learned from bank data) | "manual" (user-entered)
@@ -248,11 +293,13 @@ class ContactModel(Base):
 
 
 class PortfolioSnapshotModel(Base):
-    """Daily snapshot of Trading 212 portfolio value — used for real history chart"""
+    """Daily snapshot of Trading 212 portfolio value — used for real history chart.
+    One snapshot per (user, date)."""
     __tablename__ = "portfolio_snapshots"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    snapshot_date = Column(String, nullable=False, unique=True)  # YYYY-MM-DD, one per day (upsert)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    snapshot_date = Column(String, nullable=False)  # YYYY-MM-DD, one per day (upsert)
     total_value_czk = Column(Float, nullable=False)
     invested_czk = Column(Float, nullable=True)   # cash.invested * rate
     result_czk = Column(Float, nullable=True)      # cash.result * rate (unrealized P&L)
@@ -262,12 +309,17 @@ class PortfolioSnapshotModel(Base):
     positions_count = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    __table_args__ = (
+        UniqueConstraint("user_id", "snapshot_date", name="uq_portfolio_snapshots_user_date"),
+    )
+
 
 class ManualInvestmentAccountModel(Base):
     """Manuálně sledovaný investiční účet (bez API)"""
     __tablename__ = "manual_investment_accounts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)
     currency = Column(String, default="CZK")
     note = Column(String, nullable=True)

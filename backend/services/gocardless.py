@@ -84,15 +84,13 @@ class GoCardlessService:
 
     async def _save_to_db(self):
         """Persist current in-memory token state to the settings table."""
-        from database import get_db_context
-        from routers.settings import set_setting
-        async with get_db_context() as db:
-            await set_setting(db, _KEY_ACCESS_TOKEN, self.access_token or "")
-            await set_setting(db, _KEY_ACCESS_EXPIRES,
-                              self.access_expires.isoformat() if self.access_expires else "")
-            await set_setting(db, _KEY_REFRESH_TOKEN, self.refresh_token or "")
-            await set_setting(db, _KEY_REFRESH_EXPIRES,
-                              self.refresh_expires.isoformat() if self.refresh_expires else "")
+        from routers.settings import set_api_key
+        await set_api_key(_KEY_ACCESS_TOKEN, self.access_token or "")
+        await set_api_key(_KEY_ACCESS_EXPIRES,
+                          self.access_expires.isoformat() if self.access_expires else "")
+        await set_api_key(_KEY_REFRESH_TOKEN, self.refresh_token or "")
+        await set_api_key(_KEY_REFRESH_EXPIRES,
+                          self.refresh_expires.isoformat() if self.refresh_expires else "")
         logger.debug("GC tokens saved to DB (access expires: %s)", self.access_expires)
 
     def _store_token_response(self, data: dict):

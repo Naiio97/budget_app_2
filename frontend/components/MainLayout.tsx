@@ -4,12 +4,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect } from 'react';
+import { signOut } from 'next-auth/react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { syncData, getSyncStatus, SyncStatus } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { exitDemo, isDemoMode } from '@/lib/demo-mode';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -77,6 +79,16 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         setIsCompactNavOpen(false);
         setIsMobileToolsOpen(false);
     }, [pathname]);
+
+    const handleLogout = async () => {
+        clearBackendTokenCache();
+        if (isDemoMode()) {
+            exitDemo();
+            window.location.href = '/login';
+            return;
+        }
+        await signOut({ redirectTo: '/login' });
+    };
 
     const handleSync = async () => {
         if (isSyncing) return;
@@ -304,6 +316,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <Link href="/reports" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
                                 <span>{Icons.nav.reports}</span><span>Přehledy</span>
                             </Link>
+                            <button className="btn btn-sm" onClick={handleLogout}
+                                style={{ justifyContent: 'flex-start', gridColumn: '1 / -1', color: 'var(--neg)' }}>
+                                <span>↩</span><span>Odhlásit se</span>
+                            </button>
                         </div>
                         {syncStatus && syncStatus.status !== 'never' && (
                             <div style={{ padding: '0 var(--spacing-sm) var(--spacing-sm)', fontSize: 11, color: 'var(--text-3)', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -402,6 +418,13 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.reports} Přehledy</Link>
                                     <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>+ Účet</Link>
                                 </div>
+                                <button
+                                    className="btn btn-sm"
+                                    onClick={handleLogout}
+                                    style={{ marginTop: 10, width: '100%', color: 'var(--neg)' }}
+                                >
+                                    ↩ Odhlásit se
+                                </button>
                             </div>
                         </aside>
 

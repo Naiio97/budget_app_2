@@ -7,8 +7,9 @@ import asyncio
 import json
 import logging
 
+from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel
+from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel, UserModel
 from services.gocardless import gocardless_service
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
@@ -18,29 +19,39 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-async def get_family_account_pattern(db: AsyncSession) -> str | None:
+async def get_family_account_pattern(db: AsyncSession, user_id: int) -> str | None:
     """Get the configured family account pattern from settings"""
-    result = await db.execute(select(SettingsModel).where(SettingsModel.key == "family_account_pattern"))
+    result = await db.execute(
+        select(SettingsModel).where(
+            SettingsModel.user_id == user_id,
+            SettingsModel.key == "family_account_pattern",
+        )
+    )
     setting = result.scalar_one_or_none()
     return setting.value if setting else None
 
 
-async def get_my_account_patterns(db: AsyncSession) -> list[str]:
+async def get_my_account_patterns(db: AsyncSession, user_id: int) -> list[str]:
     """Get configured patterns for user's own accounts (for internal transfer detection)"""
     import json
-    result = await db.execute(select(SettingsModel).where(SettingsModel.key == "my_account_patterns"))
+    result = await db.execute(
+        select(SettingsModel).where(
+            SettingsModel.user_id == user_id,
+            SettingsModel.key == "my_account_patterns",
+        )
+    )
     setting = result.scalar_one_or_none()
     if setting and setting.value:
         return json.loads(setting.value)
     return []
 
 
-async def detect_and_mark_transfers(db: AsyncSession):
+async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     """Detect and mark internal transfers based on creditor/debtor account matching.
     Also updates manual account balances when transfers to/from manual accounts are detected."""
     from models import ManualAccountModel
     import re
-    
+
     def extract_account_number(value: str) -> set:
         """Extract account number from IBAN, BBAN or plain account number"""
         result = set()
@@ -66,8 +77,13 @@ async def detect_and_mark_transfers(db: AsyncSession):
     
     # Build set of all my account identifiers (bank + manual)
     my_account_identifiers = set()
-    
-    result = await db.execute(select(AccountModel).where(AccountModel.type == "bank"))
+
+    result = await db.execute(
+        select(AccountModel).where(
+            AccountModel.user_id == user_id,
+            AccountModel.type == "bank",
+        )
+    )
     bank_accounts = result.scalars().all()
     for acc in bank_accounts:
         if acc.details_json:
@@ -83,7 +99,9 @@ async def detect_and_mark_transfers(db: AsyncSession):
     
     # Build mapping: account identifier -> ManualAccountModel for balance tracking
     manual_account_map: dict[str, 'ManualAccountModel'] = {}  # identifier -> model
-    result = await db.execute(select(ManualAccountModel))
+    result = await db.execute(
+        select(ManualAccountModel).where(ManualAccountModel.user_id == user_id)
+    )
     manual_accounts = result.scalars().all()
     for acc in manual_accounts:
         if acc.account_number:
@@ -93,15 +111,20 @@ async def detect_and_mark_transfers(db: AsyncSession):
                 manual_account_map[identifier] = acc
     
     # Load text-based patterns from settings (e.g. "spořící", "savings", etc.)
-    my_account_patterns = await get_my_account_patterns(db)
-    
+    my_account_patterns = await get_my_account_patterns(db, user_id)
+
     logger.debug(f"My account identifiers for transfer detection: {my_account_identifiers}")
     logger.debug(f"My account text patterns: {my_account_patterns}")
     logger.debug(f"Manual accounts with numbers: {[(a.name, a.account_number) for a in manual_accounts if a.account_number]}")
-    
-    family_pattern = await get_family_account_pattern(db)
-    
-    tx_result = await db.execute(select(TransactionModel).where(TransactionModel.account_type == "bank"))
+
+    family_pattern = await get_family_account_pattern(db, user_id)
+
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.user_id == user_id,
+            TransactionModel.account_type == "bank",
+        )
+    )
     transactions = tx_result.scalars().all()
     
     marked_internal = 0
@@ -408,7 +431,7 @@ def categorize_transaction(tx: dict) -> str:
     return "Other"
 
 
-async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
+async def categorize_transaction_with_rules(tx: dict, db: AsyncSession, user_id: int) -> str:
     """Smart category detection with priority: user rules > purposeCode > MCC > keywords"""
     raw_desc = (tx.get("remittanceInformationUnstructured") or
                 tx.get("creditorName") or
@@ -419,7 +442,10 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
     # 1. User-defined rules (highest priority — explicit user preference)
     user_rules = await db.execute(
         select(CategoryRuleModel)
-        .where(CategoryRuleModel.is_user_defined == True)
+        .where(
+            CategoryRuleModel.user_id == user_id,
+            CategoryRuleModel.is_user_defined == True,
+        )
         .order_by(CategoryRuleModel.match_count.desc())
     )
     for rule in user_rules.scalars():
@@ -441,7 +467,10 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
     if desc:
         learned_rules = await db.execute(
             select(CategoryRuleModel)
-            .where(CategoryRuleModel.is_user_defined == False)
+            .where(
+                CategoryRuleModel.user_id == user_id,
+                CategoryRuleModel.is_user_defined == False,
+            )
             .order_by(CategoryRuleModel.match_count.desc())
         )
         for rule in learned_rules.scalars():
@@ -454,20 +483,25 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession) -> str:
 
 
 @router.post("/recategorize")
-async def recategorize_transactions(db: AsyncSession = Depends(get_db)):
+async def recategorize_transactions(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Recategorize all existing transactions using improved category detection with rules"""
     import json
-    
-    result = await db.execute(select(TransactionModel))
+
+    result = await db.execute(
+        select(TransactionModel).where(TransactionModel.user_id == current_user.id)
+    )
     transactions = result.scalars().all()
-    
+
     updated = 0
     categories_count = {}
-    
+
     for tx in transactions:
         if tx.account_type == "investment":
             continue
-            
+
         raw_data = {}
         if tx.raw_json:
             try:
@@ -476,17 +510,17 @@ async def recategorize_transactions(db: AsyncSession = Depends(get_db)):
                 raw_data = {"remittanceInformationUnstructured": tx.description}
         else:
             raw_data = {"remittanceInformationUnstructured": tx.description}
-        
-        new_category = await categorize_transaction_with_rules(raw_data, db)
-        
+
+        new_category = await categorize_transaction_with_rules(raw_data, db, current_user.id)
+
         if tx.category != new_category:
             tx.category = new_category
             updated += 1
-        
+
         categories_count[new_category] = categories_count.get(new_category, 0) + 1
-    
+
     await db.commit()
-    
+
     return {
         "updated": updated,
         "categories": categories_count
@@ -530,10 +564,14 @@ def _categorize_with_preloaded_rules(
 
 
 @router.post("/")
-async def sync_all_data(db: AsyncSession = Depends(get_db)):
+async def sync_all_data(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Synchronize all data from external APIs to local database"""
 
     sync_status = SyncStatusModel(
+        user_id=current_user.id,
         started_at=datetime.utcnow(),
         status="running"
     )
@@ -548,13 +586,19 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
     # (e.g. "billa → Supermarkets") without N+1 DB roundtrips.
     user_rules_result = await db.execute(
         select(CategoryRuleModel)
-        .where(CategoryRuleModel.is_user_defined == True)
+        .where(
+            CategoryRuleModel.user_id == current_user.id,
+            CategoryRuleModel.is_user_defined == True,
+        )
         .order_by(CategoryRuleModel.match_count.desc())
     )
     preloaded_user_rules = list(user_rules_result.scalars())
     learned_rules_result = await db.execute(
         select(CategoryRuleModel)
-        .where(CategoryRuleModel.is_user_defined == False)
+        .where(
+            CategoryRuleModel.user_id == current_user.id,
+            CategoryRuleModel.is_user_defined == False,
+        )
         .order_by(CategoryRuleModel.match_count.desc())
     )
     preloaded_learned_rules = list(learned_rules_result.scalars())
@@ -562,7 +606,12 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
     try:
         # Sync bank accounts from GoCardless
         try:
-            result = await db.execute(select(AccountModel).where(AccountModel.type == "bank"))
+            result = await db.execute(
+                select(AccountModel).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.type == "bank",
+                )
+            )
             bank_accounts = result.scalars().all()
             
             for account in bank_accounts:
@@ -623,6 +672,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                         
                         rows_to_upsert.append({
                             "id": tx_id,
+                            "user_id": current_user.id,
                             "account_id": account.id,
                             "date": str(tx_data.bookingDate) if tx_data.bookingDate else "",
                             "description": description,
@@ -749,7 +799,16 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 "pies": pies_data,
             })
 
-            t212_account = await db.get(AccountModel, "trading212")
+            # Look up by (user, type='investment') so existing user-1 row with
+            # id="trading212" keeps working. New users get a user-scoped id.
+            t212_result = await db.execute(
+                select(AccountModel).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.type == "investment",
+                    AccountModel.institution == "Trading 212",
+                )
+            )
+            t212_account = t212_result.scalar_one_or_none()
             if t212_account:
                 t212_account.balance = float(czk_total_value)
                 t212_account.currency = target_currency
@@ -757,7 +816,8 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 t212_account.details_json = details_payload
             else:
                 t212_account = AccountModel(
-                    id="trading212",
+                    id=f"trading212-{current_user.id}",
+                    user_id=current_user.id,
                     name="Trading 212",
                     type="investment",
                     balance=float(czk_total_value),
@@ -767,11 +827,13 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     last_synced=datetime.utcnow()
                 )
                 db.add(t212_account)
+            t212_account_id = t212_account.id
 
-            # Save daily portfolio snapshot (upsert by date)
+            # Save daily portfolio snapshot (upsert by user + date)
             try:
                 today = datetime.utcnow().strftime("%Y-%m-%d")
                 snapshot_stmt = pg_insert(PortfolioSnapshotModel).values({
+                    "user_id": current_user.id,
                     "snapshot_date": today,
                     "total_value_czk": float(czk_total_value),
                     "invested_czk": invested_eur * exchange_rate,
@@ -782,7 +844,7 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                     "positions_count": len(portfolio),
                 })
                 snapshot_stmt = snapshot_stmt.on_conflict_do_update(
-                    index_elements=["snapshot_date"],
+                    index_elements=["user_id", "snapshot_date"],
                     set_={
                         "total_value_czk": snapshot_stmt.excluded.total_value_czk,
                         "invested_czk": snapshot_stmt.excluded.invested_czk,
@@ -817,7 +879,8 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 
                 order_rows.append({
                     "id": order_id,
-                    "account_id": "trading212",
+                    "user_id": current_user.id,
+                    "account_id": t212_account_id,
                     "date": order.get("dateExecuted", order.get("dateCreated", ""))[:10],
                     "description": f"{order.get('type', 'ORDER')} {order.get('ticker', '')} ({eur_amount:.2f} {base_currency})",
                     "amount": czk_amount,
@@ -861,7 +924,8 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
                 
                 div_rows.append({
                     "id": div_id,
-                    "account_id": "trading212",
+                    "user_id": current_user.id,
+                    "account_id": t212_account_id,
                     "date": div.get("paidOn", "")[:10] if div.get("paidOn") else "",
                     "description": f"Dividend: {div.get('ticker', '')} ({div_amount:.2f} {div_currency})",
                     "amount": czk_div_amount,
@@ -895,9 +959,9 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
         sync_status.transactions_synced = transactions_synced
         
         await db.commit()
-        
-        transfer_result = await detect_and_mark_transfers(db)
-        
+
+        transfer_result = await detect_and_mark_transfers(db, current_user.id)
+
         return {
             "status": "completed",
             "accounts_synced": accounts_synced,
@@ -906,31 +970,38 @@ async def sync_all_data(db: AsyncSession = Depends(get_db)):
             "marked_family_transfers": transfer_result["marked_family"],
             "marked_my_account_transfers": transfer_result["marked_my_account"]
         }
-        
+
     except Exception as e:
         await db.rollback()
-        
+
         result = await db.execute(
-            select(SyncStatusModel).order_by(SyncStatusModel.id.desc()).limit(1)
+            select(SyncStatusModel)
+            .where(SyncStatusModel.user_id == current_user.id)
+            .order_by(SyncStatusModel.id.desc()).limit(1)
         )
         sync_status = result.scalar_one_or_none()
-        
+
         if sync_status:
             sync_status.status = "failed"
             sync_status.error_message = str(e)
             sync_status.completed_at = datetime.utcnow()
             await db.commit()
-        
+
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/status")
-async def get_sync_status(db: AsyncSession = Depends(get_db)):
+async def get_sync_status(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get the status of the last synchronization"""
     from sqlalchemy import func
 
     result = await db.execute(
-        select(SyncStatusModel).order_by(SyncStatusModel.id.desc()).limit(1)
+        select(SyncStatusModel)
+        .where(SyncStatusModel.user_id == current_user.id)
+        .order_by(SyncStatusModel.id.desc()).limit(1)
     )
     sync_status = result.scalar_one_or_none()
 
@@ -938,6 +1009,7 @@ async def get_sync_status(db: AsyncSession = Depends(get_db)):
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     count_result = await db.execute(
         select(func.count()).select_from(SyncStatusModel).where(
+            SyncStatusModel.user_id == current_user.id,
             SyncStatusModel.status == "completed",
             SyncStatusModel.started_at >= today_start,
         )
@@ -964,9 +1036,12 @@ async def get_sync_status(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/detect-transfers")
-async def detect_transfers(db: AsyncSession = Depends(get_db)):
+async def detect_transfers(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Manually detect and mark internal transfers and family transfers"""
-    result = await detect_and_mark_transfers(db)
+    result = await detect_and_mark_transfers(db, current_user.id)
     return {
         "status": "completed",
         "marked_internal_transfers": result["marked_internal"],

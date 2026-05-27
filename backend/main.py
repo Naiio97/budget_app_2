@@ -6,8 +6,11 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from config import get_settings
-from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts, contacts, manual_investments
+from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts, contacts, manual_investments, auth
+from auth import limiter
 from database import get_db
 
 # Centrální konfigurace logování — 12-Factor: logy jdou striktně na stdout (event stream)
@@ -33,6 +36,11 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Rate limiting (slowapi) — limiter itself is a singleton from auth.py so that
+# routers can decorate endpoints with @limiter.limit(...).
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS for frontend
 # Seznam povolených URL (tvůj nový frontend)
@@ -62,6 +70,7 @@ app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(manual_accounts.router, prefix="/manual-accounts", tags=["Manual Accounts"])
 app.include_router(contacts.router, prefix="/contacts", tags=["Contacts"])
 app.include_router(manual_investments.router, prefix="/manual-investments", tags=["Manual Investments"])
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
 @app.get("/")
 async def root():

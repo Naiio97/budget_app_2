@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import TransactionList from '@/components/TransactionList';
 import CustomSelect from '@/components/CustomSelect';
-import { Transaction, getTransactions, getDashboard } from '@/lib/api';
+import { Transaction, getTransactions, getDashboard, apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
@@ -116,7 +116,7 @@ function TransactionsPageContent() {
     const { data: categoriesData = [] } = useQuery<Category[]>({
         queryKey: queryKeys.categories,
         queryFn: () =>
-            fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io'}/categories/`)
+            apiFetch(`/categories/`)
                 .then(r => r.json())
                 .then(d => Array.isArray(d) ? d : []),
         staleTime: 5 * 60 * 1000,

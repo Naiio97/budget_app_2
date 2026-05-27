@@ -2,8 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+import { apiFetch } from '@/lib/api';
 
 interface CategoryChartProps {
     categories: Record<string, number>;
@@ -40,7 +39,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
     const { data: categoryList = [] } = useQuery<Category[]>({
         queryKey: queryKeys.categories,
         queryFn: () =>
-            fetch(`${API_BASE}/categories/`)
+            apiFetch(`/categories/`)
                 .then(r => r.json())
                 .then(d => Array.isArray(d) ? d : []),
         staleTime: 5 * 60 * 1000,

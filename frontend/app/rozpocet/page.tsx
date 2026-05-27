@@ -6,8 +6,7 @@ import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
+import { apiFetch } from '@/lib/api';
 
 interface MonthlyExpense {
     id: number; name: string; amount: number;
@@ -92,29 +91,29 @@ export default function RozpocetPage() {
 
     useQuery<RecurringExpense[]>({
         queryKey: queryKeys.recurringExpenses,
-        queryFn: () => fetch(`${API_BASE}/recurring-expenses`).then(r => r.json()),
+        queryFn: () => apiFetch(`/recurring-expenses`).then(r => r.json()),
         staleTime: 5 * 60 * 1000,
     });
 
     const { data: manualAccounts = [] } = useQuery<ManualAccount[]>({
         queryKey: queryKeys.manualAccounts,
-        queryFn: () => fetch(`${API_BASE}/manual-accounts/`).then(r => r.json()),
+        queryFn: () => apiFetch(`/manual-accounts/`).then(r => r.json()),
     });
 
     const { data: budget } = useQuery<MonthlyBudget>({
         queryKey: queryKeys.monthlyBudget(yearMonth),
-        queryFn: () => fetch(`${API_BASE}/monthly-budget/${yearMonth}`).then(r => r.json()),
+        queryFn: () => apiFetch(`/monthly-budget/${yearMonth}`).then(r => r.json()),
         enabled: viewMode === 'month',
     });
 
     const { data: annualData } = useQuery<AnnualData>({
         queryKey: queryKeys.annualOverview(selectedYear),
-        queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear}`).then(r => r.json()),
+        queryFn: () => apiFetch(`/annual-overview/${selectedYear}`).then(r => r.json()),
     });
 
     const { data: prevYearData } = useQuery<AnnualData>({
         queryKey: queryKeys.annualOverview(selectedYear - 1),
-        queryFn: () => fetch(`${API_BASE}/annual-overview/${selectedYear - 1}`).then(r => r.json()),
+        queryFn: () => apiFetch(`/annual-overview/${selectedYear - 1}`).then(r => r.json()),
         enabled: selectedMonth === 1,
     });
 
@@ -142,8 +141,8 @@ export default function RozpocetPage() {
             try {
                 const salaryRow = budget.income_items.find(i => i.is_salary);
                 if (!salaryRow || salaryRow.amount === 0)
-                    await fetch(`${API_BASE}/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
-                await fetch(`${API_BASE}/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
+                    await apiFetch(`/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
+                await apiFetch(`/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
                 await refreshBudget();
             } finally { setIsAutoSyncing(false); }
         };
@@ -153,7 +152,7 @@ export default function RozpocetPage() {
     // ── helpers ──────────────────────────────────────────────────
 
     const updateBudget = async (field: string, value: number) => {
-        await fetch(`${API_BASE}/monthly-budget/${yearMonth}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: value }) });
+        await apiFetch(`/monthly-budget/${yearMonth}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: value }) });
         refreshBudget();
     };
     const commitBudgetField = (field: string, cur: number) => {
@@ -169,26 +168,26 @@ export default function RozpocetPage() {
         if (raw === undefined) return;
         const v = parseFloat(raw) || 0;
         if (v === item.amount) return;
-        await fetch(`${API_BASE}/monthly-income-items/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: v }) });
+        await apiFetch(`/monthly-income-items/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: v }) });
         refreshBudget();
     };
     const commitIncomeName = async (item: IncomeItem) => {
         const raw = editingIncomeNames[item.id];
         setEditingIncomeNames(p => { const n = { ...p }; delete n[item.id]; return n; });
         if (!raw || raw.trim() === item.name) return;
-        await fetch(`${API_BASE}/monthly-income-items/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: raw.trim() }) });
+        await apiFetch(`/monthly-income-items/${item.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: raw.trim() }) });
         refreshBudget();
     };
     const addIncomeItem = async () => {
-        await fetch(`${API_BASE}/monthly-budget/${yearMonth}/income-items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Nový příjem', amount: 0, is_salary: false }) });
+        await apiFetch(`/monthly-budget/${yearMonth}/income-items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Nový příjem', amount: 0, is_salary: false }) });
         refreshBudget();
     };
     const deleteIncomeItem = async (id: number) => {
-        await fetch(`${API_BASE}/monthly-income-items/${id}`, { method: 'DELETE' });
+        await apiFetch(`/monthly-income-items/${id}`, { method: 'DELETE' });
         refreshBudget();
     };
     const toggleExpensePaid = async (id: number, isPaid: boolean) => {
-        await fetch(`${API_BASE}/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_paid: !isPaid }) });
+        await apiFetch(`/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_paid: !isPaid }) });
         refreshBudget();
     };
     const saveExpenseAmount = async (expense: MonthlyExpense) => {
@@ -197,7 +196,7 @@ export default function RozpocetPage() {
         const v = parseFloat(raw) || 0;
         setEditingAmounts(p => { const n = { ...p }; delete n[expense.id]; return n; });
         if (v === expense.amount) return;
-        await fetch(`${API_BASE}/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: v }) });
+        await apiFetch(`/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ amount: v }) });
         refreshBudget();
     };
     const saveExpenseName = async (expense: MonthlyExpense) => {
@@ -206,7 +205,7 @@ export default function RozpocetPage() {
         const name = raw.trim();
         setEditingExpenseNames(p => { const n = { ...p }; delete n[expense.id]; return n; });
         if (!name || name === expense.name) return;
-        await fetch(`${API_BASE}/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+        await apiFetch(`/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
         refreshBudget();
     };
     const saveMyAmount = async (expense: MonthlyExpense) => {
@@ -214,38 +213,38 @@ export default function RozpocetPage() {
         if (raw === undefined) return;
         const v = parseFloat(raw) || 0;
         setEditingMyAmounts(p => { const n = { ...p }; delete n[expense.id]; return n; });
-        await fetch(`${API_BASE}/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ my_amount_override: v }) });
+        await apiFetch(`/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ my_amount_override: v }) });
         refreshBudget();
     };
     const saveCustomOverride = async (id: number, v: number) => {
-        await fetch(`${API_BASE}/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ my_amount_override: v }) });
+        await apiFetch(`/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ my_amount_override: v }) });
         refreshBudget();
     };
     const updateExpensePercentage = async (id: number, pct: number) => {
-        await fetch(`${API_BASE}/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ my_percentage: pct, my_amount_override: -1 }) });
+        await apiFetch(`/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ my_percentage: pct, my_amount_override: -1 }) });
         refreshBudget();
     };
     const createRecurringExpense = async () => {
         if (!newExpense.name || !newExpense.amount) return;
-        await fetch(`${API_BASE}/recurring-expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid, match_pattern: newExpense.match_pattern || null }) });
-        await fetch(`${API_BASE}/monthly-budget/${yearMonth}/expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid }) });
+        await apiFetch(`/recurring-expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid, match_pattern: newExpense.match_pattern || null }) });
+        await apiFetch(`/monthly-budget/${yearMonth}/expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid }) });
         setNewExpense({ name: '', amount: '', is_auto_paid: false, match_pattern: '' });
         setShowAddExpense(false);
         queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses });
         refreshBudget();
     };
     const deleteMonthlyExpense = async (id: number) => {
-        await fetch(`${API_BASE}/monthly-expenses/${id}`, { method: 'DELETE' });
+        await apiFetch(`/monthly-expenses/${id}`, { method: 'DELETE' });
         refreshBudget();
     };
     const matchTransactions = async () => {
-        const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
+        const res = await apiFetch(`/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
         const data = await res.json();
         alert(`Spárováno ${data.matched_count} výdajů:\n\n📝 Podle patternu: ${data.details?.by_pattern || 0}\n💰 Podle částky: ${data.details?.by_amount || 0}\n📂 Podle kategorie: ${data.details?.by_category || 0}`);
         refreshBudget();
     };
     const copyFromPrevious = async () => {
-        const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
+        const res = await apiFetch(`/monthly-budget/${yearMonth}/copy-previous`, { method: 'POST' });
         const data = await res.json();
         if (res.ok) alert(`Zkopírováno ${data.expenses_copied} výdajů z ${data.from}`);
         else alert(data.detail || 'Chyba při kopírování');
@@ -253,31 +252,31 @@ export default function RozpocetPage() {
     };
     const deleteBudgetMonth = async () => {
         if (!confirm(`Smazat rozpočet pro ${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}?`)) return;
-        await fetch(`${API_BASE}/monthly-budget/${yearMonth}`, { method: 'DELETE' });
+        await apiFetch(`/monthly-budget/${yearMonth}`, { method: 'DELETE' });
         refreshBudget();
     };
     const syncIncome = async () => {
-        const res = await fetch(`${API_BASE}/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
+        const res = await apiFetch(`/monthly-budget/${yearMonth}/sync-income`, { method: 'POST' });
         const data = await res.json();
         alert(`Načteno z transakcí:\nVýplata: ${formatCurrency(data.salary)}`);
         refreshBudget();
     };
     const createManualAccount = async () => {
         if (!newAccount.name) return;
-        await fetch(`${API_BASE}/manual-accounts/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newAccount.name, balance: parseFloat(newAccount.balance) || 0 }) });
+        await apiFetch(`/manual-accounts/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newAccount.name, balance: parseFloat(newAccount.balance) || 0 }) });
         setNewAccount({ name: '', balance: '' }); setShowAddAccount(false); refreshManualAccounts();
     };
     const updateManualAccountBalance = async (id: number) => {
-        await fetch(`${API_BASE}/manual-accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balance: parseFloat(editAccountBalance) }) });
+        await apiFetch(`/manual-accounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ balance: parseFloat(editAccountBalance) }) });
         setEditingAccountId(null); refreshManualAccounts();
     };
     const addAccountItem = async (accountId: number) => {
         if (!newItem.name || !newItem.amount) return;
-        await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newItem.name, amount: parseFloat(newItem.amount), is_mine: newItem.is_mine, note: newItem.note || null }) });
+        await apiFetch(`/manual-accounts/${accountId}/envelopes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newItem.name, amount: parseFloat(newItem.amount), is_mine: newItem.is_mine, note: newItem.note || null }) });
         setNewItem({ name: '', amount: '', is_mine: false, note: '' }); setShowAddItem(null); refreshManualAccounts();
     };
     const deleteAccountItem = async (accountId: number, itemId: number) => {
-        await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes/${itemId}`, { method: 'DELETE' });
+        await apiFetch(`/manual-accounts/${accountId}/envelopes/${itemId}`, { method: 'DELETE' });
         refreshManualAccounts();
     };
 
@@ -307,8 +306,8 @@ export default function RozpocetPage() {
     };
 
     const prevMonthIncome = selectedMonth === 1
-        ? prevYearData?.months.find(m => m.month === 12)?.income ?? 0
-        : annualData?.months.find(m => m.month === selectedMonth - 1)?.income ?? 0;
+        ? prevYearData?.months?.find(m => m.month === 12)?.income ?? 0
+        : annualData?.months?.find(m => m.month === selectedMonth - 1)?.income ?? 0;
     const incomeDelta = totalIncome - prevMonthIncome;
 
     // ── tabs ─────────────────────────────────────────────────────

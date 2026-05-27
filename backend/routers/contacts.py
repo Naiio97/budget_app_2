@@ -10,9 +10,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select
+
+from auth import get_current_user
 from database import get_db
-from models import ContactModel, TransactionModel
+from models import ContactModel, TransactionModel, UserModel
 
 router = APIRouter()
 
@@ -41,17 +43,28 @@ class ContactUpsert(BaseModel):
 
 
 @router.get("/", response_model=List[Contact])
-async def list_contacts(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(ContactModel).order_by(ContactModel.name))
+async def list_contacts(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(ContactModel)
+        .where(ContactModel.user_id == current_user.id)
+        .order_by(ContactModel.name)
+    )
     return list(result.scalars().all())
 
 
 @router.get("/{iban:path}", response_model=Contact)
-async def get_contact(iban: str, db: AsyncSession = Depends(get_db)):
+async def get_contact(
+    iban: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     normalized = normalize_iban(iban)
     if not normalized:
         raise HTTPException(status_code=400, detail="Invalid IBAN")
-    contact = await db.get(ContactModel, normalized)
+    contact = await db.get(ContactModel, (current_user.id, normalized))
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     return contact
@@ -61,6 +74,7 @@ async def get_contact(iban: str, db: AsyncSession = Depends(get_db)):
 async def upsert_contact(
     iban: str,
     data: ContactUpsert,
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create or update a contact. Manual entries always win over auto-learned ones."""
@@ -71,13 +85,14 @@ async def upsert_contact(
     if not name:
         raise HTTPException(status_code=400, detail="Name must not be empty")
 
-    contact = await db.get(ContactModel, normalized)
+    contact = await db.get(ContactModel, (current_user.id, normalized))
     if contact:
         contact.name = name
         contact.note = data.note
         contact.source = "manual"
     else:
         contact = ContactModel(
+            user_id=current_user.id,
             iban=normalized,
             name=name,
             note=data.note,
@@ -91,11 +106,15 @@ async def upsert_contact(
 
 
 @router.delete("/{iban:path}")
-async def delete_contact(iban: str, db: AsyncSession = Depends(get_db)):
+async def delete_contact(
+    iban: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     normalized = normalize_iban(iban)
     if not normalized:
         raise HTTPException(status_code=400, detail="Invalid IBAN")
-    contact = await db.get(ContactModel, normalized)
+    contact = await db.get(ContactModel, (current_user.id, normalized))
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     await db.delete(contact)
@@ -104,7 +123,10 @@ async def delete_contact(iban: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/auto-populate")
-async def auto_populate(db: AsyncSession = Depends(get_db)):
+async def auto_populate(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Scan existing transactions and learn IBAN→name pairs from raw_json.
 
     Only fills gaps — never overwrites manual entries. Uses the most recent
@@ -112,7 +134,10 @@ async def auto_populate(db: AsyncSession = Depends(get_db)):
     """
     result = await db.execute(
         select(TransactionModel.raw_json, TransactionModel.date)
-        .where(TransactionModel.raw_json.isnot(None))
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.raw_json.isnot(None),
+        )
         .order_by(TransactionModel.date.desc())
     )
     rows = result.all()
@@ -135,7 +160,10 @@ async def auto_populate(db: AsyncSession = Depends(get_db)):
         return {"learned": 0, "skipped": 0, "total_scanned": len(rows)}
 
     existing_result = await db.execute(
-        select(ContactModel).where(ContactModel.iban.in_(list(latest_by_iban.keys())))
+        select(ContactModel).where(
+            ContactModel.user_id == current_user.id,
+            ContactModel.iban.in_(list(latest_by_iban.keys())),
+        )
     )
     existing = {c.iban: c for c in existing_result.scalars().all()}
 
@@ -144,7 +172,7 @@ async def auto_populate(db: AsyncSession = Depends(get_db)):
     for iban, name in latest_by_iban.items():
         contact = existing.get(iban)
         if contact is None:
-            db.add(ContactModel(iban=iban, name=name, source="auto"))
+            db.add(ContactModel(user_id=current_user.id, iban=iban, name=name, source="auto"))
             learned += 1
         elif contact.source == "auto" and contact.name != name:
             contact.name = name

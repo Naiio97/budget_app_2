@@ -4,8 +4,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
+from auth import get_current_user
 from database import get_db
-from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel
+from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel, UserModel
 from routers.contacts import normalize_iban
 
 router = APIRouter()
@@ -48,15 +49,14 @@ async def get_transactions(
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
     amount_type: Optional[str] = Query(None, description="income, expense, or all"),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get paginated transactions with filtering"""
-    
-    # Base query
+
     query = select(TransactionModel, AccountModel.name).join(AccountModel, TransactionModel.account_id == AccountModel.id)
-    
-    # Conditions
-    conditions = []
+
+    conditions = [TransactionModel.user_id == current_user.id]
     if date_from:
         conditions.append(TransactionModel.date >= date_from)
     if date_to:
@@ -78,9 +78,8 @@ async def get_transactions(
         conditions.append(TransactionModel.amount > 0)
     elif amount_type == "expense":
         conditions.append(TransactionModel.amount < 0)
-    
-    if conditions:
-        query = query.where(and_(*conditions))
+
+    query = query.where(and_(*conditions))
     
     # Count total
     from sqlalchemy import func
@@ -122,7 +121,10 @@ async def get_transactions(
     contacts_by_iban: dict[str, ContactModel] = {}
     if needed_ibans:
         contact_rows = await db.execute(
-            select(ContactModel).where(ContactModel.iban.in_(list(needed_ibans)))
+            select(ContactModel).where(
+                ContactModel.user_id == current_user.id,
+                ContactModel.iban.in_(list(needed_ibans)),
+            )
         )
         contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
 
@@ -200,9 +202,14 @@ def categorize_transaction(tx: dict) -> str:
 async def get_category_summary(
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get spending by category from database"""
+    """Get spending by category from database.
+
+    Note: shadowed by the paginated `get_transactions` above (same path) — kept
+    for legacy reasons but never reached by the router.
+    """
     transactions = await get_transactions(date_from, date_to, limit=500, db=db)
     
     categories = {}
@@ -225,12 +232,18 @@ class CategoryUpdate(BaseModel):
 async def update_transaction_category(
     transaction_id: str,
     data: CategoryUpdate,
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Update transaction category and optionally learn the mapping"""
-    
-    # Get the transaction
-    tx = await db.get(TransactionModel, transaction_id)
+
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
+    )
+    tx = tx_result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
@@ -267,9 +280,12 @@ async def update_transaction_category(
         if not pattern:
             pattern = tx.description.lower().strip()
 
-        # Check if rule already exists for this pattern
+        # Check if rule already exists for this pattern (per-user)
         existing = await db.execute(
-            select(CategoryRuleModel).where(CategoryRuleModel.pattern == pattern)
+            select(CategoryRuleModel).where(
+                CategoryRuleModel.user_id == current_user.id,
+                CategoryRuleModel.pattern == pattern,
+            )
         )
         existing_rule = existing.scalar_one_or_none()
 
@@ -280,6 +296,7 @@ async def update_transaction_category(
             existing_rule.match_count += 1
         else:
             rule = CategoryRuleModel(
+                user_id=current_user.id,
                 pattern=pattern,
                 category=data.category,
                 is_user_defined=True,   # User explicitly set this
@@ -294,6 +311,7 @@ async def update_transaction_category(
         retro_result = await db.execute(
             select(TransactionModel).where(
                 and_(
+                    TransactionModel.user_id == current_user.id,
                     TransactionModel.id != transaction_id,
                     or_(
                         TransactionModel.description.ilike(like_pattern),
@@ -326,13 +344,17 @@ async def update_transaction_category(
 @router.get("/{transaction_id}")
 async def get_transaction_detail(
     transaction_id: str,
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get full transaction detail including raw bank data"""
     result = await db.execute(
         select(TransactionModel, AccountModel.name.label("account_name"))
         .join(AccountModel, TransactionModel.account_id == AccountModel.id, isouter=True)
-        .where(TransactionModel.id == transaction_id)
+        .where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
     )
     row = result.first()
     if not row:
@@ -368,7 +390,7 @@ async def get_transaction_detail(
         if creditor_name:
             name_source = "bank"
         elif creditor_iban:
-            contact = await db.get(ContactModel, creditor_iban)
+            contact = await db.get(ContactModel, (current_user.id, creditor_iban))
             if contact:
                 creditor_name = contact.name
                 name_source = f"contact_{contact.source}"
@@ -376,7 +398,7 @@ async def get_transaction_detail(
         if debtor_name:
             name_source = "bank"
         elif debtor_iban:
-            contact = await db.get(ContactModel, debtor_iban)
+            contact = await db.get(ContactModel, (current_user.id, debtor_iban))
             if contact:
                 debtor_name = contact.name
                 name_source = f"contact_{contact.source}"
@@ -440,15 +462,22 @@ class TransactionTypeUpdate(BaseModel):
 async def update_transaction_type(
     transaction_id: str,
     data: TransactionTypeUpdate,
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Update transaction type (normal, internal_transfer, family_transfer)"""
-    
+
     valid_types = ["normal", "internal_transfer", "family_transfer"]
     if data.transaction_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {valid_types}")
-    
-    tx = await db.get(TransactionModel, transaction_id)
+
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
+    )
+    tx = tx_result.scalar_one_or_none()
     if not tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
     

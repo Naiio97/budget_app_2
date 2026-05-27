@@ -1,0 +1,232 @@
+.login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: radial-gradient(
+        circle at top,
+        color-mix(in srgb, var(--accent) 8%, var(--bg)) 0%,
+        var(--bg) 60%
+    );
+}
+
+.login-card {
+    width: 100%;
+    max-width: 360px;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 24px;
+    padding: 32px 28px;
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.35);
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.login-title {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+}
+
+.login-sub {
+    margin: 4px 0 28px;
+    font-size: 13px;
+    color: var(--text-3);
+}
+
+.login-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.login-btn {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 999px;
+    border: 0.5px solid var(--border);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: transform 0.06s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.login-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 6%, var(--surface-sunken));
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.login-btn:active:not(:disabled) {
+    transform: scale(0.98);
+}
+
+.login-btn:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+.login-btn-icon {
+    display: inline-flex;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.login-btn-apple .login-btn-icon {
+    background: #000;
+    color: #fff;
+    border-color: #000;
+}
+
+.login-btn-google .login-btn-icon {
+    background: #fff;
+    color: #4285F4;
+    border-color: #dadce0;
+}
+
+.login-divider {
+    position: relative;
+    margin: 22px 0 14px;
+    text-align: center;
+    color: var(--text-3);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.login-divider::before,
+.login-divider::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 0.5px;
+    background: var(--border);
+}
+
+.login-divider::before { left: 0; }
+.login-divider::after { right: 0; }
+
+.login-divider span {
+    background: var(--surface);
+    padding: 0 10px;
+}
+
+.login-btn-demo {
+    background: transparent;
+    border-style: dashed;
+    color: var(--text-2);
+}
+
+.login-foot {
+    margin: 18px 0 0;
+    font-size: 11px;
+    color: var(--text-3);
+    line-height: 1.5;
+}
+
+.login-mode-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    background: var(--surface-sunken);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 18px;
+}
+
+.login-mode-switch button {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.login-mode-switch button:hover:not(:disabled):not(.active) {
+    color: var(--text);
+}
+
+.login-mode-switch button.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.login-mode-switch button:disabled {
+    opacity: 0.55;
+    cursor: progress;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.login-input {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 12px;
+    border: 0.5px solid var(--border);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font-size: 14px;
+    padding: 0 14px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.login-input:focus {
+    border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+    background: var(--surface);
+}
+
+.login-input:disabled {
+    opacity: 0.6;
+}
+
+.login-error {
+    margin-top: 2px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--neg) 12%, transparent);
+    color: var(--neg);
+    font-size: 12.5px;
+    text-align: left;
+}
+
+.login-btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    margin-top: 4px;
+}
+
+.login-btn-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, #000 8%, var(--accent));
+    border-color: color-mix(in srgb, #000 8%, var(--accent));
+}

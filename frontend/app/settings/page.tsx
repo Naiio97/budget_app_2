@@ -5,11 +5,9 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account, apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
 interface Institution { id: string; name: string; logo?: string; bic?: string; }
 interface CategoryRule { id: number; pattern: string; category: string; is_user_defined: boolean; match_count: number; }
@@ -49,7 +47,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
 
     const loadCategories = useCallback(async () => {
         try {
-            const res = await fetch(`${API_BASE}/categories/`);
+            const res = await apiFetch(`/categories/`);
             const data = await res.json();
             setCategories(Array.isArray(data) ? data : []);
         } catch (err) { console.error(err); }
@@ -62,7 +60,7 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
 
     const handleAdd = async () => {
         if (!newCategory.name.trim()) return;
-        await fetch(`${API_BASE}/categories/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCategory) });
+        await apiFetch(`/categories/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCategory) });
         setNewCategory({ name: '', icon: '📦', color: CATEGORY_PALETTE[0], is_income: false });
         setShowAdd(false);
         loadCategories();
@@ -70,14 +68,14 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
     };
 
     const handleUpdate = async (id: number) => {
-        await fetch(`${API_BASE}/categories/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editData) });
+        await apiFetch(`/categories/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editData) });
         setEditingId(null);
         loadCategories();
         invalidate();
     };
 
     const handleDelete = async (id: number) => {
-        await fetch(`${API_BASE}/categories/${id}`, { method: 'DELETE' });
+        await apiFetch(`/categories/${id}`, { method: 'DELETE' });
         loadCategories();
         invalidate();
     };
@@ -198,7 +196,7 @@ function FamilyAccountSettings() {
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch(`${API_BASE}/settings/family-accounts`);
+                const res = await apiFetch(`/settings/family-accounts`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.accounts?.length > 0) {
@@ -215,7 +213,7 @@ function FamilyAccountSettings() {
         if (!familyPattern.trim()) return;
         setSaving(true);
         try {
-            const res = await fetch(`${API_BASE}/settings/family-accounts`, {
+            const res = await apiFetch(`/settings/family-accounts`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pattern: familyPattern, name: familyName }),
             });
@@ -224,7 +222,7 @@ function FamilyAccountSettings() {
     };
 
     const remove = async () => {
-        await fetch(`${API_BASE}/settings/family-accounts`, { method: 'DELETE' });
+        await apiFetch(`/settings/family-accounts`, { method: 'DELETE' });
         setHasExisting(false); setFamilyPattern(''); setFamilyName('Partner');
     };
 
@@ -257,7 +255,7 @@ function MyAccountPatterns() {
     useEffect(() => {
         (async () => {
             try {
-                const res = await fetch(`${API_BASE}/settings/my-account-patterns`);
+                const res = await apiFetch(`/settings/my-account-patterns`);
                 if (res.ok) {
                     const data = await res.json();
                     setPatterns(data.patterns || []);
@@ -278,7 +276,7 @@ function MyAccountPatterns() {
     const save = async () => {
         setSaving(true);
         try {
-            const res = await fetch(`${API_BASE}/settings/my-account-patterns`, {
+            const res = await apiFetch(`/settings/my-account-patterns`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ patterns }),
             });
@@ -364,12 +362,12 @@ export default function SettingsPage() {
 
     const loadCategoryRules = useCallback(async () => {
         try {
-            const r = await fetch(`${API_BASE}/settings/category-rules`);
+            const r = await apiFetch(`/settings/category-rules`);
             if (r.ok) {
                 const data = await r.json();
                 setCategoryRules(data.rules || []);
             }
-            const c = await fetch(`${API_BASE}/categories/`);
+            const c = await apiFetch(`/categories/`);
             const cd = await c.json();
             setRuleCategories(Array.isArray(cd) ? cd : []);
         } catch (err) { console.error(err); }
@@ -389,7 +387,7 @@ export default function SettingsPage() {
             const ref = urlParams.get('ref');
             if (ref) {
                 try {
-                    await fetch(`${API_BASE}/accounts/connect/bank/callback?ref=${ref}`);
+                    await apiFetch(`/accounts/connect/bank/callback?ref=${ref}`);
                     window.history.replaceState({}, '', '/settings');
                 } catch (err) { console.error(err); }
             }
@@ -414,7 +412,7 @@ export default function SettingsPage() {
         setProcessingAccount(id);
         try {
             if (id.startsWith('manual-')) {
-                await fetch(`${API_BASE}/manual-accounts/${id.replace('manual-', '')}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editName }) });
+                await apiFetch(`/manual-accounts/${id.replace('manual-', '')}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editName }) });
             } else {
                 await updateAccount(id, { name: editName });
             }
@@ -428,7 +426,7 @@ export default function SettingsPage() {
         setProcessingAccount(id);
         try {
             if (id.startsWith('manual-')) {
-                await fetch(`${API_BASE}/manual-accounts/${id.replace('manual-', '')}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_visible: !currentVisibility }) });
+                await apiFetch(`/manual-accounts/${id.replace('manual-', '')}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_visible: !currentVisibility }) });
             } else {
                 await updateAccount(id, { is_visible: !currentVisibility });
             }
@@ -442,7 +440,7 @@ export default function SettingsPage() {
         setProcessingAccount(id);
         try {
             if (id.startsWith('manual-')) {
-                await fetch(`${API_BASE}/manual-accounts/${id.replace('manual-', '')}`, { method: 'DELETE' });
+                await apiFetch(`/manual-accounts/${id.replace('manual-', '')}`, { method: 'DELETE' });
             } else {
                 await deleteAccount(id);
             }
@@ -463,7 +461,7 @@ export default function SettingsPage() {
         if (!newManualName.trim()) return;
         setSavingManual(true);
         try {
-            const res = await fetch(`${API_BASE}/manual-accounts/`, {
+            const res = await apiFetch(`/manual-accounts/`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: newManualName.trim(),
@@ -516,7 +514,7 @@ export default function SettingsPage() {
     const handleDetectTransfers = async () => {
         setDetecting(true);
         try {
-            const res = await fetch(`${API_BASE}/sync/detect-transfers`, { method: 'POST' });
+            const res = await apiFetch(`/sync/detect-transfers`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
                 alert(`Detekce hotová.\nInterní převody: ${data.marked_internal_transfers ?? 0}\nMoje účty: ${data.marked_my_account_transfers ?? 0}\nRodinné: ${data.marked_family_transfers ?? 0}`);
@@ -528,7 +526,7 @@ export default function SettingsPage() {
         if (!newPattern.trim()) return;
         setSavingRule(true);
         try {
-            const r = await fetch(`${API_BASE}/settings/category-rules`, {
+            const r = await apiFetch(`/settings/category-rules`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pattern: newPattern, category: newRuleCategory }),
             });
@@ -537,14 +535,14 @@ export default function SettingsPage() {
     };
 
     const handleDeleteRule = async (id: number) => {
-        await fetch(`${API_BASE}/settings/category-rules/${id}`, { method: 'DELETE' });
+        await apiFetch(`/settings/category-rules/${id}`, { method: 'DELETE' });
         setCategoryRules(categoryRules.filter(r => r.id !== id));
     };
 
     const handleRecategorize = async () => {
         setIsSyncing(true);
         try {
-            await fetch(`${API_BASE}/sync/recategorize`, { method: 'POST' });
+            await apiFetch(`/sync/recategorize`, { method: 'POST' });
             alert('Transakce byly překategorizovány.');
         } finally { setIsSyncing(false); }
     };

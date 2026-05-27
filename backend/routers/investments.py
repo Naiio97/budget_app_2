@@ -1,13 +1,14 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import json
 
+from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, PortfolioSnapshotModel
+from models import AccountModel, TransactionModel, PortfolioSnapshotModel, UserModel
 from services.exchange_rates import get_exchange_rate
 
 router = APIRouter()
@@ -17,7 +18,7 @@ class PortfolioResponse(BaseModel):
     total_value: float
     currency: str
     last_synced: Optional[str]
-    
+
 
 class HistoryPoint(BaseModel):
     date: str
@@ -31,15 +32,27 @@ class DividendItem(BaseModel):
     currency: str
 
 
-@router.get("/portfolio")
-async def get_portfolio(db: AsyncSession = Depends(get_db)):
-    """Get investment portfolio from database"""
-    # Get investment account from DB
+async def _get_investment_account(
+    db: AsyncSession, user_id: int
+) -> Optional[AccountModel]:
+    """Single investment account per user (Trading 212). Returns None if not connected."""
     result = await db.execute(
-        select(AccountModel).where(AccountModel.type == "investment")
+        select(AccountModel).where(
+            AccountModel.user_id == user_id,
+            AccountModel.type == "investment",
+        )
     )
-    account = result.scalar_one_or_none()
-    
+    return result.scalar_one_or_none()
+
+
+@router.get("/portfolio")
+async def get_portfolio(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get investment portfolio from database"""
+    account = await _get_investment_account(db, current_user.id)
+
     if not account:
         return {
             "total_value": 0,
@@ -47,18 +60,19 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
             "last_synced": None,
             "transactions": []
         }
-    
-    # Get recent investment transactions from DB
+
     tx_result = await db.execute(
         select(TransactionModel)
-        .where(TransactionModel.account_type == "investment")
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "investment",
+        )
         .order_by(TransactionModel.date.desc())
         .limit(50)
     )
     transactions = tx_result.scalars().all()
-    
+
     # Detect failed exchange rate conversion during sync (rate fell back to 1.0)
-    # In that case re-convert from original EUR value using current rate
     total_value = account.balance
     details = json.loads(account.details_json) if account.details_json else {}
     original_currency = details.get("original_currency", account.currency)
@@ -68,7 +82,7 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
     if (
         original_currency != "CZK"
         and original_balance is not None
-        and abs(stored_rate - 1.0) < 0.001  # rate was effectively 1.0 = conversion failed
+        and abs(stored_rate - 1.0) < 0.001
     ):
         live_rate = await get_exchange_rate(original_currency, "CZK")
         total_value = original_balance * live_rate
@@ -92,7 +106,11 @@ async def get_portfolio(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/history")
-async def get_portfolio_history(period: str = "1M", db: AsyncSession = Depends(get_db)):
+async def get_portfolio_history(
+    period: str = "1M",
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get portfolio value history from daily snapshots saved at each sync"""
     period_days = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "ALL": 3650}
     days = period_days.get(period, 30)
@@ -100,7 +118,10 @@ async def get_portfolio_history(period: str = "1M", db: AsyncSession = Depends(g
 
     result = await db.execute(
         select(PortfolioSnapshotModel)
-        .where(PortfolioSnapshotModel.snapshot_date >= start_date)
+        .where(
+            PortfolioSnapshotModel.user_id == current_user.id,
+            PortfolioSnapshotModel.snapshot_date >= start_date,
+        )
         .order_by(PortfolioSnapshotModel.snapshot_date.asc())
     )
     snapshots = result.scalars().all()
@@ -110,12 +131,12 @@ async def get_portfolio_history(period: str = "1M", db: AsyncSession = Depends(g
 
 
 @router.get("/portfolio-detail")
-async def get_portfolio_detail(db: AsyncSession = Depends(get_db)):
+async def get_portfolio_detail(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get investment portfolio with P&L data (invested, result, free cash)"""
-    result = await db.execute(
-        select(AccountModel).where(AccountModel.type == "investment")
-    )
-    account = result.scalar_one_or_none()
+    account = await _get_investment_account(db, current_user.id)
 
     if not account:
         return {
@@ -132,11 +153,9 @@ async def get_portfolio_detail(db: AsyncSession = Depends(get_db)):
     exchange_rate = details.get("exchange_rate", 1.0)
 
     invested_czk = float(cash.get("invested", 0) or 0) * exchange_rate
-    # T212 API uses "ppl" for unrealized P&L; fall back to calculating from totals
     result_czk = float(cash.get("ppl", 0) or cash.get("result", 0) or 0) * exchange_rate
     cash_free_czk = float(cash.get("free", 0) or 0) * exchange_rate
 
-    # If API didn't return P&L but we have invested amount, calculate from known values
     if result_czk == 0 and invested_czk > 0 and account.balance > 0:
         result_czk = account.balance - invested_czk - cash_free_czk
 
@@ -151,12 +170,12 @@ async def get_portfolio_detail(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/positions")
-async def get_positions(db: AsyncSession = Depends(get_db)):
+async def get_positions(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get individual portfolio positions from last sync"""
-    result = await db.execute(
-        select(AccountModel).where(AccountModel.type == "investment")
-    )
-    account = result.scalar_one_or_none()
+    account = await _get_investment_account(db, current_user.id)
 
     if not account or not account.details_json:
         return {"positions": [], "currency": "CZK"}
@@ -165,7 +184,6 @@ async def get_positions(db: AsyncSession = Depends(get_db)):
     exchange_rate = details.get("exchange_rate", 1.0)
     raw_positions = details.get("positions", [])
 
-    # positions may be stored as int (old format) — handle gracefully
     if not isinstance(raw_positions, list):
         return {"positions": [], "currency": "CZK"}
 
@@ -189,49 +207,54 @@ async def get_positions(db: AsyncSession = Depends(get_db)):
             "ppl_pct": round((ppl_eur / invested_eur * 100) if invested_eur else 0, 2),
         })
 
-    # Sort by value descending
     positions.sort(key=lambda x: x["value_czk"], reverse=True)
 
     return {"positions": positions, "currency": "CZK"}
 
 
 @router.get("/dividends")
-async def get_dividends(limit: int = 50, db: AsyncSession = Depends(get_db)):
+async def get_dividends(
+    limit: int = 50,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get dividend transactions from database"""
     tx_result = await db.execute(
         select(TransactionModel)
-        .where(TransactionModel.category == "Dividend")
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.category == "Dividend",
+        )
         .order_by(TransactionModel.date.desc())
         .limit(limit)
     )
     transactions = tx_result.scalars().all()
-    
+
     dividends = []
     for tx in transactions:
-        # Extract ticker from description if possible
         ticker = ""
         if ":" in tx.description:
             parts = tx.description.split(":")
             if len(parts) > 1:
                 ticker = parts[1].strip().split()[0] if parts[1].strip() else ""
-        
+
         dividends.append({
             "date": tx.date,
             "ticker": ticker,
             "amount": tx.amount,
             "currency": tx.currency
         })
-    
+
     return {"dividends": dividends}
 
 
 @router.get("/pies")
-async def get_pies(db: AsyncSession = Depends(get_db)):
+async def get_pies(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get Trading 212 pies from last sync"""
-    result = await db.execute(
-        select(AccountModel).where(AccountModel.type == "investment")
-    )
-    account = result.scalar_one_or_none()
+    account = await _get_investment_account(db, current_user.id)
 
     if not account or not account.details_json:
         return {"pies": [], "currency": "CZK"}
@@ -265,13 +288,14 @@ async def get_pies(db: AsyncSession = Depends(get_db)):
             ],
         })
 
-    # Sort by value descending
     pies.sort(key=lambda x: x["value_czk"], reverse=True)
     return {"pies": pies, "currency": "CZK"}
 
 
 @router.get("/debug/pies-raw")
-async def debug_pies_raw():
+async def debug_pies_raw(
+    current_user: UserModel = Depends(get_current_user),
+):
     """Debug: return raw T212 API response for pies (list + first pie detail)"""
     from services.trading212 import trading212_service
     pies_list = await trading212_service.get_pies()
@@ -284,42 +308,49 @@ async def debug_pies_raw():
 
 
 @router.get("/summary")
-async def get_investment_summary(db: AsyncSession = Depends(get_db)):
+async def get_investment_summary(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get investment account summary from database"""
-    result = await db.execute(
-        select(AccountModel).where(AccountModel.type == "investment")
-    )
-    account = result.scalar_one_or_none()
-    
+    account = await _get_investment_account(db, current_user.id)
+
     if not account:
         return {
             "account": None,
             "recent_transactions": [],
             "stats": {"total_dividends": 0, "transaction_count": 0}
         }
-    
-    # Get recent investment transactions
+
     tx_result = await db.execute(
         select(TransactionModel)
-        .where(TransactionModel.account_type == "investment")
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "investment",
+        )
         .order_by(TransactionModel.date.desc())
         .limit(20)
     )
     transactions = tx_result.scalars().all()
-    
-    # Calculate stats
+
     div_result = await db.execute(
         select(func.sum(TransactionModel.amount))
-        .where(TransactionModel.category == "Dividend")
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.category == "Dividend",
+        )
     )
     total_dividends = div_result.scalar() or 0
-    
+
     count_result = await db.execute(
         select(func.count(TransactionModel.id))
-        .where(TransactionModel.account_type == "investment")
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "investment",
+        )
     )
     tx_count = count_result.scalar() or 0
-    
+
     return {
         "account": {
             "id": account.id,

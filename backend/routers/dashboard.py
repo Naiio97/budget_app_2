@@ -4,8 +4,9 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
+from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -54,26 +55,37 @@ def _build_recent_tx(parsed, contacts_by_iban):
 
 
 @router.get("/")
-async def get_dashboard(db: AsyncSession = Depends(get_db)):
+async def get_dashboard(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Get main dashboard data from database (instant response)"""
-    
-    # Get accounts from DB
-    result = await db.execute(select(AccountModel).where(AccountModel.is_visible == True))
+
+    result = await db.execute(
+        select(AccountModel).where(
+            AccountModel.user_id == current_user.id,
+            AccountModel.is_visible == True,
+        )
+    )
     accounts = result.scalars().all()
-    
-    # Get manual accounts with envelopes
+
     manual_result = await db.execute(
         select(ManualAccountModel)
         .options(selectinload(ManualAccountModel.items))
-        .where(ManualAccountModel.is_visible == True)
+        .where(
+            ManualAccountModel.user_id == current_user.id,
+            ManualAccountModel.is_visible == True,
+        )
     )
     manual_accounts = manual_result.scalars().all()
 
-    # Get manual investment accounts with positions
     manual_inv_result = await db.execute(
         select(ManualInvestmentAccountModel)
         .options(selectinload(ManualInvestmentAccountModel.positions))
-        .where(ManualInvestmentAccountModel.is_visible == True)
+        .where(
+            ManualInvestmentAccountModel.user_id == current_user.id,
+            ManualInvestmentAccountModel.is_visible == True,
+        )
     )
     manual_investment_accounts = manual_inv_result.scalars().all()
 
@@ -121,6 +133,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     tx_result = await db.execute(
         select(TransactionModel, AccountModel.name)
         .join(AccountModel, TransactionModel.account_id == AccountModel.id)
+        .where(TransactionModel.user_id == current_user.id)
         .order_by(TransactionModel.date.desc())
         .limit(5)
     )
@@ -149,7 +162,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     contacts_by_iban: dict[str, ContactModel] = {}
     if needed_ibans:
         contact_rows = await db.execute(
-            select(ContactModel).where(ContactModel.iban.in_(list(needed_ibans)))
+            select(ContactModel).where(
+                ContactModel.user_id == current_user.id,
+                ContactModel.iban.in_(list(needed_ibans)),
+            )
         )
         contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
     
@@ -158,7 +174,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     today = datetime.now()
     month_start = today.replace(day=1).strftime("%Y-%m-%d")
     all_tx_result = await db.execute(
-        select(TransactionModel).where(TransactionModel.date >= month_start).limit(1000)
+        select(TransactionModel).where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.date >= month_start,
+        ).limit(1000)
     )
     all_tx = all_tx_result.scalars().all()
     
@@ -169,7 +188,10 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
     # Calculate categories (only true expense categories — exclude income categories
     # like Salary/Dividend even if a misclassified negative tx slips through)
     income_cat_result = await db.execute(
-        select(CategoryModel.name).where(CategoryModel.is_income == True)
+        select(CategoryModel.name).where(
+            CategoryModel.user_id == current_user.id,
+            CategoryModel.is_income == True,
+        )
     )
     income_category_names = {row[0] for row in income_cat_result.all()}
 
@@ -256,7 +278,9 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/portfolio")
-async def get_portfolio_summary():
+async def get_portfolio_summary(
+    current_user: UserModel = Depends(get_current_user),
+):
     """Get investment portfolio summary (live from Trading 212)"""
     try:
         portfolio = await trading212_service.get_portfolio()
@@ -295,23 +319,26 @@ async def get_portfolio_summary():
 @router.get("/balance-history")
 async def get_balance_history(
     days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get balance history for chart from database"""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
-    
-    # Get transactions from DB
+
     result = await db.execute(
         select(TransactionModel).where(
-            TransactionModel.date >= start_date.strftime("%Y-%m-%d")
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.date >= start_date.strftime("%Y-%m-%d"),
         ).limit(1000)
     )
     transactions = result.scalars().all()
-    
-    # Get current balance
+
     acc_result = await db.execute(
-        select(func.sum(AccountModel.balance)).where(AccountModel.type == "bank")
+        select(func.sum(AccountModel.balance)).where(
+            AccountModel.user_id == current_user.id,
+            AccountModel.type == "bank",
+        )
     )
     current_balance = acc_result.scalar() or 0
     
@@ -341,25 +368,28 @@ async def get_balance_history(
 @router.get("/net-worth-history")
 async def get_net_worth_history(
     days: int = Query(30, ge=7, le=365),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get net worth history (bank + investments) for chart"""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
-    
-    # Get all accounts with current balances
+
     acc_result = await db.execute(
-        select(AccountModel).where(AccountModel.is_visible == True)
+        select(AccountModel).where(
+            AccountModel.user_id == current_user.id,
+            AccountModel.is_visible == True,
+        )
     )
     accounts = acc_result.scalars().all()
-    
+
     current_bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
     current_investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
-    
-    # Get transactions from DB
+
     result = await db.execute(
         select(TransactionModel).where(
-            TransactionModel.date >= start_date.strftime("%Y-%m-%d")
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.date >= start_date.strftime("%Y-%m-%d"),
         ).limit(2000)
     )
     transactions = result.scalars().all()
@@ -421,20 +451,24 @@ async def get_net_worth_history(
 @router.get("/monthly-report")
 async def get_monthly_report(
     months: int = Query(6, ge=1, le=24),
+    current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get monthly report with income/expenses and category breakdown"""
 
-    # Income category names — excluded from the expense-by-category breakdown so
-    # misclassified Salary/Dividend negatives don't pollute the chart.
     income_cat_result = await db.execute(
-        select(CategoryModel.name).where(CategoryModel.is_income == True)
+        select(CategoryModel.name).where(
+            CategoryModel.user_id == current_user.id,
+            CategoryModel.is_income == True,
+        )
     )
     income_category_names = {row[0] for row in income_cat_result.all()}
 
-    # Get transactions grouped by month
     result = await db.execute(
-        select(TransactionModel).where(TransactionModel.account_type == "bank")
+        select(TransactionModel).where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "bank",
+        )
     )
     transactions = result.scalars().all()
 
