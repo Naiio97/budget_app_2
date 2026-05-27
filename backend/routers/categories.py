@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -81,16 +82,22 @@ async def get_categories(
     categories = result.scalars().all()
 
     if not categories:
-        for idx, cat in enumerate(DEFAULT_CATEGORIES):
-            new_cat = CategoryModel(
-                user_id=current_user.id,
-                name=cat["name"],
-                icon=cat["icon"],
-                color=cat["color"],
-                is_income=cat["is_income"],
-                order_index=idx
-            )
-            db.add(new_cat)
+        # ON CONFLICT DO NOTHING — two parallel GETs from the dashboard would
+        # both race here on a fresh user; without the conflict guard the
+        # second commit blows up on uq_categories_user_name.
+        stmt = pg_insert(CategoryModel).values([
+            {
+                "user_id": current_user.id,
+                "name": cat["name"],
+                "icon": cat["icon"],
+                "color": cat["color"],
+                "is_income": cat["is_income"],
+                "order_index": idx,
+            }
+            for idx, cat in enumerate(DEFAULT_CATEGORIES)
+        ])
+        stmt = stmt.on_conflict_do_nothing(index_elements=["user_id", "name"])
+        await db.execute(stmt)
         await db.commit()
 
         result = await db.execute(
