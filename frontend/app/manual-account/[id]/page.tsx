@@ -7,6 +7,7 @@ import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { apiFetch } from '@/lib/api';
 
 interface Envelope {
     id: number;
@@ -26,7 +27,6 @@ interface ManualAccount {
     envelopes: Envelope[];
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
 export default function ManualAccountDetailPage() {
     const params = useParams();
@@ -53,7 +53,7 @@ export default function ManualAccountDetailPage() {
     const { data: account, isLoading: loading } = useQuery<ManualAccount>({
         queryKey: queryKeys.manualAccount(accountId),
         queryFn: async () => {
-            const res = await fetch(`${API_BASE}/manual-accounts/${accountId}`);
+            const res = await apiFetch(`/manual-accounts/${accountId}`);
             if (!res.ok) throw new Error('Failed to load account');
             const data = await res.json();
             // sync local input states on first load
@@ -66,7 +66,7 @@ export default function ManualAccountDetailPage() {
 
     const updateBalance = async () => {
         try {
-            await fetch(`${API_BASE}/manual-accounts/${accountId}`, {
+            await apiFetch(`/manual-accounts/${accountId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ balance })
@@ -81,7 +81,7 @@ export default function ManualAccountDetailPage() {
     const addEnvelope = async () => {
         if (!newEnvelope.name.trim() || newEnvelope.amount <= 0) return;
         try {
-            await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes`, {
+            await apiFetch(`/manual-accounts/${accountId}/envelopes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newEnvelope)
@@ -96,7 +96,7 @@ export default function ManualAccountDetailPage() {
 
     const updateEnvelope = async (envelopeId: number, data: Partial<Envelope>) => {
         try {
-            await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
+            await apiFetch(`/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -126,7 +126,7 @@ export default function ManualAccountDetailPage() {
     const deleteEnvelope = async (envelopeId: number) => {
         if (!confirm('Opravdu smazat tuto obálku?')) return;
         try {
-            await fetch(`${API_BASE}/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
+            await apiFetch(`/manual-accounts/${accountId}/envelopes/${envelopeId}`, {
                 method: 'DELETE'
             });
             invalidate();
@@ -187,7 +187,7 @@ export default function ManualAccountDetailPage() {
                                 style={{ fontSize: '1.25rem', fontWeight: 600, width: '100%', maxWidth: '300px' }}
                             />
                             <button className="btn btn-primary" onClick={async () => {
-                                await fetch(`${API_BASE}/manual-accounts/${accountId}`, {
+                                await apiFetch(`/manual-accounts/${accountId}`, {
                                     method: 'PUT',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ name: accountName })
@@ -266,7 +266,7 @@ export default function ManualAccountDetailPage() {
                                 style={{ width: '100%' }}
                             />
                             <button className="btn btn-primary" onClick={async () => {
-                                await fetch(`${API_BASE}/manual-accounts/${accountId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_number: accountNumber }) });
+                                await apiFetch(`/manual-accounts/${accountId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account_number: accountNumber }) });
                                 setEditingAccountNumber(false);
                                 invalidate();
                             }} style={{ padding: '4px 8px' }}>✓</button>

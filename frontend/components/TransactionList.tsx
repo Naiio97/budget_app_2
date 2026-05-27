@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Transaction, TransactionDetail, getTransactionDetail, saveContact } from '@/lib/api';
+import { Transaction, TransactionDetail, getTransactionDetail, saveContact, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 
 interface TransactionListProps {
@@ -19,8 +19,6 @@ interface Category {
     is_income: boolean;
     is_active: boolean;
 }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
 
 // Fallback icons for special categories
 const FALLBACK_ICONS: Record<string, string> = {
@@ -42,7 +40,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     // Build icon map from categories
     useEffect(() => {
-        fetch(`${API_BASE}/categories/`)
+        apiFetch(`/categories/`)
             .then(res => res.json())
             .then(data => setCategories(Array.isArray(data) ? data : []))
             .catch(err => console.error('Failed to load categories:', err));
@@ -188,7 +186,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const handleCategorySelect = async (txId: string, newCategory: string) => {
         setUpdatingId(txId);
         try {
-            const response = await fetch(`${API_BASE}/transactions/${txId}/category`, {
+            const response = await apiFetch(`/transactions/${txId}/category`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ category: newCategory, learn: true })

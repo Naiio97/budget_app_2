@@ -42,7 +42,10 @@ export function clearBackendTokenCache(): void {
     tokenExpiresAt = 0;
 }
 
-async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+/** Public helper for pages/components that need to hit backend endpoints
+ * not yet wrapped by typed functions in this file. Attaches the bearer
+ * token from the Auth.js session and handles 401 the same as built-ins. */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers);
     if (init.body && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");

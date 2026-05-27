@@ -8,6 +8,7 @@ import {
     LineChart, Line
 } from 'recharts';
 import { queryKeys } from '@/lib/queryKeys';
+import { apiFetch } from '@/lib/api';
 
 interface MonthlyTotal {
     month: string;
@@ -36,8 +37,6 @@ interface Category {
     icon?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://budget-api.redfield-d4fd3af1.westeurope.azurecontainerapps.io';
-
 const FALLBACK_COLORS: Record<string, string> = {
     'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
     'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
@@ -60,12 +59,12 @@ export default function ReportsPage() {
 
     const { data: report, isLoading: loading, error } = useQuery<MonthlyReport>({
         queryKey: queryKeys.monthlyReport(months),
-        queryFn: () => fetch(`${API_BASE}/dashboard/monthly-report?months=${months}`).then(r => r.json()),
+        queryFn: () => apiFetch(`/dashboard/monthly-report?months=${months}`).then(r => r.json()),
     });
 
     const { data: categoriesData = [] } = useQuery<Category[]>({
         queryKey: queryKeys.categories,
-        queryFn: () => fetch(`${API_BASE}/categories/`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
+        queryFn: () => apiFetch(`/categories/`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
         staleTime: 5 * 60 * 1000,
     });
 
