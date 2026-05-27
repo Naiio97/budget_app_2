@@ -21,7 +21,12 @@ export default auth((req) => {
 
     if (!req.auth) {
         const loginUrl = new URL("/login", req.url);
-        loginUrl.searchParams.set("from", pathname);
+        // Only carry `from` for real destinations — never let a /login URL
+        // become the redirect target, otherwise we recursively nest the URL
+        // every time middleware fires and from= ends up tens-of-levels deep.
+        if (!pathname.startsWith("/login")) {
+            loginUrl.searchParams.set("from", pathname);
+        }
         return NextResponse.redirect(loginUrl);
     }
 

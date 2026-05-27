@@ -15,7 +15,17 @@ const API_BASE =
 export default function LoginPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const from = searchParams.get("from") || "/";
+    // Sanitize `from` so we never bounce back to /login (would cause an
+    // infinite redirect chain with each level appending another encoded URL).
+    // Also reject absolute URLs — open-redirect protection.
+    const rawFrom = searchParams.get("from");
+    const from =
+        rawFrom &&
+        rawFrom.startsWith("/") &&
+        !rawFrom.startsWith("//") &&
+        !rawFrom.startsWith("/login")
+            ? rawFrom
+            : "/";
 
     const [mode, setMode] = useState<Mode>("login");
     const [email, setEmail] = useState("");
