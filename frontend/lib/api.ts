@@ -1,17 +1,14 @@
 // Backend API client.
 //
-// One internal `apiFetch` helper handles the real network — it attaches the
-// backend JWT from the Auth.js session and redirects to /login on 401.
-//
-// Demo mode lives in a cookie/localStorage flag (see lib/demo-mode.ts) and is
-// checked at runtime, not at build time. In demo mode:
-//   - GETs go through `fetchApi`, which returns canned data from mock-data.ts
-//   - Mutations go through `apiMutate`, which returns a synthetic 200 OK
-//     without hitting the backend, so the UI feels alive without persisting.
+// One `apiFetch` helper is the single chokepoint for ALL backend traffic — it
+// attaches the JWT from the Auth.js session, redirects to /login on 401, and
+// (when demo mode is on) synthesizes a Response from mock-data.ts instead of
+// touching the network. Every page hits the backend through apiFetch, so just
+// flipping the demo cookie is enough to swap the whole app to canned data.
 
 import { getSession } from "next-auth/react";
 import { isDemoMode } from "./demo-mode";
-import * as Mocks from "./mock-data";
+import { dispatchDemoGet } from "./mock-data";
 
 const API_BASE =
     process.env.NEXT_PUBLIC_API_URL ||
@@ -42,10 +39,36 @@ export function clearBackendTokenCache(): void {
     tokenExpiresAt = 0;
 }
 
-/** Public helper for pages/components that need to hit backend endpoints
- * not yet wrapped by typed functions in this file. Attaches the bearer
- * token from the Auth.js session and handles 401 the same as built-ins. */
+function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body ?? {}), {
+        status,
+        headers: { "Content-Type": "application/json" },
+    });
+}
+
+function synthesizeDemoResponse(path: string, init: RequestInit): Response {
+    const method = (init.method || "GET").toUpperCase();
+    if (method === "GET") {
+        const body = dispatchDemoGet(path);
+        if (body === undefined) {
+            console.warn("[DEMO] no fixture for GET", path, "— returning {}");
+            return jsonResponse({});
+        }
+        return jsonResponse(body);
+    }
+    // Mutations: always synthesize a 200 OK with a permissive body so the UI
+    // never gets stuck on an error. Nothing is persisted — that's the contract.
+    return jsonResponse({ status: "ok", id: 1, deleted: 1 });
+}
+
+/** Single chokepoint for backend traffic. In demo mode, synthesizes a Response
+ * from mock-data.ts instead of going to the network. */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+    if (isDemoMode()) {
+        // Tiny artificial delay so loading states still get to render.
+        await new Promise((r) => setTimeout(r, 60));
+        return synthesizeDemoResponse(path, init);
+    }
     const headers = new Headers(init.headers);
     if (init.body && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
@@ -71,20 +94,9 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     return res;
 }
 
-// For mutations: in demo mode, fake a 200 so the UI doesn't surface errors.
-// The data isn't persisted anywhere — that's the contract of demo.
-async function apiMutate<T = { status: string }>(
-    path: string,
-    init: RequestInit,
-    demoResponse?: T
-): Promise<Response> {
-    if (isDemoMode()) {
-        const body = JSON.stringify(demoResponse ?? { status: "ok" });
-        return new Response(body, {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-        });
-    }
+// Compat shim — older callers still pass a custom demoResponse; route through
+// apiFetch which now handles demo synthesis itself.
+async function apiMutate(path: string, init: RequestInit): Promise<Response> {
     return apiFetch(path, init);
 }
 
@@ -154,33 +166,6 @@ export interface Portfolio {
 }
 
 async function fetchApi<T>(endpoint: string): Promise<T> {
-    if (isDemoMode()) {
-        console.log('[DEMO API] GET', endpoint);
-        await new Promise(r => setTimeout(r, 200));
-
-        if (endpoint.startsWith('/dashboard/balance-history')) return Mocks.MOCK_BALANCE_HISTORY as unknown as T;
-        if (endpoint.startsWith('/dashboard/net-worth-history')) return Mocks.MOCK_NET_WORTH as unknown as T;
-        if (endpoint.startsWith('/dashboard/portfolio')) return Mocks.MOCK_PORTFOLIO as unknown as T;
-        if (endpoint.startsWith('/dashboard/')) return Mocks.MOCK_DASHBOARD as unknown as T;
-        if (endpoint.startsWith('/accounts/institutions')) return { institutions: [] } as unknown as T;
-        if (endpoint.startsWith('/accounts/') && endpoint.includes('/detail')) return {
-            account: Mocks.MOCK_ACCOUNTS[0], transactions: Mocks.MOCK_TRANSACTIONS.items, total: 20, pages: 1, current_page: 1
-        } as unknown as T;
-        if (endpoint.startsWith('/accounts/')) return Mocks.MOCK_ACCOUNTS as unknown as T;
-        if (endpoint.startsWith('/transactions/')) return Mocks.MOCK_TRANSACTIONS as unknown as T;
-        if (endpoint.startsWith('/investments/portfolio')) return Mocks.MOCK_INVESTMENT_PORTFOLIO as unknown as T;
-        if (endpoint.startsWith('/investments/history')) return { history: [], currency: 'CZK' } as unknown as T;
-        if (endpoint.startsWith('/investments/dividends')) return { dividends: [] } as unknown as T;
-        if (endpoint.startsWith('/budgets/overview')) return Mocks.MOCK_BUDGET_OVERVIEW as unknown as T;
-        if (endpoint.startsWith('/budgets/goals')) return Mocks.MOCK_GOALS as unknown as T;
-        if (endpoint.startsWith('/budgets/')) return Mocks.MOCK_BUDGETS as unknown as T;
-        if (endpoint.startsWith('/sync/status')) return Mocks.MOCK_SYNC_STATUS as unknown as T;
-        if (endpoint.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 } as unknown as T;
-        if (endpoint.startsWith('/settings/api-keys')) return Mocks.MOCK_API_KEYS as unknown as T;
-
-        console.warn('[DEMO API] Unknown generic endpoint', endpoint);
-    }
-
     const response = await apiFetch(endpoint);
 
     if (!response.ok) {
@@ -262,7 +247,7 @@ export async function connectBank(institutionId: string, redirectUrl: string): P
     const response = await apiMutate(`/accounts/connect/bank`, {
         method: 'POST',
         body: JSON.stringify({ institution_id: institutionId, redirect_url: redirectUrl }),
-    }, { link: '#demo', requisition_id: 'demo' });
+    });
 
     if (!response.ok) throw new Error('Failed to connect bank');
     return response.json();
@@ -272,7 +257,7 @@ export async function updateAccount(id: string, data: { name?: string; is_visibl
     const response = await apiMutate(`/accounts/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
-    }, { status: 'updated', id });
+    });
 
     if (!response.ok) throw new Error('Failed to update account');
     return response.json();
@@ -281,7 +266,7 @@ export async function updateAccount(id: string, data: { name?: string; is_visibl
 export async function deleteAccount(id: string): Promise<{ status: string; id: string }> {
     const response = await apiMutate(`/accounts/${id}`, {
         method: 'DELETE',
-    }, { status: 'deleted', id });
+    });
 
     if (!response.ok) throw new Error('Failed to delete account');
     return response.json();
@@ -342,7 +327,7 @@ export async function saveApiKeys(keys: ApiKeysRequest): Promise<{ status: strin
     const response = await apiMutate(`/settings/api-keys`, {
         method: 'POST',
         body: JSON.stringify(keys),
-    }, { status: 'saved', updated_keys: Object.keys(keys) });
+    });
 
     if (!response.ok) throw new Error('Failed to save API keys');
     return response.json();
@@ -507,7 +492,7 @@ export async function saveContact(iban: string, name: string, note?: string): Pr
     const response = await apiMutate(`/contacts/${encodeURIComponent(iban)}`, {
         method: 'PUT',
         body: JSON.stringify({ name, note: note ?? null }),
-    }, { iban, name, source: 'manual' as const, note: note ?? null });
+    });
     if (!response.ok) throw new Error('Failed to save contact');
     return response.json();
 }
@@ -515,7 +500,7 @@ export async function saveContact(iban: string, name: string, note?: string): Pr
 export async function deleteContact(iban: string): Promise<{ deleted: string }> {
     const response = await apiMutate(`/contacts/${encodeURIComponent(iban)}`, {
         method: 'DELETE',
-    }, { deleted: iban });
+    });
     if (!response.ok) throw new Error('Failed to delete contact');
     return response.json();
 }
@@ -587,7 +572,7 @@ export async function updateBudget(id: number, data: { category?: string; amount
 export async function deleteBudget(id: number): Promise<{ status: string; id: number }> {
     const response = await apiMutate(`/budgets/${id}`, {
         method: 'DELETE',
-    }, { status: 'deleted', id });
+    });
     if (!response.ok) throw new Error('Failed to delete budget');
     return response.json();
 }
@@ -617,7 +602,7 @@ export async function updateGoal(id: number, data: { name?: string; target_amoun
 export async function deleteGoal(id: number): Promise<{ status: string; id: number }> {
     const response = await apiMutate(`/budgets/goals/${id}`, {
         method: 'DELETE',
-    }, { status: 'deleted', id });
+    });
     if (!response.ok) throw new Error('Failed to delete goal');
     return response.json();
 }

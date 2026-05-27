@@ -140,12 +140,7 @@ async def register(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new account with email + password. Returns a JWT so the user
-    is immediately logged in without a second round-trip.
-
-    Adopts the bootstrap user if its email matches (so the bootstrap row
-    becomes the real account on first registration). Otherwise rejects
-    duplicate emails to prevent silent overwrites.
-    """
+    is immediately logged in without a second round-trip."""
     if len(body.password) < MIN_PASSWORD_LEN:
         raise HTTPException(
             status_code=400,
@@ -153,28 +148,18 @@ async def register(
         )
 
     result = await db.execute(select(UserModel).where(UserModel.email == body.email))
-    existing = result.scalar_one_or_none()
+    if result.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=409, detail="Email already registered")
 
-    if existing is not None:
-        # Adopt the bootstrap user (provider='email', no password_hash) on its
-        # first real registration. Any other case = email taken.
-        if existing.password_hash is None and existing.provider == "email":
-            user = existing
-            user.password_hash = hash_password(body.password)
-            if body.name and not user.name:
-                user.name = body.name
-        else:
-            raise HTTPException(status_code=409, detail="Email already registered")
-    else:
-        user = UserModel(
-            email=body.email,
-            name=body.name,
-            provider="email",
-            password_hash=hash_password(body.password),
-            is_active=True,
-        )
-        db.add(user)
-        await db.flush()
+    user = UserModel(
+        email=body.email,
+        name=body.name,
+        provider="email",
+        password_hash=hash_password(body.password),
+        is_active=True,
+    )
+    db.add(user)
+    await db.flush()
 
     user.last_login_at = datetime.utcnow()
     await db.commit()

@@ -26,8 +26,6 @@ declare module "next-auth" {
     interface User {
         backendToken?: string;
     }
-}
-declare module "next-auth/jwt" {
     interface JWT {
         backendToken?: string;
         backendUser?: unknown;
@@ -142,8 +140,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return token;
         },
         async session({ session, token }) {
-            if (token.backendToken) {
-                session.backendToken = token.backendToken;
+            const backendToken = (token as { backendToken?: string }).backendToken;
+            if (backendToken) {
+                session.backendToken = backendToken;
             }
             return session;
         },

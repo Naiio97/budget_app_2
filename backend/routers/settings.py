@@ -97,13 +97,40 @@ async def save_api_keys(
     return {"status": "saved", "updated_keys": updated_keys}
 
 
-# Helper for services — services currently use the bootstrap user (id=1) until
-# they get a way to resolve "the calling user" from outside a request context.
-async def get_api_key(key: str, user_id: int = 1) -> Optional[str]:
+# Helpers for services that operate outside a request context (GoCardless
+# token refresh, Trading 212 polling). These don't have a current_user, so
+# they fall back to the lowest-id user in the DB — fine for single-tenant
+# deployments, but multi-tenant deployments must plumb request context
+# through.
+async def _resolve_default_user_id(db: AsyncSession) -> Optional[int]:
+    from models import UserModel
+    result = await db.execute(
+        select(UserModel.id).order_by(UserModel.id).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_api_key(key: str, user_id: Optional[int] = None) -> Optional[str]:
     """Get an API key from database (for use in services)."""
     from database import get_db_context
     async with get_db_context() as db:
+        if user_id is None:
+            user_id = await _resolve_default_user_id(db)
+            if user_id is None:
+                return None
         return await get_setting(db, user_id, key)
+
+
+async def set_api_key(key: str, value: str, user_id: Optional[int] = None) -> None:
+    """Set an API key in database (for use in services like GoCardless token cache)."""
+    from database import get_db_context
+    async with get_db_context() as db:
+        if user_id is None:
+            user_id = await _resolve_default_user_id(db)
+            if user_id is None:
+                return  # no users yet — silently drop; service will re-fetch next time
+        await set_setting(db, user_id, key, value)
+        await db.commit()
 
 
 # ============== Category Rules ==============
