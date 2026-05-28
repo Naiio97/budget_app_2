@@ -9,19 +9,105 @@ import {
 
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
+const TX_TEMPLATES: Array<{ description: string; category: string; sign: 1 | -1; min: number; max: number }> = [
+    { description: 'Lidl', category: 'Food', sign: -1, min: 250, max: 1800 },
+    { description: 'Albert', category: 'Food', sign: -1, min: 180, max: 1400 },
+    { description: 'Kavárna Etage', category: 'Food', sign: -1, min: 80, max: 250 },
+    { description: 'Wolt', category: 'Food', sign: -1, min: 180, max: 450 },
+    { description: 'Nájem', category: 'Utilities', sign: -1, min: 14000, max: 14000 },
+    { description: 'Vodafone CZ', category: 'Utilities', sign: -1, min: 349, max: 649 },
+    { description: 'ČEZ', category: 'Utilities', sign: -1, min: 1200, max: 2400 },
+    { description: 'Netflix', category: 'Entertainment', sign: -1, min: 269, max: 269 },
+    { description: 'Spotify', category: 'Entertainment', sign: -1, min: 169, max: 169 },
+    { description: 'Shell', category: 'Transport', sign: -1, min: 1200, max: 2200 },
+    { description: 'DPP', category: 'Transport', sign: -1, min: 39, max: 130 },
+    { description: 'Alza.cz', category: 'Shopping', sign: -1, min: 350, max: 4500 },
+    { description: 'Výplata', category: 'Salary', sign: 1, min: 65000, max: 68000 },
+    { description: 'Bokovka — fakturace', category: 'Salary', sign: 1, min: 6000, max: 9000 },
+];
+
+// A couple of dimmed family/internal transfers thrown in so the UI shows the
+// gray-out treatment in context, instead of every row looking the same.
+const SPECIAL_TX: Array<{ description: string; category: string; amount: number; transaction_type: 'family_transfer' | 'internal_transfer' }> = [
+    { description: 'Převod Sandri', category: 'Family Transfer', amount: -3500, transaction_type: 'family_transfer' },
+    { description: 'Spořicí účet (interní)', category: 'Internal Transfer', amount: -5000, transaction_type: 'internal_transfer' },
+];
+
 const generateTransactions = (count: number): Transaction[] => {
-    return Array.from({ length: count }).map((_, i) => ({
-        id: `txn-${i}`,
-        date: new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
-        description: ['Nákup potravin', 'Nájem', 'Výplata', 'Netflix', 'Káva', 'Tankování'][Math.floor(Math.random() * 6)],
-        amount: (Math.random() > 0.8 ? 1 : -1) * (Math.floor(Math.random() * 3000) + 100),
-        currency: 'CZK',
-        category: ['Jídlo', 'Bydlení', 'Příjem', 'Zábava', 'Doprava'][Math.floor(Math.random() * 5)],
-        account_id: `acc-${(i % 3) + 1}`,
-        account_type: 'bank',
-        account_name: 'Běžný účet',
-    }));
+    const result: Transaction[] = [];
+    for (let i = 0; i < count; i++) {
+        const isSpecial = i % 9 === 4 || i % 9 === 7; // ~2 of every 9 are transfers
+        if (isSpecial) {
+            const tpl = SPECIAL_TX[i % SPECIAL_TX.length];
+            result.push({
+                id: `txn-${i}`,
+                date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                description: tpl.description,
+                amount: tpl.amount,
+                currency: 'CZK',
+                category: tpl.category,
+                account_id: `acc-${(i % 3) + 1}`,
+                account_type: 'bank',
+                account_name: 'Běžný účet',
+                transaction_type: tpl.transaction_type,
+                is_excluded: true,
+            });
+            continue;
+        }
+        const tpl = TX_TEMPLATES[i % TX_TEMPLATES.length];
+        const range = tpl.max - tpl.min;
+        const amount = tpl.sign * (tpl.min + (range > 0 ? Math.floor(((i * 37) % 100) / 100 * range) : 0));
+        result.push({
+            id: `txn-${i}`,
+            date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            description: tpl.description,
+            amount,
+            currency: 'CZK',
+            category: tpl.category,
+            account_id: `acc-${(i % 3) + 1}`,
+            account_type: 'bank',
+            account_name: 'Běžný účet',
+            transaction_type: 'normal',
+            is_excluded: false,
+        });
+    }
+    return result;
 };
+
+function buildMockTransactionDetail(id: string) {
+    // Try to find the tx in our generated list so the modal matches what the
+    // user clicked. Falls back to a generic record if id is unknown.
+    const tx = MOCK_TRANSACTIONS.items.find(t => t.id === id) ?? MOCK_TRANSACTIONS.items[0];
+    return {
+        id: tx.id,
+        date: tx.date,
+        value_date: tx.date,
+        booking_date_time: `${tx.date}T10:23:00`,
+        description: tx.description,
+        amount: tx.amount,
+        currency: tx.currency,
+        category: tx.category ?? null,
+        account_id: tx.account_id,
+        account_name: tx.account_name ?? null,
+        account_type: tx.account_type,
+        transaction_type: tx.transaction_type ?? 'normal',
+        is_excluded: tx.is_excluded ?? false,
+        creditor_name: tx.amount < 0 ? tx.description : null,
+        debtor_name: tx.amount > 0 ? tx.description : null,
+        creditor_iban: tx.amount < 0 ? 'CZ6520100000002049290001' : null,
+        debtor_iban: tx.amount > 0 ? 'CZ1234567890123456789012' : null,
+        counterparty_name_source: 'bank' as const,
+        remittance_info: `Demo poznámka pro ${tx.description}`,
+        end_to_end_id: `END-${tx.id}`,
+        bank_tx_code: 'PMNT-RCDT-ESCT',
+        additional_info: null,
+        balance_after: 25000,
+        balance_after_currency: 'CZK',
+        fx_rate: null,
+        fx_source_currency: null,
+        fx_target_currency: null,
+    };
+}
 
 export const MOCK_DASHBOARD: DashboardData = {
     summary: {
@@ -356,7 +442,14 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         return { account: MOCK_ACCOUNTS[0], transactions: MOCK_TRANSACTIONS.items, total: 20, pages: 1, current_page: 1 };
     }
     if (path.startsWith('/accounts/')) return MOCK_ACCOUNTS;
-    if (path.startsWith('/transactions/')) return MOCK_TRANSACTIONS;
+    if (path.startsWith('/transactions/')) {
+        // Detail endpoint hits /transactions/{id}; the list is /transactions/
+        // or /transactions/?... — anything after the trailing slash is the id.
+        const pathOnly = path.split('?')[0];
+        const rest = pathOnly.slice('/transactions/'.length);
+        if (!rest) return MOCK_TRANSACTIONS;
+        return buildMockTransactionDetail(rest.split('/')[0]);
+    }
     if (path.startsWith('/investments/portfolio-detail')) return MOCK_PORTFOLIO_DETAIL;
     if (path.startsWith('/investments/portfolio')) return MOCK_INVESTMENT_PORTFOLIO;
     if (path.startsWith('/investments/positions')) return MOCK_POSITIONS;
