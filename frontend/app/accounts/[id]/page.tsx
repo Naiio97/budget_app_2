@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
+import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
 import { getAccountDetail, getTransactions, AccountDetail, Transaction, PaginatedResponse } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -261,10 +262,7 @@ export default function AccountDetailPage() {
     if (metaLoading && !meta) {
         return (
             <MainLayout>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                    <div style={{ width: 40, height: 40, border: '3px solid var(--glass-border-light)', borderTopColor: 'var(--accent-primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                    <span className="text-secondary">Načítám účet...</span>
-                </div>
+                <PageLoader />
             </MainLayout>
         );
     }

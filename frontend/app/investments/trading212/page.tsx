@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
+import PageLoader from '@/components/PageLoader';
 import {
     getInvestmentPortfolio,
     getPortfolioDetail,
@@ -150,9 +151,7 @@ export default function Trading212DetailPage() {
     if (loadingPortfolio) {
         return (
             <MainLayout>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
-                </div>
+                <PageLoader />
             </MainLayout>
         );
     }

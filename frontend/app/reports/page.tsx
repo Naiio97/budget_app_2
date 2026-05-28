@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
+import PageLoader from '@/components/PageLoader';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
     LineChart, Line
@@ -132,9 +133,7 @@ export default function ReportsPage() {
     if (loading) {
         return (
             <MainLayout>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
-                </div>
+                <PageLoader />
             </MainLayout>
         );
     }

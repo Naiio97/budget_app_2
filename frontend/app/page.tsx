@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/MainLayout';
+import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
 import NetWorthChart from '@/components/NetWorthChart';
 import CategoryChart from '@/components/CategoryChart';
@@ -92,9 +93,7 @@ export default function DashboardPage() {
   if (isLoading || !data) {
     return (
       <MainLayout>
-        <div className="page-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
-        </div>
+        <PageLoader />
       </MainLayout>
     );
   }

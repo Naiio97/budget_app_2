@@ -45,12 +45,16 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 
+    // Bottom nav holds the four primary sections + a Menu button that opens
+    // the drawer (which itself surfaces Settings, accounts, sync, logout).
+    // Nastavení moved into the drawer's Rychlé akce — kept off the bottom
+    // nav so the menu button can take its slot instead of floating over
+    // the page content.
     const bottomNavItems = [
         { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
         { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
         { href: '/rozpocet', label: 'Rozpočet', icon: Icons.nav.monthlyBudget },
         { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
-        { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 
     useEffect(() => {
@@ -191,17 +195,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
             <div className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
                 <main className="main-content">
-                    {isMobile && (
-                        <button
-                            type="button"
-                            className="mobile-tools-button"
-                            onClick={() => setIsMobileToolsOpen(true)}
-                            aria-label="Otevřít menu"
-                        >
-                            ☰
-                        </button>
-                    )}
-
                     {/* Hamburger for medium screens */}
                     <div className="compact-nav-header">
                         <button
@@ -439,6 +432,15 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     <span className="bottom-nav-label">{item.label}</span>
                                 </Link>
                             ))}
+                            <button
+                                type="button"
+                                className={`bottom-nav-item ${isMobileToolsOpen ? 'active' : ''}`}
+                                onClick={() => setIsMobileToolsOpen(true)}
+                                aria-label="Otevřít menu"
+                            >
+                                <span className="bottom-nav-icon" aria-hidden>☰</span>
+                                <span className="bottom-nav-label">Menu</span>
+                            </button>
                         </nav>
                     </>
                 )}
