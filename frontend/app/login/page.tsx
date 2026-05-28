@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { enterDemo } from "@/lib/demo-mode";
 import { clearBackendTokenCache } from "@/lib/api";
 import "./login.css";
@@ -13,11 +13,12 @@ type Pending = null | "google" | "demo" | "credentials";
 const API_BASE =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// `from` is read from window.location.search inside useEffect rather than
-// via useSearchParams — that hook forces a Suspense boundary and caused
-// hydration mismatches between the server-rendered HTML and the client
-// re-render. Reading after mount keeps the initial render identical on
-// both sides and skips the prerender bailout entirely.
+// `from` is read on-demand from window.location at click time, not via
+// useSearchParams or useState — that hook forces a Suspense boundary and
+// caused hydration mismatches between server-rendered HTML and the client
+// re-render. The value is only consumed in click handlers, so reading it
+// lazily skips React state, the prerender bailout, and the "setState in
+// effect" lint rule all at once.
 function sanitizeFrom(raw: string | null): string {
     if (
         raw &&
@@ -30,16 +31,14 @@ function sanitizeFrom(raw: string | null): string {
     return "/";
 }
 
+function readFromParam(): string {
+    if (typeof window === "undefined") return "/";
+    const params = new URLSearchParams(window.location.search);
+    return sanitizeFrom(params.get("from"));
+}
+
 export default function LoginPage() {
     const router = useRouter();
-    const [from, setFrom] = useState("/");
-
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        const params = new URLSearchParams(window.location.search);
-        setFrom(sanitizeFrom(params.get("from")));
-    }, []);
-
     const [mode, setMode] = useState<Mode>("login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -50,14 +49,14 @@ export default function LoginPage() {
     const handleGoogle = () => {
         setPending("google");
         setError(null);
-        signIn("google", { redirectTo: from }).finally(() => setPending(null));
+        signIn("google", { redirectTo: readFromParam() }).finally(() => setPending(null));
     };
 
     const handleDemo = () => {
         setPending("demo");
         setError(null);
         enterDemo();
-        router.push(from);
+        router.push(readFromParam());
     };
 
     const handleCredentials = async (e: FormEvent) => {
@@ -103,7 +102,7 @@ export default function LoginPage() {
             // backendToken — without this the cached null sticks for 10s and
             // every API call in that window comes back 401.
             clearBackendTokenCache();
-            router.push(from);
+            router.push(readFromParam());
         } catch (err) {
             setError(err instanceof Error ? err.message : "Něco se pokazilo.");
             setPending(null);
