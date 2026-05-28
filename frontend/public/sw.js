@@ -40,6 +40,12 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
     if (url.origin !== self.location.origin) return;
 
+    // Don't touch auth endpoints — they set cookies, must be fresh, and a
+    // cached failure here surfaces as a misleading "(from service worker)"
+    // badge in DevTools that points the finger at the SW instead of the
+    // actual upstream error.
+    if (url.pathname.startsWith('/api/auth/')) return;
+
     // Navigation (HTML documents): network-first, fall back to offline page
     if (request.mode === 'navigate') {
         event.respondWith(
