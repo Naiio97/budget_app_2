@@ -3,11 +3,10 @@ import {
     NetWorthHistory, SyncStatus, ApiKeysResponse,
     InvestmentPortfolio, Budget, BudgetOverview,
     SavingsGoal, PaginatedResponse, Contact,
-    PortfolioPosition, Pie, InvestmentPortfolioDetail, PortfolioHistory,
+    Pie, InvestmentPortfolioDetail, PortfolioHistory,
     ManualInvestmentAccount
 } from './api';
 
-const today = () => new Date().toISOString().split('T')[0];
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
 
 const generateTransactions = (count: number): Transaction[] => {

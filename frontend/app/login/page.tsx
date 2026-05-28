@@ -1,8 +1,8 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { enterDemo } from "@/lib/demo-mode";
 import { clearBackendTokenCache } from "@/lib/api";
 import "./login.css";
@@ -13,32 +13,32 @@ type Pending = null | "google" | "demo" | "credentials";
 const API_BASE =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// useSearchParams forces the consumer into Suspense during static
-// generation; the outer page renders the boundary and the inner client
-// component reads searchParams.
-export default function LoginPage() {
-    return (
-        <Suspense fallback={<div className="login-screen" />}>
-            <LoginContent />
-        </Suspense>
-    );
+// `from` is read on-demand from window.location at click time, not via
+// useSearchParams or useState — that hook forces a Suspense boundary and
+// caused hydration mismatches between server-rendered HTML and the client
+// re-render. The value is only consumed in click handlers, so reading it
+// lazily skips React state, the prerender bailout, and the "setState in
+// effect" lint rule all at once.
+function sanitizeFrom(raw: string | null): string {
+    if (
+        raw &&
+        raw.startsWith("/") &&
+        !raw.startsWith("//") &&
+        !raw.startsWith("/login")
+    ) {
+        return raw;
+    }
+    return "/";
 }
 
-function LoginContent() {
-    const router = useRouter();
-    const searchParams = useSearchParams();
-    // Sanitize `from` so we never bounce back to /login (would cause an
-    // infinite redirect chain with each level appending another encoded URL).
-    // Also reject absolute URLs — open-redirect protection.
-    const rawFrom = searchParams.get("from");
-    const from =
-        rawFrom &&
-        rawFrom.startsWith("/") &&
-        !rawFrom.startsWith("//") &&
-        !rawFrom.startsWith("/login")
-            ? rawFrom
-            : "/";
+function readFromParam(): string {
+    if (typeof window === "undefined") return "/";
+    const params = new URLSearchParams(window.location.search);
+    return sanitizeFrom(params.get("from"));
+}
 
+export default function LoginPage() {
+    const router = useRouter();
     const [mode, setMode] = useState<Mode>("login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
@@ -49,14 +49,14 @@ function LoginContent() {
     const handleGoogle = () => {
         setPending("google");
         setError(null);
-        signIn("google", { redirectTo: from }).finally(() => setPending(null));
+        signIn("google", { redirectTo: readFromParam() }).finally(() => setPending(null));
     };
 
     const handleDemo = () => {
         setPending("demo");
         setError(null);
         enterDemo();
-        router.push(from);
+        router.push(readFromParam());
     };
 
     const handleCredentials = async (e: FormEvent) => {
@@ -102,7 +102,7 @@ function LoginContent() {
             // backendToken — without this the cached null sticks for 10s and
             // every API call in that window comes back 401.
             clearBackendTokenCache();
-            router.push(from);
+            router.push(readFromParam());
         } catch (err) {
             setError(err instanceof Error ? err.message : "Něco se pokazilo.");
             setPending(null);
