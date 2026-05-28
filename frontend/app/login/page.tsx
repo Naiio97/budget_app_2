@@ -1,8 +1,8 @@
 "use client";
 
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import { enterDemo } from "@/lib/demo-mode";
 import { clearBackendTokenCache } from "@/lib/api";
 import "./login.css";
@@ -13,31 +13,32 @@ type Pending = null | "google" | "demo" | "credentials";
 const API_BASE =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// useSearchParams forces the consumer into Suspense during static
-// generation; the outer page renders the boundary and the inner client
-// component reads searchParams.
-export default function LoginPage() {
-    return (
-        <Suspense fallback={<div className="login-screen" />}>
-            <LoginContent />
-        </Suspense>
-    );
+// `from` is read from window.location.search inside useEffect rather than
+// via useSearchParams — that hook forces a Suspense boundary and caused
+// hydration mismatches between the server-rendered HTML and the client
+// re-render. Reading after mount keeps the initial render identical on
+// both sides and skips the prerender bailout entirely.
+function sanitizeFrom(raw: string | null): string {
+    if (
+        raw &&
+        raw.startsWith("/") &&
+        !raw.startsWith("//") &&
+        !raw.startsWith("/login")
+    ) {
+        return raw;
+    }
+    return "/";
 }
 
-function LoginContent() {
+export default function LoginPage() {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    // Sanitize `from` so we never bounce back to /login (would cause an
-    // infinite redirect chain with each level appending another encoded URL).
-    // Also reject absolute URLs — open-redirect protection.
-    const rawFrom = searchParams.get("from");
-    const from =
-        rawFrom &&
-        rawFrom.startsWith("/") &&
-        !rawFrom.startsWith("//") &&
-        !rawFrom.startsWith("/login")
-            ? rawFrom
-            : "/";
+    const [from, setFrom] = useState("/");
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const params = new URLSearchParams(window.location.search);
+        setFrom(sanitizeFrom(params.get("from")));
+    }, []);
 
     const [mode, setMode] = useState<Mode>("login");
     const [email, setEmail] = useState("");
