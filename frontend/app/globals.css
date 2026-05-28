@@ -2528,6 +2528,19 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .settings-page {
     padding-bottom: calc(92px + env(safe-area-inset-bottom));
   }
+  /* `.surface` carries 24px padding by default and `.card-head` /
+   * `.card-body` add even more inside it — fine on desktop, suffocating
+   * on a phone. Strip the outer surface padding for settings cards and
+   * let the head/body manage their own (tighter) spacing. */
+  .settings-page .surface {
+    padding: 0;
+  }
+  .settings-page .surface .card-head {
+    padding: 14px 16px 10px;
+  }
+  .settings-page .surface .card-body {
+    padding: 12px 16px 16px;
+  }
   .settings-categories-grid {
     grid-template-columns: minmax(0, 1fr);
     overflow: visible;
@@ -2538,25 +2551,16 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .settings-rules-card {
     border-radius: 22px;
   }
-  .settings-category-card .card-head,
-  .settings-add-rule-card .card-head,
-  .settings-rules-card .card-head {
-    padding: 18px 24px 12px;
-  }
-  .settings-category-card .card-body,
-  .settings-add-rule-card .card-body,
-  .settings-rules-card .card-body {
-    padding: 16px 24px 22px;
-  }
+  /* category / rule cards inherit the tighter settings-page padding above */
   .settings-account-list {
-    gap: 10px;
+    gap: 6px;
   }
   .settings-account-row {
     grid-template-columns: 30px minmax(0, 1fr) auto;
     gap: 10px;
-    min-height: 58px;
-    padding: 10px;
-    border-radius: 14px;
+    min-height: 48px;
+    padding: 8px 10px;
+    border-radius: 12px;
     position: relative;
     overflow: hidden;
     touch-action: pan-y;
