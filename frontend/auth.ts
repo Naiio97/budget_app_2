@@ -95,6 +95,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     pages: {
         signIn: "/login",
     },
+    // Trust the Host header on incoming requests. Azure Container Apps puts us
+    // behind their reverse proxy, which terminates TLS and sets X-Forwarded-Host
+    // to the public domain — without trustHost (or an AUTH_URL env), Auth.js
+    // refuses to mint cookies for that host and every /api/auth/* call errors
+    // with UntrustedHost. The container itself only accepts traffic from the
+    // proxy, so trusting the header here is safe.
+    trustHost: true,
     callbacks: {
         async jwt({ token, account, profile, user }) {
             // Credentials flow: authorize() stashed the backend JWT on `user`.
