@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useRef, useMemo, useReducer } from 'reac
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
+import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
 import CustomSelect from '@/components/CustomSelect';
 import { Transaction, getTransactions, getDashboard, apiFetch } from '@/lib/api';
@@ -334,13 +335,7 @@ function TransactionsPageContent() {
 
 export default function TransactionsPage() {
     return (
-        <Suspense fallback={
-            <MainLayout>
-                <div className="page-container" style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
-                </div>
-            </MainLayout>
-        }>
+        <Suspense fallback={<MainLayout><PageLoader /></MainLayout>}>
             <TransactionsPageContent />
         </Suspense>
     );
