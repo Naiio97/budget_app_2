@@ -511,7 +511,6 @@ select.input {
   display: inline-flex; align-items: center; gap: 7px;
   color: var(--text); letter-spacing: -0.015em;
 }
-.card-body { padding: var(--spacing-lg); }
 .card-body-nopad { padding: 0; }
 
 /* ══ TRANSACTION ROWS — iOS inset style ════════════════════ */
@@ -801,7 +800,6 @@ select.input {
 .bottom-nav-icon  { font-size: 1.3rem; line-height: 1; }
 .bottom-nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
 
-.mobile-tools-button,
 .mobile-tools-overlay,
 .mobile-tools-drawer {
   display: none;
@@ -1903,30 +1901,6 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .month-nav-row > :nth-child(3) { width: 95px !important; flex-shrink: 0; }
 
   .desktop-nav { display: none; }
-
-  .mobile-tools-button {
-    display: grid;
-    position: fixed;
-    top: calc(10px + env(safe-area-inset-top));
-    right: 12px;
-    z-index: 320;
-    width: 40px;
-    height: 40px;
-    place-items: center;
-    border: 0.5px solid var(--border);
-    border-radius: var(--radius-full);
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: var(--shadow-sm);
-    font: inherit;
-    font-size: 18px;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  [data-mode="light"] .mobile-tools-button {
-    background: rgba(242, 242, 247, 0.92);
-  }
 
   .mobile-tools-overlay {
     display: block;
