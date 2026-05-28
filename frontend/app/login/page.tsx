@@ -2,7 +2,7 @@
 
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
 import { enterDemo } from "@/lib/demo-mode";
 import { clearBackendTokenCache } from "@/lib/api";
 import "./login.css";
@@ -13,7 +13,18 @@ type Pending = null | "google" | "demo" | "credentials";
 const API_BASE =
     process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+// useSearchParams forces the consumer into Suspense during static
+// generation; the outer page renders the boundary and the inner client
+// component reads searchParams.
 export default function LoginPage() {
+    return (
+        <Suspense fallback={<div className="login-screen" />}>
+            <LoginContent />
+        </Suspense>
+    );
+}
+
+function LoginContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     // Sanitize `from` so we never bounce back to /login (would cause an
