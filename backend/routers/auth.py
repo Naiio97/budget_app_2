@@ -16,16 +16,17 @@ from auth import create_access_token, get_current_user, hash_password, limiter, 
 from config import get_settings
 from database import get_db
 from models import UserModel
+from services.oauth_verify import verify_google_id_token
 
 router = APIRouter()
 
 
 class OAuthUpsertRequest(BaseModel):
     provider: Literal["google", "apple"]
-    provider_id: str  # OAuth subject claim ("sub")
-    email: EmailStr
-    name: Optional[str] = None
-    image_url: Optional[str] = None
+    # The provider's signed OIDC ID token. The backend verifies it against the
+    # provider's JWKS and derives identity (sub, email, ...) from the verified
+    # payload — claims are NEVER trusted from the request body.
+    id_token: str
 
 
 class RegisterRequest(BaseModel):
@@ -68,45 +69,70 @@ async def oauth_upsert(
 ):
     """Called by the frontend after a successful OAuth handshake.
 
+    Identity is taken ONLY from the provider's signed ID token, which the
+    backend verifies against the provider's JWKS (signature, audience, issuer,
+    expiry). Nothing in the request body is trusted as identity, so hitting this
+    endpoint directly with a forged email/sub can't mint a JWT for that account.
+
     Lookup order:
       1. (provider, provider_id) — repeat logins
       2. email — adopts the bootstrap user / cross-provider account linking
       3. create new
-
-    Trust model: this endpoint trusts the FE that it actually verified the
-    OAuth handshake. The hardened variant (next iteration) forwards the OAuth
-    ID token and the backend verifies against Google/Apple JWKS directly.
     """
     settings = get_settings()
     if body.provider not in settings.auth_allowed_oauth_providers:
         raise HTTPException(status_code=403, detail=f"Provider '{body.provider}' is not enabled")
 
+    if body.provider != "google":
+        # Apple is wired up on the FE config but its server-side token
+        # verification isn't implemented yet — fail closed rather than trust.
+        raise HTTPException(status_code=501, detail=f"Provider '{body.provider}' is not supported yet")
+
+    if not settings.google_client_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Google login is not configured on the server (GOOGLE_CLIENT_ID missing)",
+        )
+
+    claims = await verify_google_id_token(body.id_token, settings.google_client_id)
+    # Google sets email_verified=true for its own accounts; refuse anything else
+    # so we never adopt/link an account on an unverified email.
+    if not claims.get("email_verified", False):
+        raise HTTPException(status_code=403, detail="Google account email is not verified")
+
+    provider_id = claims["sub"]  # guaranteed present by the require=[...] check
+    email = claims.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Google token has no email claim")
+    name = claims.get("name")
+    image_url = claims.get("picture")
+
     result = await db.execute(
         select(UserModel).where(
             UserModel.provider == body.provider,
-            UserModel.provider_id == body.provider_id,
+            UserModel.provider_id == provider_id,
         )
     )
     user = result.scalar_one_or_none()
 
     if user is None:
-        result = await db.execute(select(UserModel).where(UserModel.email == body.email))
+        result = await db.execute(select(UserModel).where(UserModel.email == email))
         user = result.scalar_one_or_none()
         if user is not None:
             user.provider = body.provider
-            user.provider_id = body.provider_id
-            if body.name and not user.name:
-                user.name = body.name
-            if body.image_url:
-                user.image_url = body.image_url
+            user.provider_id = provider_id
+            if name and not user.name:
+                user.name = name
+            if image_url:
+                user.image_url = image_url
 
     if user is None:
         user = UserModel(
-            email=body.email,
-            name=body.name,
-            image_url=body.image_url,
+            email=email,
+            name=name,
+            image_url=image_url,
             provider=body.provider,
-            provider_id=body.provider_id,
+            provider_id=provider_id,
             is_active=True,
         )
         db.add(user)

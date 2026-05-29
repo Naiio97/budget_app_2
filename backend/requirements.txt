@@ -7,7 +7,9 @@ pydantic-settings
 sqlalchemy>=2.0.0
 asyncpg
 alembic
-pyjwt>=2.8.0
+# [crypto] pulls in `cryptography` — required for RS256 verification of the
+# Google ID token in services/oauth_verify.py (HS256 alone doesn't need it).
+pyjwt[crypto]>=2.8.0
 passlib[argon2]>=1.7.4
 slowapi>=0.1.9
 email-validator>=2.0.0

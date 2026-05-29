@@ -21,18 +21,24 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install flake8 #Nastaví Python 3.12, nainstaluje flake8.
+      - name: Install dependencies #Nainstaluje běhové i testovací závislosti + flake8.
         run: |
           cd backend
           python -m pip install --upgrade pip
           pip install flake8
+          pip install -r requirements-dev.txt
 
       - name: Run Linting (Simple Test) #Spustí kontrolu kódu.
         #Tohle je ten "test". Flake8 je linter — kontroluje kód na chyby. Ale pozor: tenhle příkaz kontroluje jen syntaktické chyby a nedefinované proměnné (kódy E9, F63, F7, F82).
         #Nekontroluje logiku, netestuje funkčnost. Je to minimum, ale lepší než nic — zachytí situace, kdy bys deployoval kód, který se ani nespustí.
         run: |
           cd backend
-          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics  
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run tests (pytest) #Spustí jednotkové testy (zatím ověření Google ID tokenu).
+        run: |
+          cd backend
+          pytest -q
   test-fe: #Říká, na jakém stroji pipeline poběží.
     runs-on: ubuntu-latest #= virtuální Ubuntu mašina na serverech GitHubu. Standard. Nic řešit.
     steps:

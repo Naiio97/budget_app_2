@@ -103,7 +103,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // proxy, so trusting the header here is safe.
     trustHost: true,
     callbacks: {
-        async jwt({ token, account, profile, user }) {
+        async jwt({ token, account, user }) {
             // Credentials flow: authorize() stashed the backend JWT on `user`.
             // Both providers reach this branch via `user` on initial sign-in.
             if (user?.backendToken) {
@@ -112,21 +112,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
             // OAuth flow: we don't get a backend JWT from the provider — exchange
             // the OIDC identity at /auth/oauth-upsert. `account` is only set on
-            // the initial sign-in callback.
-            if (account && profile && !token.backendToken) {
+            // the initial sign-in callback. We forward the provider's signed
+            // id_token (NOT the decoded profile claims) — the backend re-verifies
+            // it against the provider JWKS and derives identity from there, so a
+            // forged request body can't mint a token for someone else's account.
+            if (account && !token.backendToken) {
+                if (!account.id_token) {
+                    console.error("[auth] OAuth account has no id_token — cannot exchange for backend JWT");
+                    return token;
+                }
                 try {
                     const res = await fetch(`${BACKEND_URL}/auth/oauth-upsert`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             provider: account.provider,
-                            provider_id: account.providerAccountId,
-                            email: profile.email,
-                            name: profile.name ?? null,
-                            image_url:
-                                (profile as { picture?: string; image?: string }).picture ??
-                                (profile as { picture?: string; image?: string }).image ??
-                                null,
+                            id_token: account.id_token,
                         }),
                     });
                     if (res.ok) {

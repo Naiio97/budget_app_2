@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from functools import lru_cache
 
 class Settings(BaseSettings):
@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     # Empty string means /auth/* endpoints will reject — set in .env before enabling auth.
     auth_secret: str = ""
     auth_jwt_ttl_hours: int = 24
+
+    # Google OAuth client ID — MUST equal the one Auth.js uses on the frontend.
+    # Used as the expected `aud` when the backend verifies the Google ID token
+    # at /auth/oauth-upsert. Empty means Google login is refused (fail closed).
+    # Accepts either GOOGLE_CLIENT_ID or Auth.js's AUTH_GOOGLE_ID in .env.
+    google_client_id: str = Field(
+        default="",
+        validation_alias=AliasChoices("google_client_id", "auth_google_id"),
+    )
     # Stored as a comma-separated string in .env (e.g. "google,apple") so
     # pydantic-settings doesn't try to JSON-decode it. Use the
     # `auth_allowed_oauth_providers` property below for a real list.
