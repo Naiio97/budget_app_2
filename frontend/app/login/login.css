@@ -93,10 +93,34 @@
     border-color: #000;
 }
 
-.login-btn-google .login-btn-icon {
-    background: #fff;
-    color: #4285F4;
-    border-color: #dadce0;
+/* "Sign in with Google" button — follows Google's branding guidelines:
+   white surface, #1f1f1f label in the Roboto stack, #747775 hairline border,
+   and the unmodified 4-color "G" logo. Fixed light colors (not theme vars) so
+   it stays compliant in both light and dark app themes. */
+.login-btn-google {
+    background: #ffffff;
+    color: #1f1f1f;
+    border: 1px solid #747775;
+    font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    gap: 12px;
+}
+
+.login-btn-google:hover:not(:disabled) {
+    /* Google's recommended hover: subtle blue state overlay, no recolor. */
+    background: #f7f8f8;
+    border-color: #747775;
+    box-shadow: 0 1px 2px rgba(60, 64, 67, 0.18);
+}
+
+.login-btn-google-logo {
+    flex: 0 0 auto;
+}
+
+.login-btn-google-text {
+    /* Keep the label visually centered as a unit with the logo. */
+    display: inline-block;
 }
 
 .login-divider {
@@ -128,9 +152,18 @@
 }
 
 .login-btn-demo {
-    background: transparent;
-    border-style: dashed;
+    /* Clean filled secondary button — solid surface + solid hairline border
+       (inherited from .login-btn), no dashed "placeholder" look. */
+    background: var(--surface-sunken);
     color: var(--text-2);
+    /* Breathing room so the demo CTA isn't glued to the Google button. */
+    margin-top: 14px;
+}
+
+.login-btn-demo:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--text) 6%, var(--surface-sunken));
+    border-color: color-mix(in srgb, var(--text) 20%, var(--border));
+    color: var(--text);
 }
 
 .login-foot {
@@ -207,6 +240,16 @@
 
 .login-input:disabled {
     opacity: 0.6;
+}
+
+.login-notice {
+    margin: 0 0 18px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--text-2);
+    font-size: 12.5px;
+    line-height: 1.4;
 }
 
 .login-error {

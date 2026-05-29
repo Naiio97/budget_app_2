@@ -12,6 +12,7 @@ import { useAccounts } from '@/contexts/AccountsContext';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { exitDemo, isDemoMode } from '@/lib/demo-mode';
+import IdleLogout from '@/components/IdleLogout';
 
 interface MainLayoutProps {
     children: ReactNode;
@@ -86,6 +87,9 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
     const handleLogout = async () => {
         clearBackendTokenCache();
+        // Clear the idle/session clock so the next login starts a fresh hour.
+        localStorage.removeItem('idle_last_activity');
+        localStorage.removeItem('idle_session_start');
         if (isDemoMode()) {
             exitDemo();
             window.location.href = '/login';
@@ -157,6 +161,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
 
     return (
         <div className="app-root">
+            <IdleLogout />
             {/* Appbar — desktop only */}
             <header className="appbar">
                 <div className="appbar-logo">
