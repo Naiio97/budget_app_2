@@ -28,4 +28,7 @@ export const queryKeys = {
   manualInvestments: ['manual-investments'] as const,
   manualInvestment: (id: number) => ['manual-investment', id] as const,
   manualInvestmentHistory: (id: number) => ['manual-investment-history', id] as const,
+  loans: ['loans'] as const,
+  loansSummary: ['loans-summary'] as const,
+  loanSchedule: (id: number) => ['loan-schedule', id] as const,
 };

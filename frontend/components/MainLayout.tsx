@@ -43,6 +43,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         { href: '/budgets', label: 'Rozpočty', icon: Icons.nav.budgets },
         { href: '/reports', label: 'Přehledy', icon: Icons.nav.reports },
         { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
+        { href: '/loans', label: 'Úvěry', icon: Icons.nav.loans },
         { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 
@@ -169,7 +170,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     <span>Koruna</span>
                 </div>
                 <nav className="appbar-nav">
-                    {navItems.slice(0, 6).map((item) => (
+                    {navItems.slice(0, 7).map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
@@ -414,7 +415,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.settings} Nastavení</Link>
                                     <Link href="/transactions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.transactions} Transakce</Link>
                                     <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.reports} Přehledy</Link>
-                                    <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>+ Účet</Link>
+                                    <Link href="/loans" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.loans} Úvěry</Link>
                                 </div>
                                 <button
                                     className="btn btn-sm"

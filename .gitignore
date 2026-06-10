@@ -1,1 +1,5 @@
 .claude/
+
+# Backend runtime logs (not build artifacts, never committed)
+backend/logs/
+backend/*.log

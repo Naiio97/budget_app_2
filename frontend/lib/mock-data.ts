@@ -4,7 +4,8 @@ import {
     InvestmentPortfolio, Budget, BudgetOverview,
     SavingsGoal, PaginatedResponse, Contact,
     Pie, InvestmentPortfolioDetail, PortfolioHistory,
-    ManualInvestmentAccount
+    ManualInvestmentAccount,
+    Loan, LoanPayment, LoansSummary
 } from './api';
 
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
@@ -192,6 +193,52 @@ export const MOCK_GOALS: SavingsGoal[] = [
     { id: 1, name: 'Nové auto', target_amount: 300000, current_amount: 150000, currency: 'CZK', deadline: '2026-12-31', is_completed: false, percentage: 50 },
     { id: 2, name: 'Dovolená', target_amount: 50000, current_amount: 45000, currency: 'CZK', deadline: '2026-06-30', is_completed: false, percentage: 90 },
 ];
+
+export const MOCK_LOANS: Loan[] = [
+    {
+        id: 1, name: 'Hypotéka', principal: 2500000, interest_rate: 5.9, term_months: 360,
+        monthly_payment: 14834, start_date: '2024-01-15', currency: 'CZK',
+        match_pattern: null, note: 'Byt', is_active: true,
+        paid_count: 29, paid_principal: 121430, remaining_balance: 2378570,
+        total_interest: 2840240, next_due_date: '2026-07-15', end_date: '2053-12-15',
+        progress_percentage: 8.1,
+    },
+    {
+        id: 2, name: 'Auto', principal: 450000, interest_rate: 7.5, term_months: 60,
+        monthly_payment: 9016, start_date: '2025-03-10', currency: 'CZK',
+        match_pattern: null, note: null, is_active: true,
+        paid_count: 15, paid_principal: 102340, remaining_balance: 347660,
+        total_interest: 90960, next_due_date: '2026-07-10', end_date: '2030-02-10',
+        progress_percentage: 25,
+    },
+];
+
+export const MOCK_LOANS_SUMMARY: LoansSummary = {
+    active_loans: 2,
+    total_monthly_payment: 23850,
+    total_remaining_balance: 2726230,
+    total_principal: 2950000,
+    currency: 'CZK',
+};
+
+export const MOCK_LOAN_SCHEDULE: LoanPayment[] = Array.from({ length: 12 }, (_, i) => {
+    const n = i + 1;
+    const interest = Math.round(2378570 * (5.9 / 100 / 12));
+    const principalPart = 14834 - interest;
+    const month = ((n - 1) % 12) + 1;
+    const year = 2026 + Math.floor((n - 1) / 12);
+    return {
+        id: n,
+        installment_number: n,
+        due_date: `${year}-${String(month).padStart(2, '0')}-15`,
+        amount: 14834,
+        principal_part: principalPart,
+        interest_part: interest,
+        remaining_balance: 2378570 - principalPart * n,
+        is_paid: n <= 2,
+        matched_transaction_id: null,
+    };
+});
 
 export const MOCK_PORTFOLIO: Portfolio = {
     total_value: 109000,
@@ -477,5 +524,8 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/manual-investments/')) return MOCK_MANUAL_INVESTMENTS;
     if (path.startsWith('/manual-accounts/')) return MOCK_MANUAL_ACCOUNTS;
     if (path.startsWith('/contacts/')) return MOCK_CONTACTS;
+    if (path.startsWith('/loans/summary')) return MOCK_LOANS_SUMMARY;
+    if (path.match(/^\/loans\/\d+\/schedule/)) return MOCK_LOAN_SCHEDULE;
+    if (path.startsWith('/loans')) return MOCK_LOANS;
     return undefined;
 }
