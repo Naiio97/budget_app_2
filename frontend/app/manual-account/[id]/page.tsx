@@ -332,7 +332,7 @@ export default function ManualAccountDetailPage() {
                 {/* Add Envelope Form */}
                 {showAddEnvelope && (
                     <div style={{ padding: 'var(--spacing-md)', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: 'var(--spacing-md)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto 1fr', gap: '8px', alignItems: 'center' }}>
+                        <div className="envelope-form-grid">
                             <input
                                 type="text"
                                 className="input"
@@ -347,7 +347,7 @@ export default function ManualAccountDetailPage() {
                                 value={newEnvelope.amount || ''}
                                 onChange={(e) => setNewEnvelope({ ...newEnvelope, amount: Number(e.target.value) })}
                             />
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            <label className="envelope-form-check">
                                 <input
                                     type="checkbox"
                                     checked={newEnvelope.is_mine}
@@ -390,7 +390,7 @@ export default function ManualAccountDetailPage() {
                                 {editingEnvelope === envelope.id ? (
                                     /* Edit Form */
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto 1fr', gap: '8px', alignItems: 'center' }}>
+                                        <div className="envelope-form-grid">
                                             <input
                                                 type="text"
                                                 className="input"
@@ -404,7 +404,7 @@ export default function ManualAccountDetailPage() {
                                                 value={editEnvelopeData.amount}
                                                 onChange={(e) => setEditEnvelopeData({ ...editEnvelopeData, amount: Number(e.target.value) })}
                                             />
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                            <label className="envelope-form-check">
                                                 <input
                                                     type="checkbox"
                                                     checked={editEnvelopeData.is_mine}

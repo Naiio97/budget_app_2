@@ -822,56 +822,19 @@ select.input {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* On large desktop the appbar handles navigation — hide the inline nav strip */
-@media (min-width: 1400px) {
+/* On desktop the top appbar handles navigation — hide the inline nav strip and
+   the compact hamburger. The hamburger/drawer used to show on top of the appbar,
+   which was redundant (menu both at the top and in the left corner). At/below
+   1200px (incl. iPad landscape) the bottom-nav takes over. */
+@media (min-width: 1201px) {
   .nav.desktop-nav { display: none; }
   .compact-nav-header { display: none; }
 }
 
-/* ══ COMPACT NAV DRAWER (769px–1400px) ══════════════════════ */
+/* Compact hamburger header — hidden by default; only the bottom-nav (≤1024px)
+   and the top appbar (≥1025px) drive navigation now. */
 .compact-nav-header { display: none; }
 .desktop-nav-header-close { display: none; }
-
-@media (min-width: 769px) and (max-width: 1400px) {
-  .compact-nav-header {
-    display: flex;
-    padding: var(--spacing-xl) var(--spacing-xl) 0 var(--spacing-xl);
-  }
-  .desktop-nav-toggle {
-    display: flex; align-items: center; justify-content: center;
-    background: var(--surface-sunken);
-    border: 0.5px solid var(--border);
-    color: var(--text); border-radius: var(--radius-md);
-    width: 40px; height: 40px; cursor: pointer; font-size: 1.3rem; z-index: 99;
-    transition: background var(--transition-fast);
-  }
-  .desktop-nav-toggle:hover { background: var(--surface); }
-  .desktop-nav-overlay {
-    display: block; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
-    z-index: 104; opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
-  }
-  .desktop-nav-overlay.open { opacity: 1; pointer-events: auto; }
-  .nav.desktop-nav {
-    position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
-    flex-direction: column; align-items: stretch;
-    background: var(--surface-strong);
-    border-right: 0.5px solid var(--border);
-    padding: var(--spacing-xl) var(--spacing-md) var(--spacing-md);
-    transition: left 0.3s cubic-bezier(0.4,0,0.2,1);
-    z-index: 105; flex-wrap: nowrap !important;
-    gap: var(--spacing-sm) !important; margin: 0 !important;
-  }
-  .nav.desktop-nav.open { left: 0; }
-  .desktop-nav-header-close {
-    display: flex; justify-content: flex-end;
-    margin-bottom: var(--spacing-md); padding-right: var(--spacing-sm);
-  }
-  .desktop-nav-close {
-    background: transparent; border: none;
-    color: var(--text-2); font-size: 1.3rem; cursor: pointer; padding: var(--spacing-sm);
-  }
-}
 
 /* ══ BUDGET PAGE ═════════════════════════════════════════════ */
 .budget-hero {
@@ -1863,11 +1826,29 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   border-top: 0.5px solid var(--border);
 }
 
+/* ══ ENVELOPE EDIT/ADD FORM (manual account) ════════════════ */
+.envelope-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 130px auto minmax(0, 1.4fr);
+  gap: 8px;
+  align-items: center;
+}
+.envelope-form-check {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+/* Stack into one column once the row can no longer fit comfortably — prevents
+   the text inputs collapsing to a single character (the old "l"/"i" bug). */
+@media (max-width: 680px) {
+  .envelope-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .envelope-form-grid .input { width: 100%; }
+}
+
 /* ══ FOCUS ════════════════════════════════════════════════════ */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ══ SCROLLBARS (desktop) ════════════════════════════════════ */
-@media (min-width: 769px) {
+@media (min-width: 1201px) {
   ::-webkit-scrollbar       { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
@@ -1880,11 +1861,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 .custom-select-dropdown::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
 /* ══ RESPONSIVE ══════════════════════════════════════════════ */
+/* Mobile + tablet layout. Breakpoint is 1200px so BOTH iPad Air orientations
+   (820px portrait, 1180px landscape) get the bottom-nav / full-width single-
+   column layout instead of the cramped desktop layout where the fixed 360px
+   right rail + multi-column grids got squeezed into the leftover width (cards
+   overflowing with horizontal scrollbars). Real laptops (≥1366px) stay desktop. */
 @media (max-width: 1200px) {
-  :root { --sidebar-width: 280px; }
-}
-
-@media (max-width: 768px) {
   .appbar { display: none; }
 
   .main-content {
