@@ -22,7 +22,7 @@ jobs:
 
       - name: Log in to ACR #Přihlásí se do Azure Container Registry (ACR) — to je soukromý Docker Hub na Azure, kde budeš ukládat Docker image.
         uses: azure/docker-login@v1 #Používá akci "docker-login" verze 1 od Azure
-        with: #Přihlašovací údaje k Azure Container Registry, užene do v Github secrets, šifrované!
+        with: #Přihlašovací údaje k Azure Container Registry, uložene do v Github secrets, šifrované!
           login-server: ${{ secrets.AZURE_REGISTRY_SERVER }} 
           username: ${{ secrets.AZURE_REGISTRY_USERNAME }}
           password: ${{ secrets.AZURE_REGISTRY_PASSWORD }}
