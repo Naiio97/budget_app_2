@@ -51,3 +51,9 @@ wheels/
 
 # --- Database & Misc ---
 *.sqlite3
+
+# Database dumps (mohou obsahovat živá data — NIKDY necommitovat)
+*.dump
+*.sql
+*.sql.gz
+db_dumps/
