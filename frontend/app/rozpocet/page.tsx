@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
@@ -13,6 +14,7 @@ interface MonthlyExpense {
     my_percentage: number; my_amount: number; my_amount_override: number | null;
     is_paid: boolean; is_auto_paid: boolean;
     matched_transaction_id: string | null; recurring_expense_id: number | null;
+    is_loan?: boolean; loan_id?: number | null; loan_payment_id?: number | null;
 }
 interface IncomeItem { id: number; name: string; amount: number; order_index: number; is_salary: boolean; }
 interface MonthlyBudget {
@@ -189,6 +191,15 @@ export default function RozpocetPage() {
     const toggleExpensePaid = async (id: number, isPaid: boolean) => {
         await apiFetch(`/monthly-expenses/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_paid: !isPaid }) });
         refreshBudget();
+    };
+    // Loan rows are live-linked: toggling paid routes to the loan payment endpoint,
+    // not /monthly-expenses. Also refresh loan queries so the Úvěry page stays in sync.
+    const toggleLoanPaid = async (loanId: number, paymentId: number, isPaid: boolean) => {
+        await apiFetch(`/loans/${loanId}/payments/${paymentId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_paid: !isPaid }) });
+        refreshBudget();
+        queryClient.invalidateQueries({ queryKey: queryKeys.loans });
+        queryClient.invalidateQueries({ queryKey: queryKeys.loansSummary });
+        queryClient.invalidateQueries({ queryKey: queryKeys.loanSchedule(loanId) });
     };
     const saveExpenseAmount = async (expense: MonthlyExpense) => {
         const raw = editingAmounts[expense.id];
@@ -394,14 +405,18 @@ export default function RozpocetPage() {
                     <div className="recurring-payments-list">
                         {budget?.expenses.map((expense, index) => {
                             const isExpanded = expandedExpenseId === expense.id;
+                            const isLoan = !!expense.is_loan;
                             const amountLabel = expense.my_amount_override !== null || expense.my_percentage < 100
                                 ? formatCurrency(expense.my_amount)
                                 : formatCurrency(expense.amount);
                             return (
-                                <div key={expense.id} className={`recurring-payment-shell ${isExpanded ? 'expanded' : ''}`}>
-                                    <button type="button" className="recurring-payment-row" onClick={() => setExpandedExpenseId(isExpanded ? null : expense.id)}>
+                                <div key={isLoan ? `loan-${expense.loan_payment_id}` : expense.id} className={`bd-card ${isExpanded ? 'expanded' : ''}`}>
+                                    <button type="button" className="bd-head" onClick={() => setExpandedExpenseId(isExpanded ? null : expense.id)}>
                                         <span className={`recurring-dot ${expense.is_paid ? 'paid' : ''}`} />
-                                        <span className={`recurring-name ${expense.is_paid ? 'paid' : ''}`}>{expense.name}</span>
+                                        <span className={`recurring-name ${expense.is_paid ? 'paid' : ''}`}>
+                                            {expense.name}
+                                            {isLoan && <span className="bd-loan-tag">ÚVĚR</span>}
+                                        </span>
                                         <span className="recurring-date">{expenseDueLabel(index)}</span>
                                         <span className="num recurring-amount">{amountLabel}</span>
                                         <span className={`recurring-status ${expense.is_paid ? 'paid' : 'pending'}`}>
@@ -409,50 +424,116 @@ export default function RozpocetPage() {
                                         </span>
                                         <span className="recurring-chevron">›</span>
                                     </button>
-                                    {isExpanded && (
-                                        <div className="recurring-edit-row">
-                                            <input
-                                                value={editingExpenseNames[expense.id] ?? expense.name}
-                                                onChange={(e) => setEditingExpenseNames(p => ({ ...p, [expense.id]: e.target.value }))}
-                                                onBlur={() => saveExpenseName(expense)}
-                                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                                                className="input recurring-edit-name"
-                                            />
-                                            <CustomSelect
-                                                compact
-                                                value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
-                                                onChange={(val) => {
-                                                    if (val === '100') updateExpensePercentage(expense.id, 100);
-                                                    else if (val === '50') updateExpensePercentage(expense.id, 50);
-                                                    else {
-                                                        setEditingMyAmounts(p => ({ ...p, [expense.id]: String(Math.round(expense.my_amount)) }));
-                                                        if (expense.my_amount_override === null) saveCustomOverride(expense.id, Math.round(expense.my_amount));
-                                                    }
-                                                }}
-                                                options={[{ value: '100', label: '100%' }, { value: '50', label: '50%' }, { value: 'custom', label: 'Vlastní' }]}
-                                            />
-                                            <input type="number" className="input recurring-edit-amount"
-                                                value={editingAmounts[expense.id] ?? expense.amount}
-                                                onChange={(e) => setEditingAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
-                                                onBlur={() => saveExpenseAmount(expense)}
-                                                title="Celková částka"
-                                            />
-                                            {(expense.my_percentage < 100 || expense.my_amount_override !== null) && (
-                                                <input type="number" className="input recurring-edit-amount mine"
-                                                    value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
-                                                    onChange={(e) => setEditingMyAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
-                                                    onBlur={() => saveMyAmount(expense)}
-                                                    title="Moje část"
-                                                />
-                                            )}
-                                            <button className="btn btn-sm" onClick={() => toggleExpensePaid(expense.id, expense.is_paid)}>
-                                                {expense.is_paid ? 'Označit čekající' : 'Zaplatit'}
-                                            </button>
-                                            <button onClick={() => deleteMonthlyExpense(expense.id)} className="btn btn-ghost btn-sm expense-delete-btn">
-                                                {Icons.action.delete} Smazat
-                                            </button>
+
+                                    <div className="bd-expand">
+                                        <div className="bd-expand-inner">
+                                            <div className="bd-expand-content">
+                                                {isLoan ? (
+                                                    <>
+                                                        <div className="bd-field">
+                                                            <span className="bd-label">Název</span>
+                                                            <div className="bd-readonly">{expense.name}</div>
+                                                        </div>
+                                                        <div className="bd-cols bd-cols-2">
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Měsíční splátka</span>
+                                                                <div className="bd-readonly bd-readonly-accent num">{formatCurrency(expense.amount)}</div>
+                                                            </div>
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Spravováno v</span>
+                                                                <div className="bd-readonly">Úvěry</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bd-actions">
+                                                            <span className="bd-note"><span className="bd-note-icon">ⓘ</span> Splátka úvěru — spravuje se na stránce Úvěry</span>
+                                                            <div className="bd-actions-right">
+                                                                <Link href="/loans" className="bd-link">Otevřít Úvěry ›</Link>
+                                                                <button
+                                                                    className="btn btn-sm btn-primary"
+                                                                    disabled={expense.loan_id == null || expense.loan_payment_id == null}
+                                                                    onClick={() => expense.loan_id != null && expense.loan_payment_id != null && toggleLoanPaid(expense.loan_id, expense.loan_payment_id, expense.is_paid)}
+                                                                >
+                                                                    {expense.is_paid ? 'Označit čekající' : 'Zaplatit'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="bd-field">
+                                                            <span className="bd-label">Název</span>
+                                                            <input
+                                                                value={editingExpenseNames[expense.id] ?? expense.name}
+                                                                onChange={(e) => setEditingExpenseNames(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                                onBlur={() => saveExpenseName(expense)}
+                                                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                                className="input bd-input"
+                                                            />
+                                                        </div>
+                                                        <div className="bd-cols bd-cols-3">
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Podíl</span>
+                                                                <CustomSelect
+                                                                    compact
+                                                                    value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
+                                                                    onChange={(val) => {
+                                                                        if (val === '100') updateExpensePercentage(expense.id, 100);
+                                                                        else if (val === '50') updateExpensePercentage(expense.id, 50);
+                                                                        else {
+                                                                            setEditingMyAmounts(p => ({ ...p, [expense.id]: String(Math.round(expense.my_amount)) }));
+                                                                            if (expense.my_amount_override === null) saveCustomOverride(expense.id, Math.round(expense.my_amount));
+                                                                        }
+                                                                    }}
+                                                                    options={[{ value: '100', label: '100%' }, { value: '50', label: '50%' }, { value: 'custom', label: 'Vlastní' }]}
+                                                                />
+                                                            </div>
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Částka</span>
+                                                                <input type="number" className="input bd-input bd-input-num"
+                                                                    value={editingAmounts[expense.id] ?? expense.amount}
+                                                                    onChange={(e) => setEditingAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                                    onBlur={() => saveExpenseAmount(expense)}
+                                                                />
+                                                            </div>
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">K platbě</span>
+                                                                {(expense.my_percentage < 100 || expense.my_amount_override !== null) ? (
+                                                                    <input type="number" className="input bd-input bd-input-num bd-input-accent"
+                                                                        value={editingMyAmounts[expense.id] ?? Math.round(expense.my_amount)}
+                                                                        onChange={(e) => setEditingMyAmounts(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                                        onBlur={() => saveMyAmount(expense)}
+                                                                    />
+                                                                ) : (
+                                                                    <div className="bd-readonly bd-readonly-accent num">{formatCurrency(expense.my_amount)}</div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="bd-actions">
+                                                            <div className="bd-segment" role="group">
+                                                                <button
+                                                                    type="button"
+                                                                    className={`bd-seg ${expense.is_paid ? 'active paid' : ''}`}
+                                                                    onClick={() => { if (!expense.is_paid) toggleExpensePaid(expense.id, expense.is_paid); }}
+                                                                >
+                                                                    Zaplaceno
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`bd-seg ${!expense.is_paid ? 'active pending' : ''}`}
+                                                                    onClick={() => { if (expense.is_paid) toggleExpensePaid(expense.id, expense.is_paid); }}
+                                                                >
+                                                                    Čekající
+                                                                </button>
+                                                            </div>
+                                                            <button onClick={() => deleteMonthlyExpense(expense.id)} className="bd-delete">
+                                                                {Icons.action.delete} Smazat
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             );
                         })}

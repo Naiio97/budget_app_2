@@ -503,8 +503,9 @@ select.input {
 /* ══ CARD COMPONENTS ════════════════════════════════════════ */
 .card-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 13px var(--spacing-lg) 11px;
+  padding-bottom: 8px;
   border-bottom: 0.5px solid var(--border);
+  margin-bottom: 8px;
 }
 .card-head h3, .card-head h4 {
   font-size: 14.5px; font-weight: 590;
@@ -1174,18 +1175,16 @@ select.input {
   opacity: 1;
 }
 .recurring-payments-card .card-head {
-  padding: 16px 24px 14px;
+  padding-bottom: 14px;
 }
 .recurring-payments-card {
-  min-height: 0;
-}
-.recurring-payments-body {
-  padding: 18px 24px 24px;
   min-height: 0;
 }
 .recurring-payments-list {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  overflow-x: hidden;
 }
 .recurring-payment-shell {
   border-bottom: 0.5px solid var(--border);
@@ -1332,6 +1331,247 @@ select.input {
 }
 .recurring-edit-row .expense-delete-btn {
   color: var(--neg);
+}
+/* ── Budget payment cards ──────────────────────────────────────────────
+   One unified card per row. The row expands inside itself (the card grows
+   via grid-template-rows) instead of floating controls underneath. Loan and
+   regular rows share the same skeleton: header → fields → action bar. */
+.bd-card {
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden; /* clips the expand animation to the rounded corners */
+  transition: background 0.18s ease;
+  /* In the height-constrained list (budget-page-fit → overflow-y:auto), flex
+     items with overflow:hidden would otherwise shrink to share space and
+     collapse into thin bars. Pin the height so the list scrolls instead. */
+  flex-shrink: 0;
+}
+/* Hover changes background only — no border/transform/scale, so nothing shifts. */
+@media (hover: hover) {
+  .bd-card:not(.expanded):hover {
+    background: var(--surface-elevated);
+  }
+}
+.bd-head {
+  width: 100%;
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto auto 16px;
+  gap: 14px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 14px 12px;
+}
+/* Neutralize legacy grid-area / display rules that target the bare
+   .recurring-* spans inside the old list layout. */
+.bd-head .recurring-dot,
+.bd-head .recurring-name,
+.bd-head .recurring-date,
+.bd-head .recurring-amount,
+.bd-head .recurring-status,
+.bd-head .recurring-chevron {
+  grid-area: auto;
+  display: inline-flex;
+}
+.bd-head .recurring-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bd-loan-tag {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--border);
+  color: var(--text-2);
+  vertical-align: middle;
+}
+.bd-head .recurring-chevron {
+  transition: transform 0.22s ease;
+}
+.bd-card.expanded .recurring-chevron {
+  transform: rotate(90deg);
+}
+/* Expand/collapse animated via grid-template-rows (0fr → 1fr) — smooth, no jump. */
+.bd-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.26s ease;
+}
+.bd-card.expanded .bd-expand {
+  grid-template-rows: 1fr;
+}
+.bd-expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+.bd-expand-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 12px 16px;
+  border-top: 0.5px solid var(--border);
+}
+.bd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.bd-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding-left: 2px;
+}
+.bd-cols {
+  display: grid;
+  gap: 12px;
+}
+.bd-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bd-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bd-input,
+.bd-readonly {
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-full);
+  font-size: 14px !important;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+.bd-input-num { text-align: right; }
+.bd-input-accent,
+.bd-readonly-accent {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+  font-weight: 650;
+}
+.bd-readonly {
+  display: flex;
+  align-items: center;
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--border);
+  color: var(--text-2);
+}
+.bd-readonly-accent {
+  justify-content: flex-end;
+}
+/* Action bar — segmented status toggle + secondary actions. */
+.bd-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bd-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.bd-segment {
+  display: inline-flex;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+}
+.bd-seg {
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  padding: 7px 16px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.bd-seg.active.paid {
+  background: var(--pos);
+  color: #00210a;
+}
+.bd-seg.active.pending {
+  background: var(--surface-elevated);
+  color: var(--text);
+}
+.bd-delete {
+  border: 0;
+  background: transparent;
+  color: var(--neg);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--radius-full);
+}
+@media (hover: hover) {
+  .bd-delete:hover {
+    background: color-mix(in srgb, var(--neg) 14%, transparent);
+  }
+}
+.bd-link {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .bd-link:hover { text-decoration: underline; }
+}
+.bd-note {
+  font-size: 12.5px;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.bd-note-icon {
+  font-size: 13px;
+  opacity: 0.8;
+}
+.bd-actions .btn {
+  height: 38px;
+  min-height: 38px;
+  border-radius: var(--radius-full);
+  padding: 0 20px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+@media (max-width: 560px) {
+  /* Explicit columns so the chevron pins to the far right; drop the date/status
+     chips that crowd a phone-width row. */
+  .bd-head {
+    grid-template-columns: 14px minmax(0, 1fr) auto 16px;
+    gap: 10px;
+  }
+  .bd-head .recurring-date,
+  .bd-head .recurring-status { display: none; }
+  .bd-head .recurring-chevron { justify-self: end; }
+  .bd-cols-2,
+  .bd-cols-3 { grid-template-columns: 1fr; }
+  .bd-actions-right { gap: 10px; }
 }
 .budget-expenses-split {
   display: grid;
@@ -2212,7 +2452,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .seg { max-width: 100%; overflow-x: auto; }
   .seg-item { flex-shrink: 0; }
   .budget-upcoming-card .card-head {
-    padding: 18px 22px 12px;
+    padding-bottom: 12px;
     align-items: center;
   }
   .budget-payment-list {
@@ -2267,7 +2507,8 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   .budget-plan-card .card-head {
     align-items: center;
-    padding: 18px 20px 12px;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
   }
   .budget-plan-body {
     gap: 18px;
@@ -2350,7 +2591,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     overflow: visible;
   }
   .recurring-payments-card .card-head {
-    padding: 18px 18px 12px;
+    padding-bottom: 12px;
     align-items: stretch;
     flex-direction: column;
     gap: 12px;
@@ -2373,11 +2614,11 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     font-size: 12px;
   }
   .recurring-payments-body {
-    padding: 4px 18px 18px;
+    padding-top: 4px;
     overflow: visible;
   }
   .recurring-payments-list {
-    gap: 0;
+    gap: 10px;
     overflow: visible;
   }
   .recurring-payment-shell {
@@ -2522,7 +2763,8 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
-    padding: 18px 24px 12px;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
   }
   .budget-category-panel {
     width: 100%;
