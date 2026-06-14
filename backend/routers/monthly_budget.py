@@ -12,7 +12,8 @@ from auth import get_current_user
 from database import get_db
 from models import (
     MonthlyBudgetModel, MonthlyIncomeItemModel, RecurringExpenseModel, MonthlyExpenseModel,
-    ManualAccountModel, ManualAccountItemModel, TransactionModel, UserModel
+    ManualAccountModel, ManualAccountItemModel, TransactionModel, UserModel,
+    LoanModel, LoanPaymentModel
 )
 
 router = APIRouter(tags=["Budget & Expenses"])
@@ -62,6 +63,12 @@ class MonthlyExpenseResponse(BaseModel):
     is_auto_paid: bool
     matched_transaction_id: Optional[str] = None
     recurring_expense_id: Optional[int] = None
+    # Loan-derived virtual row (live-linked to a loan installment, read-only in
+    # the budget UI). When is_loan is True, paid-toggling routes to the loan
+    # payment endpoint instead of /monthly-expenses.
+    is_loan: bool = False
+    loan_id: Optional[int] = None
+    loan_payment_id: Optional[int] = None
 
 
 class MonthlyBudgetResponse(BaseModel):
@@ -190,6 +197,40 @@ async def _load_income_items(budget_id: int, db: AsyncSession) -> List[MonthlyIn
     return list(result.scalars().all())
 
 
+async def _loan_expense_rows(db: AsyncSession, user_id: int, year_month: str) -> List[MonthlyExpenseResponse]:
+    """Virtual expense rows for active loans whose installment is due in this
+    month. Live-linked: amount + paid state come straight from the loan
+    schedule, so there's nothing to keep in sync. Read-only in the budget UI."""
+    result = await db.execute(
+        select(LoanModel, LoanPaymentModel)
+        .join(LoanPaymentModel, LoanPaymentModel.loan_id == LoanModel.id)
+        .where(
+            LoanModel.user_id == user_id,
+            LoanModel.is_active.is_(True),
+            LoanPaymentModel.due_date.like(f"{year_month}-%"),
+        )
+        .order_by(LoanModel.name)
+    )
+    rows: List[MonthlyExpenseResponse] = []
+    for loan, payment in result.all():
+        rows.append(MonthlyExpenseResponse(
+            id=-payment.id,  # negative → never collides with real monthly_expenses ids
+            name=loan.name,
+            amount=payment.amount,
+            my_percentage=100,
+            my_amount=payment.amount,
+            my_amount_override=None,
+            is_paid=payment.is_paid,
+            is_auto_paid=False,
+            matched_transaction_id=payment.matched_transaction_id,
+            recurring_expense_id=None,
+            is_loan=True,
+            loan_id=loan.id,
+            loan_payment_id=payment.id,
+        ))
+    return rows
+
+
 @router.get("/monthly-budget/{year_month}", response_model=MonthlyBudgetResponse)
 async def get_monthly_budget(
     year_month: str,
@@ -223,7 +264,23 @@ async def get_monthly_budget(
             return e.my_amount_override
         return e.amount * (e.my_percentage or 100) / 100
 
-    total_expenses = sum(effective_my_amount(e) for e in expenses)
+    expense_rows = [MonthlyExpenseResponse(
+        id=e.id,
+        name=e.name,
+        amount=e.amount,
+        my_percentage=e.my_percentage or 100,
+        my_amount=effective_my_amount(e),
+        my_amount_override=e.my_amount_override,
+        is_paid=e.is_paid,
+        is_auto_paid=e.is_auto_paid,
+        matched_transaction_id=e.matched_transaction_id,
+        recurring_expense_id=e.recurring_expense_id
+    ) for e in expenses]
+
+    # Append live-linked loan installments due this month (read-only rows).
+    expense_rows.extend(await _loan_expense_rows(db, current_user.id, year_month))
+
+    total_expenses = sum(r.my_amount for r in expense_rows)
 
     return MonthlyBudgetResponse(
         id=budget.id,
@@ -241,18 +298,7 @@ async def get_monthly_budget(
         total_income=total_income,
         total_expenses=total_expenses,
         remaining=total_income - total_expenses - budget.investment_amount,
-        expenses=[MonthlyExpenseResponse(
-            id=e.id,
-            name=e.name,
-            amount=e.amount,
-            my_percentage=e.my_percentage or 100,
-            my_amount=effective_my_amount(e),
-            my_amount_override=e.my_amount_override,
-            is_paid=e.is_paid,
-            is_auto_paid=e.is_auto_paid,
-            matched_transaction_id=e.matched_transaction_id,
-            recurring_expense_id=e.recurring_expense_id
-        ) for e in expenses]
+        expenses=expense_rows
     )
 
 
