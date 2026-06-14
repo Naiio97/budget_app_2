@@ -151,6 +151,11 @@ class LoanResponse(BaseModel):
     next_due_date: Optional[str]
     end_date: Optional[str]
     progress_percentage: float
+    # Installment due in the current calendar month (if any) — drives the
+    # "this month paid?" badge on the loans page.
+    current_payment_id: Optional[int] = None
+    current_due_date: Optional[str] = None
+    current_paid: bool = False
 
 
 # === Helpers ===
@@ -200,6 +205,10 @@ def _build_loan_response(loan: LoanModel, payments: list[LoanPaymentModel]) -> L
     end_date = payments[-1].due_date if payments else None
     progress = round(len(paid) / len(payments) * 100, 1) if payments else 0.0
 
+    # Installment whose due_date falls in the current calendar month.
+    current_ym = date.today().strftime("%Y-%m")
+    current = next((p for p in payments if (p.due_date or "")[:7] == current_ym), None)
+
     return LoanResponse(
         id=loan.id,
         name=loan.name,
@@ -219,6 +228,9 @@ def _build_loan_response(loan: LoanModel, payments: list[LoanPaymentModel]) -> L
         next_due_date=next_due,
         end_date=end_date,
         progress_percentage=progress,
+        current_payment_id=current.id if current else None,
+        current_due_date=current.due_date if current else None,
+        current_paid=bool(current.is_paid) if current else False,
     )
 
 

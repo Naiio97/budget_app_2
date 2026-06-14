@@ -725,6 +725,9 @@ export interface Loan {
     next_due_date: string | null;
     end_date: string | null;
     progress_percentage: number;
+    current_payment_id: number | null;
+    current_due_date: string | null;
+    current_paid: boolean;
 }
 
 export interface LoanPayment {

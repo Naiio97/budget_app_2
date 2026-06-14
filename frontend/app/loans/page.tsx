@@ -9,7 +9,7 @@ import { Icons } from '@/lib/icons';
 import {
     Loan, LoanPayment, LoansSummary, LoanCreateInput,
     getLoans, getLoansSummary, getLoanSchedule,
-    createLoan, deleteLoan, toggleLoanPayment,
+    createLoan, updateLoan, deleteLoan, toggleLoanPayment,
 } from '@/lib/api';
 
 const formatCurrency = (amount: number, currency = 'CZK') =>
@@ -21,19 +21,37 @@ const formatDate = (iso: string | null) => {
     return `${parseInt(d)}. ${parseInt(m)}. ${y}`;
 };
 
+// Form date helpers — UI uses European dd.mm.yyyy, backend wants ISO yyyy-mm-dd.
+const isoToEu = (iso: string) => {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y}`;
+};
+const euToIso = (eu: string): string | null => {
+    const m = eu.trim().match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/);
+    if (!m) return null;
+    const dd = m[1].padStart(2, '0');
+    const mm = m[2].padStart(2, '0');
+    const iso = `${m[3]}-${mm}-${dd}`;
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime()) || dt.getDate() !== Number(dd)) return null;
+    return iso;
+};
+
 const emptyForm = {
     name: '',
     principal: '',
     interest_rate: '',
     term_months: '',
     monthly_payment: '',
-    start_date: new Date().toISOString().slice(0, 10),
+    start_date: isoToEu(new Date().toISOString().slice(0, 10)),
     note: '',
 };
 
 export default function LoansPage() {
     const queryClient = useQueryClient();
     const [showForm, setShowForm] = useState(false);
+    const [editingId, setEditingId] = useState<number | null>(null);
     const [form, setForm] = useState(emptyForm);
     const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -45,28 +63,59 @@ export default function LoansPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.loansSummary });
     };
 
+    const closeForm = () => { setShowForm(false); setEditingId(null); setForm(emptyForm); };
+
     const createMutation = useMutation({
         mutationFn: (data: LoanCreateInput) => createLoan(data),
-        onSuccess: () => { invalidate(); setForm(emptyForm); setShowForm(false); },
+        onSuccess: () => { invalidate(); closeForm(); },
+    });
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: number; data: LoanCreateInput }) => updateLoan(id, data),
+        onSuccess: () => {
+            invalidate();
+            if (editingId != null) queryClient.invalidateQueries({ queryKey: queryKeys.loanSchedule(editingId) });
+            closeForm();
+        },
     });
     const deleteMutation = useMutation({
         mutationFn: (id: number) => deleteLoan(id),
         onSuccess: () => { invalidate(); setExpandedId(null); },
     });
 
+    const saving = createMutation.isPending || updateMutation.isPending;
+    const saveError = createMutation.isError || updateMutation.isError;
+
+    const startEdit = (loan: Loan) => {
+        setEditingId(loan.id);
+        setForm({
+            name: loan.name,
+            principal: String(loan.principal),
+            interest_rate: String(loan.interest_rate),
+            term_months: String(loan.term_months),
+            monthly_payment: String(loan.monthly_payment),
+            start_date: isoToEu(loan.start_date),
+            note: loan.note ?? '',
+        });
+        setShowForm(true);
+        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const submit = () => {
         const principal = parseFloat(form.principal);
         const term = parseInt(form.term_months);
-        if (!form.name.trim() || !(principal > 0) || !(term > 0)) return;
-        createMutation.mutate({
+        const startIso = euToIso(form.start_date);
+        if (!form.name.trim() || !(principal > 0) || !(term > 0) || !startIso) return;
+        const data: LoanCreateInput = {
             name: form.name.trim(),
             principal,
             interest_rate: parseFloat(form.interest_rate) || 0,
             term_months: term,
             monthly_payment: form.monthly_payment ? parseFloat(form.monthly_payment) : null,
-            start_date: form.start_date,
+            start_date: startIso,
             note: form.note.trim() || null,
-        });
+        };
+        if (editingId != null) updateMutation.mutate({ id: editingId, data });
+        else createMutation.mutate(data);
     };
 
     return (
@@ -74,10 +123,10 @@ export default function LoansPage() {
             <div className="page-container">
                 <header className="section-header-wrap">
                     <div>
-                        <h1 style={{ margin: 0 }}>{Icons.nav.loans} Úvěry</h1>
+                        <h1 style={{ margin: 0 }}>Úvěry</h1>
                         <p className="text-secondary" style={{ marginTop: 4 }}>Přehled splátek, kolik zbývá splatit a do kdy</p>
                     </div>
-                    <button className="btn btn-primary" onClick={() => setShowForm(v => !v)}>
+                    <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
                         {showForm ? 'Zrušit' : '+ Přidat úvěr'}
                     </button>
                 </header>
@@ -103,7 +152,7 @@ export default function LoansPage() {
                 {/* Add form */}
                 {showForm && (
                     <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>Nový úvěr</h3>
+                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{editingId != null ? 'Upravit úvěr' : 'Nový úvěr'}</h3>
                         <div className="loan-form-grid">
                             <label className="loan-field">
                                 <span>Název</span>
@@ -127,7 +176,7 @@ export default function LoansPage() {
                             </label>
                             <label className="loan-field">
                                 <span>První splátka</span>
-                                <input className="input" type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
+                                <input className="input" type="text" inputMode="numeric" placeholder="dd.mm.rrrr" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
                             </label>
                             <label className="loan-field loan-field-wide">
                                 <span>Poznámka (nepovinné)</span>
@@ -135,13 +184,15 @@ export default function LoansPage() {
                             </label>
                         </div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
-                            <button className="btn btn-primary" onClick={submit} disabled={createMutation.isPending}>
-                                {createMutation.isPending ? 'Ukládám…' : 'Vytvořit úvěr'}
+                            <button className="btn btn-primary" onClick={submit} disabled={saving}>
+                                {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit úvěr'}
                             </button>
-                            <button className="btn" onClick={() => { setShowForm(false); setForm(emptyForm); }}>Zrušit</button>
+                            <button className="btn" onClick={closeForm}>Zrušit</button>
                         </div>
-                        {createMutation.isError && (
-                            <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>Nepodařilo se vytvořit úvěr.</p>
+                        {saveError && (
+                            <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>
+                                {editingId != null ? 'Nepodařilo se uložit změny.' : 'Nepodařilo se vytvořit úvěr.'}
+                            </p>
                         )}
                     </GlassCard>
                 )}
@@ -163,6 +214,7 @@ export default function LoansPage() {
                                 loan={loan}
                                 expanded={expandedId === loan.id}
                                 onToggle={() => setExpandedId(expandedId === loan.id ? null : loan.id)}
+                                onEdit={() => startEdit(loan)}
                                 onDelete={() => { if (confirm(`Smazat úvěr „${loan.name}"?`)) deleteMutation.mutate(loan.id); }}
                             />
                         ))}
@@ -173,10 +225,11 @@ export default function LoansPage() {
     );
 }
 
-function LoanCard({ loan, expanded, onToggle, onDelete }: {
+function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
     loan: Loan;
     expanded: boolean;
     onToggle: () => void;
+    onEdit: () => void;
     onDelete: () => void;
 }) {
     const queryClient = useQueryClient();
@@ -193,6 +246,9 @@ function LoanCard({ loan, expanded, onToggle, onDelete }: {
             queryClient.invalidateQueries({ queryKey: queryKeys.loanSchedule(loan.id) });
             queryClient.invalidateQueries({ queryKey: queryKeys.loans });
             queryClient.invalidateQueries({ queryKey: queryKeys.loansSummary });
+            // Loan paid state is shared with the budget (live-linked rows).
+            queryClient.invalidateQueries({ queryKey: ['monthly-budget'] });
+            queryClient.invalidateQueries({ queryKey: ['annual-overview'] });
         },
     });
 
@@ -205,8 +261,32 @@ function LoanCard({ loan, expanded, onToggle, onDelete }: {
                         {formatCurrency(loan.monthly_payment, loan.currency)}/měs · {loan.interest_rate}% p.a. · do {formatDate(loan.end_date)}
                     </div>
                 </div>
-                <button className="loan-delete-btn" onClick={onDelete} title="Smazat úvěr">{Icons.action.delete}</button>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <button className="loan-delete-btn" onClick={onEdit} title="Upravit úvěr">{Icons.action.edit}</button>
+                    <button className="loan-delete-btn" onClick={onDelete} title="Smazat úvěr">{Icons.action.delete}</button>
+                </div>
             </div>
+
+            {loan.current_due_date && (
+                <button
+                    onClick={() => loan.current_payment_id != null && toggleMutation.mutate({ paymentId: loan.current_payment_id, isPaid: !loan.current_paid })}
+                    disabled={loan.current_payment_id == null || toggleMutation.isPending}
+                    title="Přepnout zaplacení splátky za tento měsíc"
+                    style={{
+                        marginTop: 'var(--spacing-sm)',
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        fontSize: 12, fontWeight: 600, padding: '4px 10px',
+                        borderRadius: 999, cursor: 'pointer',
+                        border: '0.5px solid var(--border)',
+                        background: loan.current_paid
+                            ? 'color-mix(in srgb, var(--pos) 15%, transparent)'
+                            : 'color-mix(in srgb, var(--warn) 15%, transparent)',
+                        color: loan.current_paid ? 'var(--pos)' : 'var(--warn)',
+                    }}
+                >
+                    {loan.current_paid ? '✓ Splátka za tento měsíc zaplacena' : '○ Splátka za tento měsíc nezaplacena'}
+                </button>
+            )}
 
             <div className="loan-progress-row">
                 <div className="progress" style={{ flex: 1 }}>
