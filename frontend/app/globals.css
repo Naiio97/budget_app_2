@@ -325,29 +325,34 @@ select.input {
 .custom-select-option.selected { background: var(--accent-soft); color: var(--accent); font-weight: 510; }
 
 /* ══ KORUNA APPBAR ════════════════════════════════════════════ */
+/* Floating pill appbar */
 .appbar {
-  position: sticky; top: 0; z-index: 50;
-  display: flex; align-items: center; gap: var(--spacing-md);
-  padding: 11px var(--spacing-lg);
-  background: var(--surface);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  border-bottom: 0.5px solid var(--border);
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 50;
+  display: flex; align-items: center; gap: 4px;
+  width: max-content; max-width: calc(100% - 24px);
+  padding: 7px 8px 7px 14px;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.10), inset 0 0.5px 0 rgba(255,255,255,0.55);
 }
-[data-mode="light"] .appbar {
-  background: rgba(242,242,247,0.82);
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
+[data-mode="dark"] .appbar {
+  background: rgba(44,44,48,0.5);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.45), inset 0 0.5px 0 rgba(255,255,255,0.09);
 }
 
 .appbar-logo {
-  display: flex; align-items: center; gap: 8px;
-  font-weight: 600; font-size: 15px; letter-spacing: -0.015em;
+  display: flex; align-items: center; gap: 9px;
+  font-weight: 650; font-size: 15px; letter-spacing: -0.015em;
   color: var(--text); text-decoration: none;
-  flex-shrink: 0;
+  flex-shrink: 0; padding-right: 8px; margin-right: 4px;
+  border-right: 0.5px solid var(--border);
 }
 .appbar-logo-mark {
-  width: 30px; height: 30px;
+  width: 28px; height: 28px;
   background: var(--accent);
   color: #fff;
   border-radius: 8px;
@@ -357,34 +362,47 @@ select.input {
   flex-shrink: 0;
 }
 
-/* Segmented nav */
 .appbar-nav {
-  display: flex; align-items: center; padding: 3px;
-  background: var(--surface-sunken);
-  border-radius: 11px;
-  margin-left: 4px;
+  display: flex; align-items: center; gap: 2px;
 }
 .appbar-nav-item {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 6px 14px; border-radius: 8px;
-  font-size: 14px; font-weight: 510; color: var(--text-2);
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 13px; border-radius: var(--radius-full);
+  font-size: 14px; font-weight: 500; color: var(--text-2);
   cursor: pointer; white-space: nowrap;
-  transition: color 0.18s, background 0.18s;
+  transition: color 0.18s, background 0.18s, box-shadow 0.18s;
   border: none; background: transparent;
   letter-spacing: -0.01em; text-decoration: none;
   -webkit-tap-highlight-color: transparent;
 }
-.appbar-nav-item:hover { color: var(--text); }
+.appbar-nav-item svg { flex-shrink: 0; opacity: 0.85; }
+.appbar-nav-item:hover { color: var(--text); background: var(--surface-sunken); }
 .appbar-nav-item.active {
-  color: var(--text);
+  color: var(--text); font-weight: 600;
   background: var(--surface-strong);
-  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.10);
+  box-shadow: inset 0 0 0 0.5px var(--border), 0 1px 3px rgba(0,0,0,0.12);
 }
-[data-mode="dark"] .appbar-nav-item.active,
-:root .appbar-nav-item.active {
-  background: rgba(99,99,102,0.55);
-  box-shadow: 0 0 0 0.5px rgba(255,255,255,0.05);
+.appbar-nav-item.active svg { opacity: 1; }
+[data-mode="dark"] .appbar-nav-item.active {
+  background: rgba(99,99,102,0.45);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.07);
 }
+
+.appbar-divider {
+  width: 0.5px; height: 22px; flex-shrink: 0;
+  background: var(--border);
+  margin: 0 4px;
+}
+.appbar-theme {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  border: none; background: transparent; cursor: pointer;
+  color: var(--text-2); border-radius: var(--radius-full);
+  transition: color 0.18s, background 0.18s;
+}
+.appbar-theme:hover { color: var(--text); background: var(--surface-sunken); }
+.appbar-theme svg { width: 18px; height: 18px; }
 
 /* ══ APP LAYOUT ══════════════════════════════════════════════ */
 .app-root {
@@ -403,6 +421,9 @@ select.input {
   overscroll-behavior: contain;
   max-width: 100vw;
   align-items: flex-start;
+  /* Clearance for the fixed glass appbar (top:12 + pill height). Content
+     scrolls underneath it so the blur actually has something to frost. */
+  padding-top: 70px;
 }
 .layout-no-scroll {
   overflow: hidden;
@@ -421,14 +442,16 @@ select.input {
   display: flex; flex-direction: column;
 }
 .page-container {
-  padding: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-xl);
   flex: 1;
   display: flex; flex-direction: column;
 }
 .right-panel {
   width: 360px; flex-shrink: 0;
-  padding: var(--spacing-lg);
-  padding-left: 0;
+  /* top padding intentionally larger than the content's so the first card's
+     edge lines up with the H1 text (large headings have ~8px font leading
+     above the cap), not the H1's invisible box top. */
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-lg) 0;
   display: flex; flex-direction: column;
   gap: var(--spacing-md);
 }
@@ -773,32 +796,49 @@ select.input {
 .label-row dd { font-size: 13px; color: var(--text); font-weight: 500; text-align: right; min-width: 0; word-break: break-word; }
 
 /* ══ BOTTOM NAVIGATION — Apple tab bar ══════════════════════ */
+/* Floating glass pill — matches the desktop appbar. */
 .bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  display: flex; justify-content: space-around; align-items: center;
-  background: var(--surface);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
-  border-top: 0.5px solid var(--border);
-  padding: 6px env(safe-area-inset-right) 0 env(safe-area-inset-left);
-  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px));
+  display: flex; justify-content: center; align-items: center; gap: 2px;
+  width: max-content; max-width: calc(100% - 24px);
+  background: rgba(255,255,255,0.97);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  border: none;
+  border-radius: var(--radius-full);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.14), inset 0 0.5px 0 rgba(255,255,255,0.55);
+  padding: 6px 8px;
   z-index: 300;
 }
-[data-mode="light"] .bottom-nav { background: rgba(242,242,247,0.88); }
+[data-mode="dark"] .bottom-nav {
+  background: rgba(50,50,54,0.97);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5), inset 0 0.5px 0 rgba(255,255,255,0.09);
+}
 
 .bottom-nav-item {
   display: flex; flex-direction: column; align-items: center;
   justify-content: center; gap: 3px;
-  padding: 4px var(--spacing-sm); min-width: 52px; min-height: 44px;
+  padding: 8px 16px; min-width: 56px; min-height: 44px;
   color: var(--text-3); text-decoration: none;
   border: none; background: none; cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   transition: color var(--transition-fast);
   -webkit-tap-highlight-color: transparent; font-family: inherit;
 }
 .bottom-nav-item:active { opacity: 0.6; }
-.bottom-nav-item.active { color: var(--accent); }
-.bottom-nav-icon  { font-size: 1.3rem; line-height: 1; }
+/* Active item gets its own bubble + dark text, exactly like the desktop appbar. */
+.bottom-nav-item.active {
+  color: var(--text);
+  background: var(--surface-strong);
+  box-shadow: inset 0 0 0 0.5px var(--border), 0 1px 3px rgba(0,0,0,0.12);
+}
+[data-mode="dark"] .bottom-nav-item.active {
+  background: rgba(99,99,102,0.45);
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.07);
+}
+.bottom-nav-icon  { font-size: 1.3rem; line-height: 1; display: inline-flex; }
+.bottom-nav-icon svg { width: 22px; height: 22px; }
 .bottom-nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
 
 .mobile-tools-overlay,
@@ -2172,6 +2212,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
    overflowing with horizontal scrollbars). Real laptops (≥1366px) stay desktop. */
 @media (max-width: 1200px) {
   .appbar { display: none; }
+  .layout { padding-top: 0; }
 
   .main-content {
     max-width: 100vw;
@@ -2405,6 +2446,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     border-radius: var(--radius-full);
     text-decoration: none;
   }
+  .mobile-quick-grid .btn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 
   .dashboard-grid { grid-template-columns: 1fr; }
@@ -3018,17 +3060,15 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 .page-head {
   display: flex; justify-content: space-between; align-items: flex-start;
   flex-wrap: wrap; gap: 12px 20px;
-  padding: var(--spacing-lg) 0 var(--spacing-md);
+  padding: 0 0 var(--spacing-md);
 }
 .page-head h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.1; }
 .page-head .sub { font-size: 13px; color: var(--text-3); margin-top: 4px; letter-spacing: -0.01em; }
 
 .page-container:has(.budget-hero) {
-  padding-top: 8px;
   gap: var(--spacing-sm) !important;
 }
 .page-container:has(.budget-hero) .page-head {
-  padding-top: 0;
   padding-bottom: 2px;
 }
 
@@ -3050,12 +3090,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 .right   { text-align: right; }
 
 /* Investments page */
-.investment-page { padding-top: 18px; }
+.investment-page { padding-top: var(--spacing-md); }
 .investment-header {
   display: flex; align-items: flex-start; justify-content: space-between;
   gap: var(--spacing-md); margin-bottom: 22px;
 }
-.investment-header h1 { margin: 0; font-size: 2rem; }
+.investment-header h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.022em; line-height: 1.1; }
 .investment-header p { margin-top: 4px; color: var(--text-2); font-size: 13px; }
 .investment-add-btn { min-width: 124px; }
 .investment-create-card {
@@ -3129,10 +3169,19 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 .investment-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .investment-holdings-card, .investment-allocation-card, .investment-feed-card,
 .investment-projection-card, .investment-accounts-card { overflow: hidden; padding: 0; }
+/* These cards are padding:0 (full-bleed list rows), but the header still needs
+   the usual inset so the title isn't jammed into the top-left corner. */
+.investment-holdings-card > .card-head,
+.investment-allocation-card > .card-head,
+.investment-feed-card > .card-head,
+.investment-projection-card > .card-head,
+.investment-accounts-card > .card-head {
+  padding: 16px 16px 10px;
+}
 .investment-holdings-card .card-head span, .investment-projection-card .card-head span {
   color: var(--text-2); font-size: 12px;
 }
-.investment-holding-list, .investment-feed-list, .investment-account-list { padding: 8px 14px 14px; }
+.investment-holding-list, .investment-feed-list, .investment-account-list { padding: 8px 16px 16px; }
 .investment-holding-row {
   display: grid; grid-template-columns: 40px minmax(120px, 1fr) minmax(110px, 0.8fr) auto;
   gap: 12px; align-items: center; min-height: 62px; padding: 10px 4px; border-bottom: 0.5px solid var(--border);

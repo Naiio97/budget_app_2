@@ -14,6 +14,26 @@ import { Icons } from '@/lib/icons';
 import { exitDemo, isDemoMode } from '@/lib/demo-mode';
 import IdleLogout from '@/components/IdleLogout';
 
+// Crisp line icons for the floating appbar (the global Icons map is emoji,
+// which looks off in the monochrome pill). Keyed by route.
+const Svg = ({ children }: { children: ReactNode }) => (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
+);
+const APPBAR_ICONS: Record<string, ReactNode> = {
+    '/': <Svg><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 22V12h6v10" /></Svg>,
+    '/transactions': <Svg><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></Svg>,
+    '/rozpocet': <Svg><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></Svg>,
+    '/budgets': <Svg><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></Svg>,
+    '/reports': <Svg><path d="M6 20v-4M12 20v-9M18 20V8" /></Svg>,
+    '/investments': <Svg><path d="m22 7-8.5 8.5-5-5L2 17" /><path d="M16 7h6v6" /></Svg>,
+    '/loans': <Svg><path d="M3 22h18" /><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="M12 2 21 7H3z" /></Svg>,
+    '/settings': <Svg><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 12.6H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 7.6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 11 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1.82 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21 9.09V9a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></Svg>,
+};
+const MenuIcon = <Svg><path d="M3 12h18M3 6h18M3 18h18" /></Svg>;
+const MoonIcon = <Svg><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" /></Svg>;
+const SunIcon = <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Svg>;
+
 interface MainLayoutProps {
     children: ReactNode;
     disableScroll?: boolean;
@@ -165,10 +185,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             <IdleLogout />
             {/* Appbar — desktop only */}
             <header className="appbar">
-                <div className="appbar-logo">
+                <Link href="/" className="appbar-logo">
                     <span className="appbar-logo-mark">K</span>
                     <span>Koruna</span>
-                </div>
+                </Link>
                 <nav className="appbar-nav">
                     {navItems.slice(0, 7).map((item) => (
                         <Link
@@ -176,26 +196,18 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             href={item.href}
                             className={`appbar-nav-item ${pathname === item.href ? 'active' : ''}`}
                         >
-                            {item.label}
+                            {APPBAR_ICONS[item.href]}
+                            <span>{item.label}</span>
                         </Link>
                     ))}
                 </nav>
+                <span className="appbar-divider" aria-hidden />
                 <button
                     onClick={toggleTheme}
+                    className="appbar-theme"
                     aria-label="Přepnout motiv"
-                    style={{
-                        background: 'var(--surface-sunken)',
-                        border: '0.5px solid var(--border)',
-                        borderRadius: 'var(--radius-full)',
-                        color: 'var(--text)',
-                        cursor: 'pointer',
-                        fontSize: 16,
-                        width: 36, height: 36,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
-                    }}
                 >
-                    {theme === 'dark' ? '☀️' : '🌙'}
+                    {theme === 'dark' ? SunIcon : MoonIcon}
                 </button>
             </header>
 
@@ -352,7 +364,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                             onClick={toggleTheme}
                                             aria-label="Přepnout motiv"
                                         >
-                                            {theme === 'dark' ? '☀️' : '🌙'}
+                                            {theme === 'dark' ? SunIcon : MoonIcon}
                                         </button>
                                     </div>
                                     <span>{accounts.length} {accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}</span>
@@ -412,10 +424,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <div className="mobile-tools-section">
                                 <div className="mobile-tools-title">Rychlé akce</div>
                                 <div className="mobile-quick-grid">
-                                    <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.settings} Nastavení</Link>
-                                    <Link href="/transactions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.transactions} Transakce</Link>
-                                    <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.reports} Přehledy</Link>
-                                    <Link href="/loans" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{Icons.nav.loans} Úvěry</Link>
+                                    <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/settings']}Nastavení</Link>
+                                    <Link href="/transactions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/transactions']}Transakce</Link>
+                                    <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/reports']}Přehledy</Link>
+                                    <Link href="/loans" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/loans']}Úvěry</Link>
                                 </div>
                                 <button
                                     className="btn btn-sm"
@@ -434,7 +446,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     href={item.href}
                                     className={`bottom-nav-item ${pathname === item.href ? 'active' : ''}`}
                                 >
-                                    <span className="bottom-nav-icon">{item.icon}</span>
+                                    <span className="bottom-nav-icon">{APPBAR_ICONS[item.href] ?? item.icon}</span>
                                     <span className="bottom-nav-label">{item.label}</span>
                                 </Link>
                             ))}
@@ -444,7 +456,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 onClick={() => setIsMobileToolsOpen(true)}
                                 aria-label="Otevřít menu"
                             >
-                                <span className="bottom-nav-icon" aria-hidden>☰</span>
+                                <span className="bottom-nav-icon">{MenuIcon}</span>
                                 <span className="bottom-nav-label">Menu</span>
                             </button>
                         </nav>

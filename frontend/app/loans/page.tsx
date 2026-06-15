@@ -120,16 +120,16 @@ export default function LoansPage() {
 
     return (
         <MainLayout>
-            <div className="page-container">
-                <header className="section-header-wrap">
+            <div className="page-container" style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
+                <div className="page-head">
                     <div>
-                        <h1 style={{ margin: 0 }}>Úvěry</h1>
-                        <p className="text-secondary" style={{ marginTop: 4 }}>Přehled splátek, kolik zbývá splatit a do kdy</p>
+                        <h1>Úvěry</h1>
+                        <p className="sub">Přehled splátek, kolik zbývá splatit a do kdy</p>
                     </div>
                     <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
                         {showForm ? 'Zrušit' : '+ Přidat úvěr'}
                     </button>
-                </header>
+                </div>
 
                 {/* Summary */}
                 {summary && summary.active_loans > 0 && (
