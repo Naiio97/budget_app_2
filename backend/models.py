@@ -361,3 +361,48 @@ class ManualInvestmentSnapshotModel(Base):
 
     account = relationship("ManualInvestmentAccountModel", back_populates="snapshots")
 
+
+class LoanModel(Base):
+    """Úvěr / půjčka — hypotéka, spotřebák, auto…
+
+    Splátkový kalendář (LoanPaymentModel) se generuje z těchto parametrů anuitním
+    vzorcem. `remaining_balance` je průběžně přepočítáván z (ne)zaplacených splátek.
+    """
+    __tablename__ = "loans"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)              # "Hypotéka", "Auto", "Spotřebák"
+    principal = Column(Float, nullable=False)          # původní výše úvěru (jistina)
+    interest_rate = Column(Float, nullable=False, default=0.0)  # roční úroková sazba v % p.a.
+    term_months = Column(Integer, nullable=False)      # počet splátek
+    monthly_payment = Column(Float, nullable=False)    # výše měsíční splátky (anuita)
+    start_date = Column(String, nullable=False)        # YYYY-MM-DD první splátky
+    currency = Column(String, nullable=False, default="CZK")
+    match_pattern = Column(String, nullable=True)      # pro párování splátkových transakcí
+    note = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    payments = relationship("LoanPaymentModel", back_populates="loan", cascade="all, delete-orphan", order_by="LoanPaymentModel.installment_number")
+
+
+class LoanPaymentModel(Base):
+    """Jedna splátka ve splátkovém kalendáři úvěru (amortizace)."""
+    __tablename__ = "loan_payments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    loan_id = Column(Integer, ForeignKey("loans.id", ondelete="CASCADE"), nullable=False, index=True)
+    installment_number = Column(Integer, nullable=False)   # 1..term_months
+    due_date = Column(String, nullable=False)              # YYYY-MM-DD
+    amount = Column(Float, nullable=False)                 # celková splátka
+    principal_part = Column(Float, nullable=False)         # část jdoucí na jistinu
+    interest_part = Column(Float, nullable=False)          # část jdoucí na úrok
+    remaining_balance = Column(Float, nullable=False)      # zůstatek dluhu po této splátce
+    is_paid = Column(Boolean, nullable=False, default=False)
+    matched_transaction_id = Column(String, nullable=True)  # ID spárované transakce
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    loan = relationship("LoanModel", back_populates="payments")
+

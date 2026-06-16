@@ -12,6 +12,7 @@ export const Icons = {
         budgets: '🎯',
         reports: '📊',
         investments: '📈',
+        loans: '🏧',
         settings: '⚙️',
         more: '☰',
     },

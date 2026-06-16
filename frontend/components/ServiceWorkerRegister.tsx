@@ -9,6 +9,16 @@ export default function ServiceWorkerRegister() {
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return;
 
+        // In development the SW's stale-while-revalidate on /_next/static/ serves
+        // stale Turbopack chunks (dev filenames aren't content-hashed), so code
+        // edits silently don't take effect. Skip registration in dev and tear
+        // down any SW + caches left over from a previous run.
+        if (process.env.NODE_ENV !== 'production') {
+            navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+            if ('caches' in window) caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+            return;
+        }
+
         let reloading = false;
         const onControllerChange = () => {
             if (reloading) return;

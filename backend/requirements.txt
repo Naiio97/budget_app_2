@@ -5,6 +5,7 @@ python-dotenv
 pydantic
 pydantic-settings
 sqlalchemy>=2.0.0
+greenlet>=3.0.0
 asyncpg
 alembic
 # [crypto] pulls in `cryptography` — required for RS256 verification of the
