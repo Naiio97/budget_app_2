@@ -202,6 +202,7 @@ export const MOCK_LOANS: Loan[] = [
         paid_count: 29, paid_principal: 121430, remaining_balance: 2378570,
         total_interest: 2840240, next_due_date: '2026-07-15', end_date: '2053-12-15',
         progress_percentage: 8.1,
+        current_payment_id: null, current_due_date: null, current_paid: false,
     },
     {
         id: 2, name: 'Auto', principal: 450000, interest_rate: 7.5, term_months: 60,
@@ -210,6 +211,7 @@ export const MOCK_LOANS: Loan[] = [
         paid_count: 15, paid_principal: 102340, remaining_balance: 347660,
         total_interest: 90960, next_due_date: '2026-07-10', end_date: '2030-02-10',
         progress_percentage: 25,
+        current_payment_id: null, current_due_date: null, current_paid: false,
     },
 ];
 
