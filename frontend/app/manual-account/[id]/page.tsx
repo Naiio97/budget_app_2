@@ -177,45 +177,11 @@ export default function ManualAccountDetailPage() {
             <div className="page-container">
             <header style={{ marginBottom: 'var(--spacing-xl)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--spacing-md)' }}>
-                    {editingName ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                            <input
-                                type="text"
-                                className="input"
-                                value={accountName}
-                                onChange={(e) => setAccountName(e.target.value)}
-                                style={{ fontSize: '1.25rem', fontWeight: 600, width: '100%', maxWidth: '300px' }}
-                            />
-                            <button className="btn btn-primary" onClick={async () => {
-                                await apiFetch(`/manual-accounts/${accountId}`, {
-                                    method: 'PUT',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ name: accountName })
-                                });
-                                setEditingName(false);
-                                invalidate();
-                            }} style={{ padding: '4px 12px' }}>{Icons.action.confirm}</button>
-                            <button className="btn" onClick={() => setEditingName(false)} style={{ padding: '4px 12px' }}>{Icons.action.cancel}</button>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                            <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {Icons.accountType.manual} {account.name}
-                            </h1>
-                            <button
-                                onClick={() => { setAccountName(account.name); setEditingName(true); }}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, fontSize: '1.2rem', padding: '0 4px' }}
-                                title="Přejmenovat"
-                            >{Icons.action.edit}</button>
-                        </div>
-                    )}
-                    <button
-                        className="btn"
-                        onClick={() => router.push('/')}
-                        style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                    >
-                        Zpět
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                        <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {account.name}
+                        </h1>
+                    </div>
                 </div>
             </header>
 
@@ -244,7 +210,7 @@ export default function ManualAccountDetailPage() {
                             <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                                 {formatCurrency(account.balance)}
                             </div>
-                            <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>{Icons.action.edit}</button>
+                            <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>{Icons.action.edit}</button>
                         </div>
                     )}
                 </div>
@@ -277,7 +243,7 @@ export default function ManualAccountDetailPage() {
                             <div style={{ fontSize: '1.1rem', fontWeight: 500, color: accountNumber ? 'inherit' : 'var(--text-tertiary)', wordBreak: 'break-all' }}>
                                 {accountNumber || 'Nenastaveno'}
                             </div>
-                            <button onClick={() => setEditingAccountNumber(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>{Icons.action.edit}</button>
+                            <button onClick={() => setEditingAccountNumber(true)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>{Icons.action.edit}</button>
                         </div>
                     )}
                 </div>

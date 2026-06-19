@@ -213,24 +213,9 @@ export default function ManualInvestmentDetailPage() {
                 {/* Header */}
                 <header className="section-header-wrap" style={{ marginBottom: 'var(--spacing-xl)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
-                        {editingName ? (
-                            <>
-                                <input className="input" autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') renameMutation.mutate(nameInput); if (e.key === 'Escape') setEditingName(false); }} style={{ fontSize: '1.4rem', fontWeight: 600, background: 'rgba(255,255,255,0.07)', border: '1px solid var(--accent-primary)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '4px 10px' }} />
-                                <button className="btn btn-primary" onClick={() => renameMutation.mutate(nameInput)} style={{ fontSize: '0.85rem' }}>Uložit</button>
-                                <button className="btn" onClick={() => setEditingName(false)} style={{ fontSize: '0.85rem' }}>Zrušit</button>
-                            </>
-                        ) : (
-                            <>
-                                <h1 style={{ margin: 0, fontSize: '1.75rem' }}>{Icons.accountType.investment} {account.name}</h1>
-                                <button className="btn" onClick={() => { setNameInput(account.name); setEditingName(true); }} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>{Icons.action.edit} Přejmenovat</button>
-                                <button className="btn" onClick={() => { if (confirm(`Opravdu smazat účet "${account.name}" i se všemi pozicemi?`)) deleteAccountMutation.mutate(); }} style={{ fontSize: '0.8rem', padding: '4px 10px', color: 'var(--accent-danger)', borderColor: 'rgba(239,68,68,0.4)', marginLeft: 'auto' }}>
-                                    Smazat účet
-                                </button>
-                            </>
-                        )}
-                    </div>
+                         <h1 style={{ margin: 0, fontSize: '1.75rem' }}>{account.name}</h1>
+                    </div>        
                 </header>
-
                 {/* Two-column layout: left = summary + pie, right = positions */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
 
@@ -360,7 +345,7 @@ export default function ManualInvestmentDetailPage() {
                                                     <button
                                                         className="btn"
                                                         onClick={(e) => { e.stopPropagation(); setColorPickerForId(prev => prev === pos.id ? null : pos.id); }}
-                                                        style={{ padding: '4px 8px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                                        style={{ width: 36, height: 36, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                                                         title="Změnit barvu"
                                                         aria-label="Změnit barvu pozice"
                                                     >
@@ -419,8 +404,8 @@ export default function ManualInvestmentDetailPage() {
                                                             )}
                                                         </div>
                                                     )}
-                                                    <button className="btn" onClick={() => startEdit(pos)} style={{ padding: '4px 8px', fontSize: '0.78rem' }}>{Icons.action.edit}</button>
-                                                    <button className="btn" onClick={() => { if (confirm(`Smazat pozici "${pos.name}"?`)) deleteMutation.mutate(pos.id); }} style={{ padding: '4px 8px', fontSize: '0.78rem', color: 'var(--accent-danger)' }}>✕</button>
+                                                    <button className="btn" onClick={() => startEdit(pos)} style={{ width: 36, height: 36, padding: 0, fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icons.action.edit}</button>
+                                                    <button className="btn" onClick={() => { if (confirm(`Smazat pozici "${pos.name}"?`)) deleteMutation.mutate(pos.id); }} style={{ width: 36, height: 36, padding: 0, fontSize: '0.9rem', color: 'var(--accent-danger)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icons.action.delete}</button>
                                                 </div>
                                             </div>
                                         </div>
