@@ -20,6 +20,16 @@ const CATEGORY_PALETTE = [
 const EMOJI_OPTIONS = ['🍔', '🚗', '💡', '🎬', '🛒', '💰', '📈', '💵', '🔄', '📦', '🏥', '🏠', '✈️', '🎮', '📱', '👕', '💄', '🐕', '🎁', '⚡'];
 
 // ── Card helpers ──────────────────────────────────────────────
+// Crisp line icons for the settings redesign (the global Icons map is emoji).
+const SvgIcon = ({ children }: { children: React.ReactNode }) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
+);
+const EditIcon = <SvgIcon><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" /></SvgIcon>;
+const TrashIcon = <SvgIcon><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" /></SvgIcon>;
+const SearchIcon = <SvgIcon><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></SvgIcon>;
+const CloseIcon = <SvgIcon><path d="M18 6 6 18M6 6l12 12" /></SvgIcon>;
+
 function SurfaceCard({ title, sub, children, action, className = '' }: { title: string; sub?: string; children: React.ReactNode; action?: React.ReactNode; className?: string }) {
     return (
         <section className={`surface ${className}`} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -101,50 +111,13 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
         </div>
     );
 
+    const activeCategories = categories.filter(c => c.is_active);
+
     return (
         <div className="settings-category-manager">
-            {showAdd ? (
-                <div style={{ padding: 14, background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <CustomSelect
-                            value={newCategory.icon}
-                            onChange={(val) => setNewCategory({ ...newCategory, icon: val })}
-                            style={{ width: 80 }}
-                            options={EMOJI_OPTIONS.map(e => ({ value: e, label: e }))}
-                        />
-                        <input
-                            className="input"
-                            placeholder="Název kategorie"
-                            value={newCategory.name}
-                            onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
-                            style={{ flex: 1 }}
-                        />
-                    </div>
-                    <ColorSwatches value={newCategory.color} onChange={(c) => setNewCategory({ ...newCategory, color: c })} />
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-2)', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={newCategory.is_income} onChange={(e) => setNewCategory({ ...newCategory, is_income: e.target.checked })} />
-                        Je to příjem
-                    </label>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-primary" onClick={handleAdd} style={{ flex: 1 }}>Přidat</button>
-                        <button className="btn" onClick={() => setShowAdd(false)}>Zrušit</button>
-                    </div>
-                </div>
-            ) : (
-                <button className="btn btn-primary" onClick={() => setShowAdd(true)} style={{ marginBottom: 12, width: '100%' }}>
-                    {Icons.action.add} Přidat kategorii
-                </button>
-            )}
-
             <div className="settings-scroll-list settings-category-list">
-                {categories.filter(c => c.is_active).map(cat => (
-                    <div key={cat.id} style={{
-                        display: 'flex', alignItems: 'center', gap: 10,
-                        padding: '8px 12px',
-                        background: 'var(--surface-sunken)',
-                        borderRadius: 'var(--radius-sm)',
-                        borderLeft: `3px solid ${cat.color}`,
-                    }}>
+                {activeCategories.map(cat => (
+                    <div key={cat.id} className="set-cat-row">
                         {editingId === cat.id ? (
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 <div style={{ display: 'flex', gap: 8 }}>
@@ -169,18 +142,63 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
                             </div>
                         ) : (
                             <>
-                                <span style={{ fontSize: 18 }}>{cat.icon}</span>
-                                <span style={{ flex: 1, fontWeight: 500, fontSize: 14 }}>
-                                    {cat.name}
-                                    {cat.is_income && <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--pos)' }}>· příjem</span>}
-                                </span>
-                                <button className="btn btn-sm" onClick={() => { setEditingId(cat.id); setEditData({ name: cat.name, icon: cat.icon, color: cat.color, is_income: cat.is_income }); }}>{Icons.action.edit}</button>
-                                <button className="btn btn-sm" onClick={() => handleDelete(cat.id)} style={{ color: 'var(--neg)' }}>{Icons.action.delete}</button>
+                                <span className="set-cat-accent" style={{ background: cat.color }} />
+                                <span className="set-cat-emoji">{cat.icon}</span>
+                                <span className="set-cat-name">{cat.name}</span>
+                                <span className={`set-tag ${cat.is_income ? 'income' : ''}`}>{cat.is_income ? 'Příjem' : 'Výdaj'}</span>
+                                <div className="set-row-actions">
+                                    <button className="set-icon-btn" title="Upravit" onClick={() => { setEditingId(cat.id); setEditData({ name: cat.name, icon: cat.icon, color: cat.color, is_income: cat.is_income }); }}>{EditIcon}</button>
+                                    <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDelete(cat.id)}>{TrashIcon}</button>
+                                </div>
                             </>
                         )}
                     </div>
                 ))}
             </div>
+
+            <button className="set-add-dashed" onClick={() => setShowAdd(true)}>
+                {Icons.action.add} Přidat kategorii
+            </button>
+
+            {showAdd && (
+                <div className="set-modal-overlay" onClick={() => setShowAdd(false)}>
+                    <div className="set-modal" onClick={e => e.stopPropagation()}>
+                        <div className="set-modal-head">
+                            <h3 style={{ margin: 0 }}>Nová kategorie</h3>
+                            <button className="set-icon-btn" title="Zavřít" onClick={() => setShowAdd(false)}>{CloseIcon}</button>
+                        </div>
+                        <div>
+                            <label className="set-field-label">Ikona a název</label>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <CustomSelect
+                                    value={newCategory.icon}
+                                    onChange={(val) => setNewCategory({ ...newCategory, icon: val })}
+                                    style={{ width: 80 }}
+                                    options={EMOJI_OPTIONS.map(e => ({ value: e, label: e }))}
+                                />
+                                <input
+                                    className="input"
+                                    autoFocus
+                                    placeholder="Název kategorie"
+                                    value={newCategory.name}
+                                    onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && newCategory.name.trim()) handleAdd(); }}
+                                    style={{ flex: 1 }}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="set-field-label">Barva</label>
+                            <ColorSwatches value={newCategory.color} onChange={(c) => setNewCategory({ ...newCategory, color: c })} />
+                        </div>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)', cursor: 'pointer' }}>
+                            <input type="checkbox" checked={newCategory.is_income} onChange={(e) => setNewCategory({ ...newCategory, is_income: e.target.checked })} />
+                            Je to příjem
+                        </label>
+                        <button className="btn btn-primary" onClick={handleAdd} disabled={!newCategory.name.trim()}>{Icons.action.add} Přidat kategorii</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -351,6 +369,7 @@ export default function SettingsPage() {
     const [newPattern, setNewPattern] = useState('');
     const [newRuleCategory, setNewRuleCategory] = useState('Food');
     const [savingRule, setSavingRule] = useState(false);
+    const [showRuleForm, setShowRuleForm] = useState(false);
     const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
     // Manual account creation
@@ -530,7 +549,7 @@ export default function SettingsPage() {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pattern: newPattern, category: newRuleCategory }),
             });
-            if (r.ok) { setNewPattern(''); loadCategoryRules(); }
+            if (r.ok) { setNewPattern(''); setShowRuleForm(false); loadCategoryRules(); }
         } finally { setSavingRule(false); }
     };
 
@@ -587,7 +606,7 @@ export default function SettingsPage() {
     };
 
     return (
-        <MainLayout>
+        <MainLayout disableScroll={tab === 'categories'}>
             <div className={`page-container settings-page ${tab === 'categories' ? 'settings-page-fit' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page head */}
@@ -718,58 +737,89 @@ export default function SettingsPage() {
                 {tab === 'categories' && (
                     <div className="settings-categories-grid">
 
-                        <SurfaceCard title="Správa kategorií" sub="Přidej, uprav, nebo skryj kategorie" className="settings-category-card">
+                        <SurfaceCard
+                            title="Kategorie"
+                            sub="Přidej, uprav nebo skryj kategorie pro třídění transakcí."
+                            action={<span className="set-count-chip">{ruleCategories.filter(c => c.is_active).length} kategorií</span>}
+                            className="settings-category-card"
+                        >
                             <CategoryManager onCategoriesChange={loadCategoryRules} />
                         </SurfaceCard>
 
-                        <div className="settings-rules-column">
-
-                            <SurfaceCard title="Přidat pravidlo" sub="Když popis transakce obsahuje text, přiřadí se kategorie" className="settings-add-rule-card">
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    <input className="input" placeholder='Např. "billa" nebo "uber"' value={newPattern} onChange={e => setNewPattern(e.target.value)} />
-                                    <CustomSelect
-                                        value={newRuleCategory}
-                                        onChange={setNewRuleCategory}
-                                        options={ruleCategories.filter(c => c.is_active).map(c => ({ value: c.name, label: c.name, icon: c.icon }))}
-                                    />
-                                    <button className="btn btn-primary" onClick={handleAddRule} disabled={savingRule || !newPattern.trim()}>
-                                        {savingRule ? 'Ukládám...' : `${Icons.action.add} Přidat pravidlo`}
-                                    </button>
-                                    <button className="btn" onClick={handleRecategorize} disabled={isSyncing} style={{ marginTop: 4 }}>
-                                        {isSyncing ? 'Překategorizovávám...' : `${Icons.action.sync} Překategorizovat všechny transakce`}
-                                    </button>
+                        <SurfaceCard
+                            title="Pravidla"
+                            sub="Když popis transakce obsahuje text, automaticky se přiřadí kategorie."
+                            action={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                    <span className="set-count-chip">{categoryRules.length} pravidel</span>
+                                    <button className="btn btn-primary btn-sm" onClick={() => setShowRuleForm(true)}>{Icons.action.add} Pravidlo</button>
                                 </div>
-                            </SurfaceCard>
-
-                            <SurfaceCard title="Pravidla kategorií" sub={`${categoryRules.length} pravidel`} className="settings-rules-card">
-                                {categoryRules.length === 0 ? (
-                                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
-                                        Zatím žádná pravidla. Přidej nahoře nebo změň kategorii u transakce.
-                                    </div>
-                                ) : (
-                                    <div className="settings-scroll-list settings-rules-list">
-                                        {categoryRules.map(rule => (
-                                            <div key={rule.id} style={{
-                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                padding: '10px 12px',
-                                                background: rule.is_user_defined ? 'color-mix(in srgb, var(--accent) 8%, var(--surface-sunken))' : 'var(--surface-sunken)',
-                                                borderRadius: 'var(--radius-sm)',
-                                                border: rule.is_user_defined ? '0.5px solid color-mix(in srgb, var(--accent) 24%, transparent)' : '0.5px solid var(--border)',
-                                            }}>
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ fontWeight: 500, fontSize: 14 }}>
-                                                        &apos;{rule.pattern}&apos; → {rule.category}
+                            }
+                            className="settings-rules-card"
+                        >
+                            {categoryRules.length === 0 ? (
+                                <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                                    Zatím žádná pravidla. Přidej přes „+ Pravidlo“ nebo změň kategorii u transakce.
+                                </div>
+                            ) : (
+                                <div className="settings-scroll-list settings-rules-list">
+                                    {categoryRules.map(rule => {
+                                        const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
+                                        return (
+                                            <div key={rule.id} className="set-rule-row">
+                                                <div className="set-rule-main">
+                                                    <div className="set-rule-title">
+                                                        <span>„{rule.pattern}“</span>
+                                                        <span style={{ color: 'var(--text-3)' }}>→</span>
+                                                        <span className="set-rule-dot" style={{ background: catColor }} />
+                                                        <span>{rule.category}</span>
                                                     </div>
-                                                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                                                        {rule.is_user_defined ? `${Icons.rule.userDefined} Vlastní` : `${Icons.rule.learned} Naučené`} · {rule.match_count}× použito
+                                                    <div className="set-rule-sub">
+                                                        {rule.is_user_defined ? 'Vlastní' : 'Naučené'} · {rule.match_count}× použito
                                                     </div>
                                                 </div>
-                                                <button onClick={() => handleDeleteRule(rule.id)} className="btn btn-sm" style={{ color: 'var(--neg)' }}>{Icons.action.delete}</button>
+                                                <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDeleteRule(rule.id)}>{TrashIcon}</button>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </SurfaceCard>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <button className="btn set-recat-btn" onClick={handleRecategorize} disabled={isSyncing}>
+                                {isSyncing ? 'Překategorizovávám...' : `${Icons.action.sync} Překategorizovat všechny transakce`}
+                            </button>
+                        </SurfaceCard>
+                    </div>
+                )}
+
+                {/* New rule modal */}
+                {tab === 'categories' && showRuleForm && (
+                    <div className="set-modal-overlay" onClick={() => setShowRuleForm(false)}>
+                        <div className="set-modal" onClick={e => e.stopPropagation()}>
+                            <div className="set-modal-head">
+                                <div>
+                                    <h3 style={{ margin: 0 }}>Nové pravidlo</h3>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>Když popis transakce obsahuje text, automaticky se přiřadí kategorie.</div>
+                                </div>
+                                <button className="set-icon-btn" title="Zavřít" onClick={() => setShowRuleForm(false)}>{CloseIcon}</button>
+                            </div>
+                            <div>
+                                <label className="set-field-label">Obsahuje text</label>
+                                <div className="set-search">
+                                    {SearchIcon}
+                                    <input className="input" autoFocus placeholder='např. „billa" nebo „uber"' value={newPattern} onChange={e => setNewPattern(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newPattern.trim()) handleAddRule(); }} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="set-field-label">Přiřadit kategorii</label>
+                                <CustomSelect
+                                    value={newRuleCategory}
+                                    onChange={setNewRuleCategory}
+                                    options={ruleCategories.filter(c => c.is_active).map(c => ({ value: c.name, label: c.name, icon: c.icon }))}
+                                />
+                            </div>
+                            <button className="btn btn-primary" onClick={handleAddRule} disabled={savingRule || !newPattern.trim()}>
+                                {savingRule ? 'Ukládám...' : `${Icons.action.add} Přidat pravidlo`}
+                            </button>
                         </div>
                     </div>
                 )}
