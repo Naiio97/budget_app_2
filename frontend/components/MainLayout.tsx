@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
@@ -47,6 +47,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isMobile, setIsMobile] = useState(false);
     const [hasMounted, setHasMounted] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    const [navHidden, setNavHidden] = useState(false);
+    const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
     const queryClient = useQueryClient();
 
@@ -104,7 +106,30 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     useEffect(() => {
         setIsCompactNavOpen(false);
         setIsMobileToolsOpen(false);
+        setNavHidden(false);
     }, [pathname]);
+
+    // Instagram-style bottom nav: hide on scroll down, reveal on scroll up.
+    useEffect(() => {
+        const el = layoutRef.current;
+        if (!el || !isMobile) return;
+        let last = el.scrollTop;
+        let ticking = false;
+        const onScroll = () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+                const y = el.scrollTop;
+                if (y < 48) setNavHidden(false);          // near top → always show
+                else if (y - last > 6) setNavHidden(true);  // scrolling down → hide
+                else if (last - y > 6) setNavHidden(false); // scrolling up → show
+                last = y;
+                ticking = false;
+            });
+        };
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, [isMobile]);
 
     const handleLogout = async () => {
         clearBackendTokenCache();
@@ -211,7 +236,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 </button>
             </header>
 
-            <div className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
+            <div ref={layoutRef} className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
                 <main className="main-content">
                     {/* Hamburger for medium screens */}
                     <div className="compact-nav-header">
@@ -439,7 +464,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             </div>
                         </aside>
 
-                        <nav className="bottom-nav">
+                        <nav className={`bottom-nav ${navHidden ? 'bottom-nav--hidden' : ''}`}>
                             {bottomNavItems.map((item) => (
                                 <Link
                                     key={item.href}
