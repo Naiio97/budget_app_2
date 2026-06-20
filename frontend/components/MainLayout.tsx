@@ -353,7 +353,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 <span>{Icons.nav.reports}</span><span>Přehledy</span>
                             </Link>
                             <button className="btn btn-sm" onClick={handleLogout}
-                                style={{ justifyContent: 'flex-start', gridColumn: '1 / -1', color: 'var(--neg)' }}>
+                                style={{ justifyContent: 'center', gridColumn: '1 / -1', color: 'var(--neg)' }}>
                                 <span>↩</span><span>Odhlásit se</span>
                             </button>
                         </div>
