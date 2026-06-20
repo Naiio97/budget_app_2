@@ -33,12 +33,12 @@ const CloseIcon = <SvgIcon><path d="M18 6 6 18M6 6l12 12" /></SvgIcon>;
 function SurfaceCard({ title, sub, children, action, className = '' }: { title: string; sub?: string; children: React.ReactNode; action?: React.ReactNode; className?: string }) {
     return (
         <section className={`surface ${className}`} style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                <div>
+            <div className="card-head" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <h3 style={{ margin: 0 }}>{title}</h3>
-                    {sub && <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{sub}</div>}
+                    {action}
                 </div>
-                {action}
+                {sub && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{sub}</div>}
             </div>
             <div className="card-body">{children}</div>
         </section>
@@ -46,11 +46,10 @@ function SurfaceCard({ title, sub, children, action, className = '' }: { title: 
 }
 
 // ── Category manager ──────────────────────────────────────────
-function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => void }) {
+function CategoryManager({ onCategoriesChange, showAdd, setShowAdd }: { onCategoriesChange?: () => void; showAdd: boolean; setShowAdd: (v: boolean) => void }) {
     const queryClient = useQueryClient();
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showAdd, setShowAdd] = useState(false);
     const [newCategory, setNewCategory] = useState({ name: '', icon: '📦', color: CATEGORY_PALETTE[0], is_income: false });
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editData, setEditData] = useState({ name: '', icon: '', color: '', is_income: false });
@@ -155,10 +154,6 @@ function CategoryManager({ onCategoriesChange }: { onCategoriesChange?: () => vo
                     </div>
                 ))}
             </div>
-
-            <button className="set-add-dashed" onClick={() => setShowAdd(true)}>
-                {Icons.action.add} Přidat kategorii
-            </button>
 
             {showAdd && (
                 <div className="set-modal-overlay" onClick={() => setShowAdd(false)}>
@@ -358,6 +353,16 @@ export default function SettingsPage() {
     const [loadingBanks, setLoadingBanks] = useState(false);
     const [connectingBank, setConnectingBank] = useState<string | null>(null);
 
+    // Fit-mode (two scrolling columns) is desktop-only; on phones the page
+    // scrolls normally so cards stack instead of fighting over a fixed height.
+    const [isNarrow, setIsNarrow] = useState(false);
+    useEffect(() => {
+        const check = () => setIsNarrow(window.innerWidth <= 1200);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+
     // Sync
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -370,6 +375,8 @@ export default function SettingsPage() {
     const [newRuleCategory, setNewRuleCategory] = useState('Food');
     const [savingRule, setSavingRule] = useState(false);
     const [showRuleForm, setShowRuleForm] = useState(false);
+    const [showAddCategory, setShowAddCategory] = useState(false);
+    const [detailRule, setDetailRule] = useState<CategoryRule | null>(null);
     const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
     // Manual account creation
@@ -606,8 +613,8 @@ export default function SettingsPage() {
     };
 
     return (
-        <MainLayout disableScroll={tab === 'categories'}>
-            <div className={`page-container settings-page ${tab === 'categories' ? 'settings-page-fit' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+        <MainLayout disableScroll={tab === 'categories' && !isNarrow}>
+            <div className={`page-container settings-page ${tab === 'categories' && !isNarrow ? 'settings-page-fit' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page head */}
                 <div className="page-head">
@@ -740,18 +747,26 @@ export default function SettingsPage() {
                         <SurfaceCard
                             title="Kategorie"
                             sub="Přidej, uprav nebo skryj kategorie pro třídění transakcí."
-                            action={<span className="set-count-chip">{ruleCategories.filter(c => c.is_active).length} kategorií</span>}
+                            action={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                    <span className="set-count-chip">{ruleCategories.filter(c => c.is_active).length} kategorií</span>
+                                    <button className="btn btn-primary btn-sm" onClick={() => setShowAddCategory(true)}>{Icons.action.add} Kategorie</button>
+                                </div>
+                            }
                             className="settings-category-card"
                         >
-                            <CategoryManager onCategoriesChange={loadCategoryRules} />
+                            <CategoryManager onCategoriesChange={loadCategoryRules} showAdd={showAddCategory} setShowAdd={setShowAddCategory} />
                         </SurfaceCard>
 
                         <SurfaceCard
                             title="Pravidla"
                             sub="Když popis transakce obsahuje text, automaticky se přiřadí kategorie."
                             action={
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                     <span className="set-count-chip">{categoryRules.length} pravidel</span>
+                                    <button className="btn btn-sm" onClick={handleRecategorize} disabled={isSyncing} title="Překategorizovat všechny transakce">
+                                        {isSyncing ? '…' : `${Icons.action.sync} Sync`}
+                                    </button>
                                     <button className="btn btn-primary btn-sm" onClick={() => setShowRuleForm(true)}>{Icons.action.add} Pravidlo</button>
                                 </div>
                             }
@@ -766,27 +781,17 @@ export default function SettingsPage() {
                                     {categoryRules.map(rule => {
                                         const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
                                         return (
-                                            <div key={rule.id} className="set-rule-row">
-                                                <div className="set-rule-main">
-                                                    <div className="set-rule-title">
-                                                        <span>„{rule.pattern}“</span>
-                                                        <span style={{ color: 'var(--text-3)' }}>→</span>
-                                                        <span className="set-rule-dot" style={{ background: catColor }} />
-                                                        <span>{rule.category}</span>
-                                                    </div>
-                                                    <div className="set-rule-sub">
-                                                        {rule.is_user_defined ? 'Vlastní' : 'Naučené'} · {rule.match_count}× použito
-                                                    </div>
-                                                </div>
-                                                <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDeleteRule(rule.id)}>{TrashIcon}</button>
-                                            </div>
+                                            <button key={rule.id} type="button" className="set-rule-row" onClick={() => setDetailRule(rule)}>
+                                                <span className="set-rule-pattern">„{rule.pattern}“</span>
+                                                <span className="set-rule-arrow">→</span>
+                                                <span className="set-rule-dot" style={{ background: catColor }} />
+                                                <span className="set-rule-cat">{rule.category}</span>
+                                                <span className="set-rule-chevron">›</span>
+                                            </button>
                                         );
                                     })}
                                 </div>
                             )}
-                            <button className="btn set-recat-btn" onClick={handleRecategorize} disabled={isSyncing}>
-                                {isSyncing ? 'Překategorizovávám...' : `${Icons.action.sync} Překategorizovat všechny transakce`}
-                            </button>
                         </SurfaceCard>
                     </div>
                 )}
@@ -819,6 +824,36 @@ export default function SettingsPage() {
                             </div>
                             <button className="btn btn-primary" onClick={handleAddRule} disabled={savingRule || !newPattern.trim()}>
                                 {savingRule ? 'Ukládám...' : `${Icons.action.add} Přidat pravidlo`}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Rule detail modal */}
+                {tab === 'categories' && detailRule && (
+                    <div className="set-modal-overlay" onClick={() => setDetailRule(null)}>
+                        <div className="set-modal" onClick={e => e.stopPropagation()}>
+                            <div className="set-modal-head">
+                                <h3 style={{ margin: 0 }}>Detail pravidla</h3>
+                                <button className="set-icon-btn" title="Zavřít" onClick={() => setDetailRule(null)}>{CloseIcon}</button>
+                            </div>
+                            <div>
+                                <label className="set-field-label">Obsahuje text</label>
+                                <div className="set-modal-value">„{detailRule.pattern}“</div>
+                            </div>
+                            <div>
+                                <label className="set-field-label">Přiřadí kategorii</label>
+                                <div className="set-modal-value" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span className="set-rule-dot" style={{ background: ruleCategories.find(c => c.name === detailRule.category)?.color ?? 'var(--text-3)' }} />
+                                    {detailRule.category}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="set-field-label">Původ</label>
+                                <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
+                            </div>
+                            <button className="btn" style={{ color: 'var(--neg)' }} onClick={() => { handleDeleteRule(detailRule.id); setDetailRule(null); }}>
+                                {TrashIcon} Smazat pravidlo
                             </button>
                         </div>
                     </div>

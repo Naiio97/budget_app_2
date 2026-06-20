@@ -1784,6 +1784,21 @@ select.input {
   border-radius: var(--radius-full);
   white-space: nowrap;
 }
+/* Compact header actions so title + buttons sit on one row, sub goes below. */
+.settings-categories-grid .card-head .btn {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 12.5px;
+  gap: 5px;
+}
+.settings-categories-grid .card-head .set-count-chip {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
 .set-cat-row {
   position: relative;
   display: flex;
@@ -1887,23 +1902,52 @@ select.input {
 .set-rule-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
+  width: 100%;
   padding: 12px 14px;
   background: var(--surface-strong);
   border: 0.5px solid var(--border);
   border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  transition: background 0.15s;
 }
-.set-rule-main { min-width: 0; flex: 1; }
-.set-rule-title {
+@media (hover: hover) {
+  .set-rule-row:hover { background: var(--surface-elevated); }
+}
+.set-rule-pattern {
+  flex: 1 1 auto;
+  min-width: 0;
   font-weight: 500;
   font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.set-rule-arrow { color: var(--text-3); flex-shrink: 0; }
 .set-rule-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
-.set-rule-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+.set-rule-cat {
+  flex-shrink: 0;
+  max-width: 42%;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.set-rule-chevron { color: var(--text-3); font-size: 20px; line-height: 1; flex-shrink: 0; }
+.set-modal-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  word-break: break-word;
+}
 
 /* New-rule modal */
 .set-modal-overlay {
@@ -3051,15 +3095,43 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .settings-page .surface .card-body {
     padding: 12px 16px 16px;
   }
+  /* On phones drop the whole grid/fit machinery: plain block stack, each card
+     grows to its real content height, the page scrolls. Anything else left a
+     short card box with its list overflowing onto the next card. */
   .settings-categories-grid {
-    grid-template-columns: minmax(0, 1fr);
-    overflow: visible;
-    gap: var(--spacing-md);
+    display: block !important;
+    overflow: visible !important;
+    flex: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+  .settings-categories-grid > * + * {
+    margin-top: var(--spacing-md);
+  }
+  .settings-rules-column {
+    display: block !important;
   }
   .settings-category-card,
   .settings-add-rule-card,
   .settings-rules-card {
     border-radius: 22px;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+  .settings-category-card .card-body,
+  .settings-rules-card .card-body,
+  .settings-category-manager {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+  .settings-categories-grid .settings-scroll-list {
+    min-height: 0 !important;
+    height: auto !important;
+    flex: none !important;
   }
   /* category / rule cards inherit the tighter settings-page padding above */
   .settings-account-list {
