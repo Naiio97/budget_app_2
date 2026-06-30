@@ -1,3 +1,20 @@
+// On localhost a leftover SW would keep serving stale dev chunks (the browser
+// revalidates this script on navigation, so this self-destruct propagates even
+// to already-installed old workers). Kill it, wipe caches, reload open tabs.
+if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1') {
+    self.addEventListener('install', () => self.skipWaiting());
+    self.addEventListener('activate', (event) => {
+        event.waitUntil((async () => {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((k) => caches.delete(k)));
+            await self.registration.unregister();
+            const clients = await self.clients.matchAll({ type: 'window' });
+            clients.forEach((c) => c.navigate(c.url));
+        })());
+    });
+    // No fetch handler in dev → nothing is ever served from cache.
+} else {
+
 // __BUILD_SHA__ is replaced at docker build time; falls back to 'dev' for local.
 const CACHE_NAME = 'budget-tracker-__BUILD_SHA__';
 const OFFLINE_URL = '/offline.html';
@@ -92,3 +109,5 @@ self.addEventListener('fetch', (event) => {
         fetch(request).catch(() => caches.match(request))
     );
 });
+
+} // end production-only SW
