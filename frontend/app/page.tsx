@@ -81,7 +81,8 @@ function getPaydayText(today: Date, payday: Date): string {
 export default function DashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard,
-    queryFn: getDashboard,
+    // Wrap so React Query's context object isn't passed as `includeHidden`.
+    queryFn: () => getDashboard(),
   });
 
   const [now, setNow] = useState(() => new Date());

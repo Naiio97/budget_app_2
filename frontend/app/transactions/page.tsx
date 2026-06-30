@@ -111,7 +111,8 @@ function TransactionsPageContent() {
 
     const { data: dashData } = useQuery({
         queryKey: queryKeys.dashboard,
-        queryFn: getDashboard,
+        // Wrap so React Query's context object isn't passed as `includeHidden`.
+        queryFn: () => getDashboard(),
     });
 
     const { data: categoriesData = [] } = useQuery<Category[]>({
