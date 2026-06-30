@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account, apiFetch } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
@@ -29,6 +29,9 @@ const EditIcon = <SvgIcon><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 
 const TrashIcon = <SvgIcon><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M10 11v6M14 11v6" /></SvgIcon>;
 const SearchIcon = <SvgIcon><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></SvgIcon>;
 const CloseIcon = <SvgIcon><path d="M18 6 6 18M6 6l12 12" /></SvgIcon>;
+const EyeIcon = <SvgIcon><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></SvgIcon>;
+const EyeOffIcon = <SvgIcon><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A11 11 0 0 1 12 5c6.5 0 10 7 10 7a13 13 0 0 1-2.16 3.19" /><path d="M6.61 6.61A13 13 0 0 0 2 12s3.5 7 10 7a11 11 0 0 0 5.39-1.39" /><path d="m2 2 20 20" /></SvgIcon>;
+const BankIcon = <SvgIcon><path d="M3 22h18" /><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="M12 2 21 7H3z" /></SvgIcon>;
 
 function SurfaceCard({ title, sub, children, action, className = '' }: { title: string; sub?: string; children: React.ReactNode; action?: React.ReactNode; className?: string }) {
     return (
@@ -345,8 +348,6 @@ export default function SettingsPage() {
     const [editingAccount, setEditingAccount] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [processingAccount, setProcessingAccount] = useState<string | null>(null);
-    const [swipedAccount, setSwipedAccount] = useState<string | null>(null);
-    const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
     // Banks
     const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -376,6 +377,7 @@ export default function SettingsPage() {
     const [savingRule, setSavingRule] = useState(false);
     const [showRuleForm, setShowRuleForm] = useState(false);
     const [showAddCategory, setShowAddCategory] = useState(false);
+    const [showConnectBank, setShowConnectBank] = useState(false);
     const [detailRule, setDetailRule] = useState<CategoryRule | null>(null);
     const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
@@ -418,7 +420,7 @@ export default function SettingsPage() {
                 } catch (err) { console.error(err); }
             }
             try {
-                const [status, dashData, keys] = await Promise.all([getSyncStatus(), getDashboard(), getApiKeys()]);
+                const [status, dashData, keys] = await Promise.all([getSyncStatus(), getDashboard(true), getApiKeys()]);
                 setSyncStatus(status);
                 setApiKeysLoaded(keys);
                 if (keys.gocardless_secret_id) setGocardlessId(keys.gocardless_secret_id);
@@ -437,8 +439,10 @@ export default function SettingsPage() {
         if (!editName.trim()) return;
         setProcessingAccount(id);
         try {
-            if (id.startsWith('manual-')) {
-                await apiFetch(`/manual-accounts/${id.replace('manual-', '')}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editName }) });
+            if (id.startsWith('manual-inv-')) {
+                await updateManualInvestment(Number(id.slice('manual-inv-'.length)), { name: editName });
+            } else if (id.startsWith('manual-')) {
+                await apiFetch(`/manual-accounts/${id.slice('manual-'.length)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: editName }) });
             } else {
                 await updateAccount(id, { name: editName });
             }
@@ -451,8 +455,10 @@ export default function SettingsPage() {
     const handleToggleVisibility = async (id: string, currentVisibility: boolean) => {
         setProcessingAccount(id);
         try {
-            if (id.startsWith('manual-')) {
-                await apiFetch(`/manual-accounts/${id.replace('manual-', '')}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_visible: !currentVisibility }) });
+            if (id.startsWith('manual-inv-')) {
+                await updateManualInvestment(Number(id.slice('manual-inv-'.length)), { is_visible: !currentVisibility });
+            } else if (id.startsWith('manual-')) {
+                await apiFetch(`/manual-accounts/${id.slice('manual-'.length)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_visible: !currentVisibility }) });
             } else {
                 await updateAccount(id, { is_visible: !currentVisibility });
             }
@@ -465,8 +471,10 @@ export default function SettingsPage() {
         if (!confirm('Opravdu chcete smazat tento účet a celou jeho historii transakcí?')) return;
         setProcessingAccount(id);
         try {
-            if (id.startsWith('manual-')) {
-                await apiFetch(`/manual-accounts/${id.replace('manual-', '')}`, { method: 'DELETE' });
+            if (id.startsWith('manual-inv-')) {
+                await deleteManualInvestment(Number(id.slice('manual-inv-'.length)));
+            } else if (id.startsWith('manual-')) {
+                await apiFetch(`/manual-accounts/${id.slice('manual-'.length)}`, { method: 'DELETE' });
             } else {
                 await deleteAccount(id);
             }
@@ -498,7 +506,7 @@ export default function SettingsPage() {
             if (res.ok) {
                 setNewManualName(''); setNewManualBalance(''); setNewManualAccountNumber('');
                 setShowAddManual(false);
-                const dashData = await getDashboard();
+                const dashData = await getDashboard(true);
                 setAccounts(dashData.accounts || []);
                 await refreshAccounts();
             }
@@ -528,7 +536,7 @@ export default function SettingsPage() {
             await syncData();
             const status = await getSyncStatus();
             setSyncStatus(status);
-            const dashData = await getDashboard();
+            const dashData = await getDashboard(true);
             if (dashData.accounts.length > 0) setAccounts(dashData.accounts);
             await refreshAccounts();
         } catch (err) {
@@ -578,24 +586,6 @@ export default function SettingsPage() {
         return new Date(dateStr).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
-    const startAccountSwipe = (event: React.TouchEvent, accountId: string) => {
-        if (editingAccount) return;
-        const touch = event.touches[0];
-        swipeStart.current = { x: touch.clientX, y: touch.clientY };
-        if (swipedAccount && swipedAccount !== accountId) setSwipedAccount(null);
-    };
-
-    const endAccountSwipe = (event: React.TouchEvent, accountId: string) => {
-        const start = swipeStart.current;
-        swipeStart.current = null;
-        if (!start || editingAccount) return;
-        const touch = event.changedTouches[0];
-        const dx = touch.clientX - start.x;
-        const dy = touch.clientY - start.y;
-        if (Math.abs(dx) < 36 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
-        setSwipedAccount(dx < 0 ? accountId : null);
-    };
-
     const getBankLogo = (institution: string | undefined) => {
         if (!institution) return null;
         const inst = institution.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -635,53 +625,50 @@ export default function SettingsPage() {
 
                 {/* TAB: ACCOUNTS */}
                 {tab === 'accounts' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--spacing-lg)' }}>
-
-                        <SurfaceCard title="Moje účty" sub={`${accounts.length} ${accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}`}>
+                    <div className="settings-accounts-wrap">
+                        <SurfaceCard
+                            title="Účty"
+                            sub="Přejmenuj, skryj nebo odpoj propojené a manuální účty."
+                            action={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                    <span className="set-count-chip">{accounts.length} {accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}</span>
+                                    <button className="btn btn-sm" onClick={() => setShowConnectBank(true)}>{BankIcon} Banka</button>
+                                    <button className="btn btn-primary btn-sm" onClick={() => setShowAddManual(true)}>{Icons.action.add} Účet</button>
+                                </div>
+                            }
+                            className="settings-category-card"
+                        >
                             {accounts.length === 0 ? (
-                                <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Zatím žádné připojené účty.</div>
+                                <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Zatím žádné účty. Přidej přes „+ Banka“ nebo „+ Účet“.</div>
                             ) : (
-                                <div className="settings-account-list">
+                                <div className="settings-scroll-list settings-account-list">
                                     {accounts.map(acc => {
                                         const logo = getBankLogo(acc.institution);
                                         const visible = acc.is_visible !== false;
                                         return (
-                                            <div
-                                                key={acc.id}
-                                                className={`settings-account-row ${editingAccount === acc.id ? 'editing' : ''} ${swipedAccount === acc.id ? 'swiped' : ''}`}
-                                                onTouchStart={(event) => startAccountSwipe(event, acc.id)}
-                                                onTouchEnd={(event) => endAccountSwipe(event, acc.id)}
-                                                style={{ opacity: processingAccount === acc.id ? 0.5 : visible ? 1 : 0.6 }}
-                                            >
-                                                {logo ? (
-                                                    <Image className="settings-account-logo" src={logo} alt={acc.name} width={28} height={28} style={{ objectFit: 'contain', borderRadius: 4 }} />
-                                                ) : (
-                                                    <span className="settings-account-logo">{acc.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment}</span>
-                                                )}
+                                            <div key={acc.id} className={`set-acc-row ${visible ? '' : 'is-hidden'}`} style={{ opacity: processingAccount === acc.id ? 0.5 : undefined }}>
+                                                <span className="set-acc-logo" style={logo ? { background: '#fff' } : undefined}>
+                                                    {logo ? <Image src={logo} alt={acc.name} width={34} height={34} /> : (acc.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment)}
+                                                </span>
                                                 {editingAccount === acc.id ? (
-                                                    <div className="settings-account-edit">
-                                                        <input className="input" value={editName} autoFocus onChange={e => setEditName(e.target.value)} style={{ flex: 1 }} />
+                                                    <div className="set-acc-edit">
+                                                        <input className="input" value={editName} autoFocus onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleRename(acc.id); }} style={{ flex: 1 }} />
                                                         <button className="btn btn-sm btn-primary" onClick={() => handleRename(acc.id)}>OK</button>
-                                                        <button className="btn btn-sm" onClick={() => setEditingAccount(null)}>✕</button>
+                                                        <button className="set-icon-btn" onClick={() => setEditingAccount(null)} title="Zrušit">{CloseIcon}</button>
                                                     </div>
                                                 ) : (
-                                                    <div className="settings-account-copy">
-                                                        <div className="settings-account-name">
-                                                            {acc.name}
+                                                    <>
+                                                        <div className="set-acc-info">
+                                                            <div className="set-acc-name">{acc.name}</div>
+                                                            <div className="set-acc-meta">{acc.institution || acc.type}</div>
                                                         </div>
-                                                        <div className="settings-account-meta">
-                                                            {acc.institution || acc.type}{!visible && ' · skryto'}
+                                                        {!visible && <span className="set-tag">Skryto</span>}
+                                                        <div className="set-row-actions">
+                                                            <button className="set-icon-btn" title="Přejmenovat" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); }}>{EditIcon}</button>
+                                                            <button className="set-icon-btn" title={visible ? 'Skrýt' : 'Zobrazit'} onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)}>{visible ? EyeIcon : EyeOffIcon}</button>
+                                                            <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDeleteAccount(acc.id)}>{TrashIcon}</button>
                                                         </div>
-                                                    </div>
-                                                )}
-                                                {editingAccount !== acc.id && (
-                                                    <div className="settings-account-actions">
-                                                        <button className="btn btn-sm settings-account-rename" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); setSwipedAccount(null); }} title="Přejmenovat">{Icons.action.edit}</button>
-                                                        <button className="btn btn-sm" onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)} title={visible ? 'Skrýt' : 'Zobrazit'}>
-                                                            {visible ? Icons.action.visible : Icons.action.hidden}
-                                                        </button>
-                                                        <button className="btn btn-sm" onClick={() => handleDeleteAccount(acc.id)} style={{ color: 'var(--neg)' }} title="Smazat">{Icons.action.delete}</button>
-                                                    </div>
+                                                    </>
                                                 )}
                                             </div>
                                         );
@@ -689,19 +676,32 @@ export default function SettingsPage() {
                                 </div>
                             )}
                         </SurfaceCard>
+                    </div>
+                )}
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-                            <SurfaceCard title="Připojit banku" sub="Přes GoCardless (Open Banking)">
-                                {!apiKeysLoaded?.has_gocardless ? (
-                                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
-                                        Nejdřív zadej GoCardless klíče v záložce <strong>Pokročilé</strong>.
-                                    </div>
-                                ) : loadingBanks ? (
-                                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Načítám banky...</div>
-                                ) : institutions.length === 0 ? (
-                                    <button className="btn" onClick={loadBanks}>{Icons.action.sync} Načíst banky</button>
-                                ) : (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Connect bank modal */}
+                {tab === 'accounts' && showConnectBank && (
+                    <div className="set-modal-overlay" onClick={() => setShowConnectBank(false)}>
+                        <div className="set-modal" onClick={e => e.stopPropagation()}>
+                            <div className="set-modal-head">
+                                <div>
+                                    <h3 style={{ margin: 0 }}>Připojit banku</h3>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>Přes GoCardless (Open Banking).</div>
+                                </div>
+                                <button className="set-icon-btn" title="Zavřít" onClick={() => setShowConnectBank(false)}>{CloseIcon}</button>
+                            </div>
+                            {!apiKeysLoaded?.has_gocardless ? (
+                                <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                                    Nejdřív zadej GoCardless klíče v záložce <strong>Pokročilé</strong>.
+                                </div>
+                            ) : loadingBanks ? (
+                                <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Načítám banky...</div>
+                            ) : institutions.length === 0 ? (
+                                <button className="btn btn-primary" onClick={loadBanks}>{Icons.action.sync} Načíst banky</button>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="set-field-label">Banka</label>
                                         <CustomSelect
                                             options={institutions.map(b => ({ value: b.id, label: b.name, icon: Icons.accountType.bank }))}
                                             value={connectingBank || ''}
@@ -710,32 +710,42 @@ export default function SettingsPage() {
                                             searchable
                                             searchPlaceholder="Hledat banku..."
                                         />
-                                        <button className="btn btn-primary" disabled={!connectingBank} onClick={() => connectingBank && handleConnectBank(connectingBank)}>
-                                            Připojit a přejít na banku →
-                                        </button>
                                     </div>
-                                )}
-                            </SurfaceCard>
-
-                            <SurfaceCard title="Přidat manuální účet" sub="Pro účty bez API (hotovost, atd.)">
-                                {showAddManual ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                        <input className="input" placeholder="Název účtu" value={newManualName} onChange={e => setNewManualName(e.target.value)} autoFocus />
-                                        <input className="input" placeholder="Číslo účtu / IBAN (volitelné)" value={newManualAccountNumber} onChange={e => setNewManualAccountNumber(e.target.value)} />
-                                        <input type="number" className="input" placeholder="Počáteční zůstatek (Kč)" value={newManualBalance} onChange={e => setNewManualBalance(e.target.value)} />
-                                        <div style={{ display: 'flex', gap: 6 }}>
-                                            <button className="btn btn-primary" disabled={savingManual || !newManualName.trim()} onClick={handleCreateManualAccount} style={{ flex: 1 }}>
-                                                {savingManual ? 'Vytvářím...' : 'Vytvořit'}
-                                            </button>
-                                            <button className="btn" onClick={() => { setShowAddManual(false); setNewManualName(''); setNewManualBalance(''); setNewManualAccountNumber(''); }}>Zrušit</button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button className="btn" onClick={() => setShowAddManual(true)} style={{ width: '100%' }}>
-                                        {Icons.action.add} Nový manuální účet
+                                    <button className="btn btn-primary" disabled={!connectingBank} onClick={() => connectingBank && handleConnectBank(connectingBank)}>
+                                        Připojit a přejít na banku →
                                     </button>
-                                )}
-                            </SurfaceCard>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Add manual account modal */}
+                {tab === 'accounts' && showAddManual && (
+                    <div className="set-modal-overlay" onClick={() => { setShowAddManual(false); setNewManualName(''); setNewManualBalance(''); setNewManualAccountNumber(''); }}>
+                        <div className="set-modal" onClick={e => e.stopPropagation()}>
+                            <div className="set-modal-head">
+                                <div>
+                                    <h3 style={{ margin: 0 }}>Nový manuální účet</h3>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>Pro účty bez API (hotovost, spoření…).</div>
+                                </div>
+                                <button className="set-icon-btn" title="Zavřít" onClick={() => { setShowAddManual(false); setNewManualName(''); setNewManualBalance(''); setNewManualAccountNumber(''); }}>{CloseIcon}</button>
+                            </div>
+                            <div>
+                                <label className="set-field-label">Název účtu</label>
+                                <input className="input" placeholder="např. Hotovost" value={newManualName} autoFocus onChange={e => setNewManualName(e.target.value)} style={{ width: '100%' }} />
+                            </div>
+                            <div>
+                                <label className="set-field-label">Číslo účtu / IBAN (volitelné)</label>
+                                <input className="input" placeholder="" value={newManualAccountNumber} onChange={e => setNewManualAccountNumber(e.target.value)} style={{ width: '100%' }} />
+                            </div>
+                            <div>
+                                <label className="set-field-label">Počáteční zůstatek (Kč)</label>
+                                <input type="number" className="input" placeholder="0" value={newManualBalance} onChange={e => setNewManualBalance(e.target.value)} style={{ width: '100%' }} />
+                            </div>
+                            <button className="btn btn-primary" disabled={savingManual || !newManualName.trim()} onClick={handleCreateManualAccount}>
+                                {savingManual ? 'Vytvářím...' : `${Icons.action.add} Vytvořit účet`}
+                            </button>
                         </div>
                     </div>
                 )}
