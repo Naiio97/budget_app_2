@@ -13,7 +13,7 @@ from database import get_db
 from models import (
     MonthlyBudgetModel, MonthlyIncomeItemModel, RecurringExpenseModel, MonthlyExpenseModel,
     ManualAccountModel, ManualAccountItemModel, TransactionModel, UserModel,
-    LoanModel, LoanPaymentModel
+    LoanModel, LoanPaymentModel, AccountModel
 )
 
 router = APIRouter(tags=["Budget & Expenses"])
@@ -552,6 +552,13 @@ async def match_transactions(
         .where(TransactionModel.date >= start_date)
         .where(TransactionModel.date < end_date)
         .where(TransactionModel.amount < 0)
+        # Hidden accounts are excluded from budget matching.
+        .where(TransactionModel.account_id.in_(
+            select(AccountModel.id).where(
+                AccountModel.user_id == current_user.id,
+                AccountModel.is_visible == True,
+            )
+        ))
     )
     transactions = tx_result.scalars().all()
 
@@ -662,6 +669,13 @@ async def sync_income_from_transactions(
         .where(TransactionModel.date < salary_window_end)
         .where(TransactionModel.category == "Salary")
         .where(TransactionModel.amount > 0)
+        # Hidden accounts don't contribute auto-detected salary income.
+        .where(TransactionModel.account_id.in_(
+            select(AccountModel.id).where(
+                AccountModel.user_id == current_user.id,
+                AccountModel.is_visible == True,
+            )
+        ))
     )
     salary_total = salary_result.scalar() or 0
 
