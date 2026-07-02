@@ -2188,6 +2188,41 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .loan-schedule-row > :nth-child(5) { display: none; }
 }
 
+/* ══ SUBSCRIPTIONS ═══════════════════════════════════════════ */
+.subs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: var(--spacing-md);
+}
+.subs-card-inactive { opacity: 0.55; }
+
+.subs-meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 0.5px solid var(--border);
+}
+
+.subs-suggestion-list {
+  display: flex;
+  flex-direction: column;
+}
+.subs-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 10px 0;
+  border-bottom: 0.5px solid var(--border);
+}
+.subs-suggestion-row:last-child { border-bottom: none; }
+
+@media (max-width: 680px) {
+  .subs-grid { grid-template-columns: minmax(0, 1fr); }
+  .subs-suggestion-row { flex-wrap: wrap; }
+}
+
 /* ══ FOCUS ════════════════════════════════════════════════════ */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 

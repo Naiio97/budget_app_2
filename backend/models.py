@@ -406,3 +406,27 @@ class LoanPaymentModel(Base):
 
     loan = relationship("LoanModel", back_populates="payments")
 
+
+class SubscriptionModel(Base):
+    """Předplatné — opakovaná platba (Netflix, mobil, pojistka…).
+
+    Ukládáme jen definici (pattern + očekávaná částka + perioda). Poslední platba,
+    příští obnovení a změny ceny se počítají živě z transakcí přes merchant_pattern,
+    takže nikdy nejsou zastaralé.
+    """
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)              # "Netflix", "Vodafone"
+    merchant_pattern = Column(String, nullable=False)  # lowercase pattern pro párování transakcí
+    amount = Column(Float, nullable=False)             # očekávaná částka za periodu
+    currency = Column(String, nullable=False, default="CZK")
+    period = Column(String, nullable=False, default="monthly")  # "monthly" | "quarterly" | "yearly"
+    category = Column(String, nullable=True)
+    first_seen_date = Column(String, nullable=True)    # YYYY-MM-DD první zachycené platby
+    note = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
