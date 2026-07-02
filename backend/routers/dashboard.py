@@ -56,38 +56,29 @@ def _build_recent_tx(parsed, contacts_by_iban):
 
 @router.get("/")
 async def get_dashboard(
+    include_hidden: bool = False,
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get main dashboard data from database (instant response)"""
+    """Get main dashboard data from database (instant response).
 
-    result = await db.execute(
-        select(AccountModel).where(
-            AccountModel.user_id == current_user.id,
-            AccountModel.is_visible == True,
-        )
-    )
-    accounts = result.scalars().all()
+    `include_hidden=true` returns hidden accounts too (each with `is_visible`) so
+    the settings account manager can list and un-hide them. The summary/totals are
+    only meaningful for the default (visible-only) call — the settings manager
+    reads just the `accounts` list.
+    """
 
-    manual_result = await db.execute(
-        select(ManualAccountModel)
-        .options(selectinload(ManualAccountModel.items))
-        .where(
-            ManualAccountModel.user_id == current_user.id,
-            ManualAccountModel.is_visible == True,
-        )
-    )
-    manual_accounts = manual_result.scalars().all()
+    acc_q = select(AccountModel).where(AccountModel.user_id == current_user.id)
+    man_q = select(ManualAccountModel).options(selectinload(ManualAccountModel.items)).where(ManualAccountModel.user_id == current_user.id)
+    inv_q = select(ManualInvestmentAccountModel).options(selectinload(ManualInvestmentAccountModel.positions)).where(ManualInvestmentAccountModel.user_id == current_user.id)
+    if not include_hidden:
+        acc_q = acc_q.where(AccountModel.is_visible == True)
+        man_q = man_q.where(ManualAccountModel.is_visible == True)
+        inv_q = inv_q.where(ManualInvestmentAccountModel.is_visible == True)
 
-    manual_inv_result = await db.execute(
-        select(ManualInvestmentAccountModel)
-        .options(selectinload(ManualInvestmentAccountModel.positions))
-        .where(
-            ManualInvestmentAccountModel.user_id == current_user.id,
-            ManualInvestmentAccountModel.is_visible == True,
-        )
-    )
-    manual_investment_accounts = manual_inv_result.scalars().all()
+    accounts = (await db.execute(acc_q)).scalars().all()
+    manual_accounts = (await db.execute(man_q)).scalars().all()
+    manual_investment_accounts = (await db.execute(inv_q)).scalars().all()
 
     # Calculate investment balance — re-convert if sync stored wrong rate (fallback 1.0)
     investment_balance = 0
@@ -129,13 +120,17 @@ async def get_dashboard(
     total_balance += manual_investment_balance
     investment_balance += manual_investment_balance
     
-    # Get recent transactions from DB with account name
-    tx_result = await db.execute(
+    # Get recent transactions from DB with account name — hidden accounts'
+    # transactions stay out of the dashboard overview.
+    tx_q = (
         select(TransactionModel, AccountModel.name)
         .join(AccountModel, TransactionModel.account_id == AccountModel.id)
         .where(TransactionModel.user_id == current_user.id)
-        .order_by(TransactionModel.date.desc())
-        .limit(5)
+    )
+    if not include_hidden:
+        tx_q = tx_q.where(AccountModel.is_visible == True)
+    tx_result = await db.execute(
+        tx_q.order_by(TransactionModel.date.desc()).limit(5)
     )
     recent_tx_rows = tx_result.all()
 
@@ -173,12 +168,20 @@ async def get_dashboard(
     # as "tento měsíc" so they must match what the user sees on a calendar).
     today = datetime.now()
     month_start = today.replace(day=1).strftime("%Y-%m-%d")
-    all_tx_result = await db.execute(
-        select(TransactionModel).where(
-            TransactionModel.user_id == current_user.id,
-            TransactionModel.date >= month_start,
-        ).limit(1000)
+    all_tx_q = select(TransactionModel).where(
+        TransactionModel.user_id == current_user.id,
+        TransactionModel.date >= month_start,
     )
+    if not include_hidden:
+        all_tx_q = all_tx_q.where(
+            TransactionModel.account_id.in_(
+                select(AccountModel.id).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.is_visible == True,
+                )
+            )
+        )
+    all_tx_result = await db.execute(all_tx_q.limit(1000))
     all_tx = all_tx_result.scalars().all()
     
     # Calculate income vs expenses (excluding internal/family transfers)
@@ -231,9 +234,9 @@ async def get_dashboard(
             "balance": balance,
             "currency": currency,
             "institution": acc.institution,
-            "consent_expires_at": acc.consent_expires_at.isoformat() if acc.consent_expires_at else None
+            "is_visible": acc.is_visible,
         })
-    
+
     # Add manual accounts to the list
     for macc in manual_accounts:
         borrowed = sum(item.amount for item in macc.items if not getattr(item, 'is_mine', True))
@@ -243,7 +246,8 @@ async def get_dashboard(
             "type": "manual",
             "balance": macc.balance - borrowed,
             "currency": macc.currency,
-            "institution": "Manuální"
+            "institution": "Manuální",
+            "is_visible": macc.is_visible,
         })
 
     # Add manual investment accounts to the list
@@ -255,7 +259,8 @@ async def get_dashboard(
             "type": "manual_investment",
             "balance": total,
             "currency": macc.currency,
-            "institution": "Manuální investice"
+            "institution": "Manuální investice",
+            "is_visible": macc.is_visible,
         })
 
     return {
@@ -331,6 +336,12 @@ async def get_balance_history(
         select(TransactionModel).where(
             TransactionModel.user_id == current_user.id,
             TransactionModel.date >= start_date.strftime("%Y-%m-%d"),
+            TransactionModel.account_id.in_(
+                select(AccountModel.id).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.is_visible == True,
+                )
+            ),
         ).limit(1000)
     )
     transactions = result.scalars().all()
@@ -339,6 +350,7 @@ async def get_balance_history(
         select(func.sum(AccountModel.balance)).where(
             AccountModel.user_id == current_user.id,
             AccountModel.type == "bank",
+            AccountModel.is_visible == True,
         )
     )
     current_balance = acc_result.scalar() or 0
@@ -391,6 +403,12 @@ async def get_net_worth_history(
         select(TransactionModel).where(
             TransactionModel.user_id == current_user.id,
             TransactionModel.date >= start_date.strftime("%Y-%m-%d"),
+            TransactionModel.account_id.in_(
+                select(AccountModel.id).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.is_visible == True,
+                )
+            ),
         ).limit(2000)
     )
     transactions = result.scalars().all()
@@ -469,6 +487,12 @@ async def get_monthly_report(
         select(TransactionModel).where(
             TransactionModel.user_id == current_user.id,
             TransactionModel.account_type == "bank",
+            TransactionModel.account_id.in_(
+                select(AccountModel.id).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.is_visible == True,
+                )
+            ),
         )
     )
     transactions = result.scalars().all()

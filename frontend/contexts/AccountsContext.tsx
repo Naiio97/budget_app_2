@@ -28,7 +28,9 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
     const { data, isLoading } = useQuery({
         queryKey: queryKeys.dashboard,
-        queryFn: getDashboard,
+        // Wrap so React Query's QueryFunctionContext isn't passed as `includeHidden`
+        // (a truthy object would request hidden accounts and leak them into the UI).
+        queryFn: () => getDashboard(),
     });
 
     const refreshAccounts = useCallback(async () => {

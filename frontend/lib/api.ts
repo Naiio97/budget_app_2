@@ -176,8 +176,8 @@ async function fetchApi<T>(endpoint: string): Promise<T> {
     return response.json();
 }
 
-export async function getDashboard(): Promise<DashboardData> {
-    return fetchApi<DashboardData>('/dashboard/');
+export async function getDashboard(includeHidden = false): Promise<DashboardData> {
+    return fetchApi<DashboardData>(`/dashboard/${includeHidden ? '?include_hidden=true' : ''}`);
 }
 
 export async function getAccounts(): Promise<Account[]> {

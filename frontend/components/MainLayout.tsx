@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
@@ -19,7 +19,8 @@ import IdleLogout from '@/components/IdleLogout';
 // which looks off in the monochrome pill). Keyed by route.
 const Svg = ({ children }: { children: ReactNode }) => (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{children}</svg>
+        strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden
+        style={{ display: 'block' }}>{children}</svg>
 );
 const APPBAR_ICONS: Record<string, ReactNode> = {
     '/': <Svg><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 22V12h6v10" /></Svg>,
@@ -29,10 +30,11 @@ const APPBAR_ICONS: Record<string, ReactNode> = {
     '/reports': <Svg><path d="M6 20v-4M12 20v-9M18 20V8" /></Svg>,
     '/investments': <Svg><path d="m22 7-8.5 8.5-5-5L2 17" /><path d="M16 7h6v6" /></Svg>,
     '/loans': <Svg><path d="M3 22h18" /><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="M12 2 21 7H3z" /></Svg>,
-    '/subscriptions': <Svg><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></Svg>,
-    '/settings': <Svg><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 12.6H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 7.6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 11 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1.82 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21 9.09V9a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></Svg>,
+    '/settings': <Svg><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></Svg>,
 };
 const MenuIcon = <Svg><path d="M3 12h18M3 6h18M3 18h18" /></Svg>;
+const SyncIcon = <Svg><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></Svg>;
+const CloseIcon = <Svg><path d="M18 6 6 18M6 6l12 12" /></Svg>;
 const MoonIcon = <Svg><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" /></Svg>;
 const SunIcon = <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Svg>;
 
@@ -49,6 +51,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [isMobile, setIsMobile] = useState(false);
     const [hasMounted, setHasMounted] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    const [navHidden, setNavHidden] = useState(false);
+    const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
     const queryClient = useQueryClient();
 
@@ -107,7 +111,30 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     useEffect(() => {
         setIsCompactNavOpen(false);
         setIsMobileToolsOpen(false);
+        setNavHidden(false);
     }, [pathname]);
+
+    // Instagram-style bottom nav: hide on scroll down, reveal on scroll up.
+    useEffect(() => {
+        const el = layoutRef.current;
+        if (!el || !isMobile) return;
+        let last = el.scrollTop;
+        let ticking = false;
+        const onScroll = () => {
+            if (ticking) return;
+            ticking = true;
+            requestAnimationFrame(() => {
+                const y = el.scrollTop;
+                if (y < 48) setNavHidden(false);          // near top → always show
+                else if (y - last > 6) setNavHidden(true);  // scrolling down → hide
+                else if (last - y > 6) setNavHidden(false); // scrolling up → show
+                last = y;
+                ticking = false;
+            });
+        };
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, [isMobile]);
 
     const handleLogout = async () => {
         clearBackendTokenCache();
@@ -214,7 +241,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 </button>
             </header>
 
-            <div className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
+            <div ref={layoutRef} className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
                 <main className="main-content">
                     {/* Hamburger for medium screens */}
                     <div className="compact-nav-header">
@@ -326,20 +353,20 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 style={{ justifyContent: 'flex-start' }}>
                                 {isSyncing
                                     ? <><span style={{ width: 13, height: 13, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} /><span>Sync...</span></>
-                                    : <><span>{Icons.action.sync}</span><span>Sync</span></>
+                                    : <><span>{SyncIcon}</span><span>Sync</span></>
                                 }
                             </button>
                             <Link href="/settings" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{Icons.nav.settings}</span><span>Nastavení</span>
+                                <span>{APPBAR_ICONS['/settings']}</span><span>Nastavení</span>
                             </Link>
                             <Link href="/transactions" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{Icons.nav.transactions}</span><span>Transakce</span>
+                                <span>{APPBAR_ICONS['/transactions']}</span><span>Transakce</span>
                             </Link>
                             <Link href="/reports" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{Icons.nav.reports}</span><span>Přehledy</span>
+                                <span>{APPBAR_ICONS['/reports']}</span><span>Přehledy</span>
                             </Link>
                             <button className="btn btn-sm" onClick={handleLogout}
-                                style={{ justifyContent: 'flex-start', gridColumn: '1 / -1', color: 'var(--neg)' }}>
+                                style={{ justifyContent: 'center', gridColumn: '1 / -1', color: 'var(--neg)' }}>
                                 <span>↩</span><span>Odhlásit se</span>
                             </button>
                         </div>
@@ -380,7 +407,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     </div>
                                     <span>{accounts.length} {accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}</span>
                                 </div>
-                                <button className="btn btn-sm btn-icon" onClick={() => setIsMobileToolsOpen(false)} aria-label="Zavřít">✕</button>
+                                <button className="mobile-theme-mini" onClick={() => setIsMobileToolsOpen(false)} aria-label="Zavřít">{CloseIcon}</button>
                             </div>
 
                             <div className="mobile-tools-section">
@@ -457,7 +484,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             </div>
                         </aside>
 
-                        <nav className="bottom-nav">
+                        <nav className={`bottom-nav ${navHidden ? 'bottom-nav--hidden' : ''}`}>
                             {bottomNavItems.map((item) => (
                                 <Link
                                     key={item.href}

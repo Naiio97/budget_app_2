@@ -332,9 +332,9 @@ select.input {
   display: flex; align-items: center; gap: 4px;
   width: max-content; max-width: calc(100% - 24px);
   padding: 7px 8px 7px 14px;
-  background: rgba(255,255,255,0.55);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  background: rgba(255,255,255,0.30);
+  backdrop-filter: blur(5px) saturate(200%);
+  -webkit-backdrop-filter: blur(5px) saturate(200%);
   border: none;
   border-radius: var(--radius-full);
   box-shadow: 0 8px 30px rgba(0,0,0,0.10), inset 0 0.5px 0 rgba(255,255,255,0.55);
@@ -802,14 +802,25 @@ select.input {
   bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px));
   display: flex; justify-content: center; align-items: center; gap: 2px;
   width: max-content; max-width: calc(100% - 24px);
-  background: rgba(255,255,255,0.97);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  background: rgba(255,255,255,0.30);
+  backdrop-filter: blur(5px) saturate(200%);
+  -webkit-backdrop-filter: blur(5px) saturate(200%);
   border: none;
   border-radius: var(--radius-full);
   box-shadow: 0 8px 30px rgba(0,0,0,0.14), inset 0 0.5px 0 rgba(255,255,255,0.55);
   padding: 6px 8px;
   z-index: 300;
+  /* Origin must stay constant across both states, otherwise it snaps back to
+     center when the .hidden class is removed and the grow jerks at the start. */
+  transform-origin: center bottom;
+  /* Symmetric ease-in-out so shrinking and growing feel identically smooth
+     (no snappy "jump to 100%"). */
+  transition: transform 0.5s cubic-bezier(0.45, 0, 0.55, 1);
+}
+/* Instagram-style: shrinks ~25% when scrolling down (stays visible & tappable),
+   grows back when scrolling up. */
+.bottom-nav--hidden {
+  transform: translateX(-50%) scale(0.75);
 }
 [data-mode="dark"] .bottom-nav {
   background: rgba(50,50,54,0.97);
@@ -1707,6 +1718,20 @@ select.input {
 .settings-rules-card {
   padding: 0;
 }
+/* Inner padding lives on head/body (card itself is padding:0 so the scroll list
+   can own the full height). No header divider — matches the redesign. */
+.settings-category-card .card-head,
+.settings-add-rule-card .card-head,
+.settings-rules-card .card-head {
+  padding: 20px 22px 14px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+.settings-category-card .card-body,
+.settings-add-rule-card .card-body,
+.settings-rules-card .card-body {
+  padding: 0 22px 22px;
+}
 .settings-category-card .card-body,
 .settings-rules-card .card-body {
   flex: 1 1 auto;
@@ -1737,14 +1762,259 @@ select.input {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-right: 3px;
+  gap: 8px;
+  padding-right: 6px;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .settings-category-list,
 .settings-rules-list {
   flex: 1 1 auto;
+}
+
+/* ── Categories redesign ─────────────────────────────────────── */
+.set-count-chip {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--border);
+  padding: 4px 11px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+/* Compact header actions so title + buttons sit on one row, sub goes below. */
+.settings-category-card .card-head .btn,
+.settings-rules-card .card-head .btn {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 12.5px;
+  gap: 5px;
+}
+.settings-category-card .card-head .set-count-chip,
+.settings-rules-card .card-head .set-count-chip {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+/* Account rows — same card-row language as categories. */
+.settings-accounts-wrap { display: block; }
+.set-acc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.set-acc-row.is-hidden { opacity: 0.55; }
+.set-acc-logo {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 9px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-sunken);
+  font-size: 18px;
+  overflow: hidden;
+}
+.set-acc-logo img { width: 100%; height: 100%; object-fit: contain; padding: 4px; box-sizing: border-box; }
+.set-acc-info { flex: 1 1 auto; min-width: 0; }
+.set-acc-name { font-weight: 600; font-size: 14.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-acc-meta { font-size: 12px; color: var(--text-3); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-acc-edit { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.set-cat-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px 13px 20px;
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.set-cat-accent {
+  position: absolute;
+  left: 7px;
+  top: 11px;
+  bottom: 11px;
+  width: 4px;
+  border-radius: var(--radius-full);
+}
+.set-cat-emoji { font-size: 18px; line-height: 1; flex-shrink: 0; }
+.set-cat-name { font-weight: 600; font-size: 14.5px; color: var(--text); }
+.set-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  color: var(--text-3);
+  border: 0.5px solid var(--border);
+}
+.set-tag.income {
+  background: color-mix(in srgb, var(--pos) 14%, transparent);
+  color: var(--pos);
+  border-color: color-mix(in srgb, var(--pos) 30%, transparent);
+}
+.set-row-actions { margin-left: auto; display: flex; gap: 8px; flex-shrink: 0; }
+.set-icon-btn {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: var(--text-2);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+@media (hover: hover) {
+  .set-icon-btn:hover { background: var(--surface-sunken); color: var(--text); }
+  .set-icon-btn.danger:hover {
+    background: color-mix(in srgb, var(--neg) 12%, transparent);
+    color: var(--neg);
+    border-color: color-mix(in srgb, var(--neg) 30%, transparent);
+  }
+}
+.set-add-dashed {
+  width: 100%;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px;
+  background: transparent;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+@media (hover: hover) {
+  .set-add-dashed:hover { background: var(--surface-sunken); color: var(--text); }
+}
+.set-field-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 7px;
+}
+.set-search { position: relative; }
+.set-search > svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.set-search .input { padding-left: 40px; width: 100%; }
+.set-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  transition: background 0.15s;
+}
+@media (hover: hover) {
+  .set-rule-row:hover { background: var(--surface-elevated); }
+}
+.set-rule-pattern {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-rule-arrow { color: var(--text-3); flex-shrink: 0; }
+.set-rule-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+.set-rule-cat {
+  flex-shrink: 0;
+  max-width: 42%;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.set-rule-chevron { color: var(--text-3); font-size: 20px; line-height: 1; flex-shrink: 0; }
+.set-modal-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  word-break: break-word;
+}
+
+/* New-rule modal */
+.set-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.set-modal {
+  width: min(440px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.35);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.set-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.set-modal .btn { width: 100%; }
+.set-recat-btn {
+  width: 100%;
+  flex-shrink: 0;
+  margin-top: 12px;
 }
 
 .settings-account-list {
@@ -1800,6 +2070,15 @@ select.input {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+/* Uniform circular action buttons (rename/visibility/delete) — without this the
+   icons size to their content and end up as differently-shaped pills. */
+.settings-account-actions .btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 /* ══ ACCOUNT DETAIL ══════════════════════════════════════════ */
@@ -2894,15 +3173,43 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .settings-page .surface .card-body {
     padding: 12px 16px 16px;
   }
+  /* On phones drop the whole grid/fit machinery: plain block stack, each card
+     grows to its real content height, the page scrolls. Anything else left a
+     short card box with its list overflowing onto the next card. */
   .settings-categories-grid {
-    grid-template-columns: minmax(0, 1fr);
-    overflow: visible;
-    gap: var(--spacing-md);
+    display: block !important;
+    overflow: visible !important;
+    flex: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+  .settings-categories-grid > * + * {
+    margin-top: var(--spacing-md);
+  }
+  .settings-rules-column {
+    display: block !important;
   }
   .settings-category-card,
   .settings-add-rule-card,
   .settings-rules-card {
     border-radius: 22px;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+  .settings-category-card .card-body,
+  .settings-rules-card .card-body,
+  .settings-category-manager {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+  .settings-categories-grid .settings-scroll-list {
+    min-height: 0 !important;
+    height: auto !important;
+    flex: none !important;
   }
   /* category / rule cards inherit the tighter settings-page padding above */
   .settings-account-list {

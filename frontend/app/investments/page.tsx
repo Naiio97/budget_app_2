@@ -403,7 +403,7 @@ export default function InvestmentsPage() {
                 </section>
 
                 <section className="investment-main-grid">
-                    <div className="surface investment-holdings-card glass-card">
+                    <div className="surface investment-holdings-card">
                         <div className="card-head">
                             <h3>Pozice</h3>
                             <span>{holdingRows.length} položek</span>

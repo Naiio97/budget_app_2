@@ -7,7 +7,7 @@ from datetime import datetime
 
 from auth import get_current_user
 from database import get_db
-from models import BudgetModel, SavingsGoalModel, TransactionModel, UserModel
+from models import BudgetModel, SavingsGoalModel, TransactionModel, UserModel, AccountModel
 
 router = APIRouter()
 
@@ -86,6 +86,13 @@ async def get_category_spending(db: AsyncSession, user_id: int, category: str) -
         .where(TransactionModel.date >= start)
         .where(TransactionModel.date < end)
         .where(TransactionModel.amount < 0)
+        # Skip transactions from hidden accounts — they're out of the picture.
+        .where(TransactionModel.account_id.in_(
+            select(AccountModel.id).where(
+                AccountModel.user_id == user_id,
+                AccountModel.is_visible == True,
+            )
+        ))
     )
     total = result.scalar() or 0
     return abs(total)

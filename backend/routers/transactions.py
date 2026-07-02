@@ -56,7 +56,9 @@ async def get_transactions(
 
     query = select(TransactionModel, AccountModel.name).join(AccountModel, TransactionModel.account_id == AccountModel.id)
 
-    conditions = [TransactionModel.user_id == current_user.id]
+    # Hidden accounts are excluded from the financial picture entirely — their
+    # transactions must not surface anywhere.
+    conditions = [TransactionModel.user_id == current_user.id, AccountModel.is_visible == True]
     if date_from:
         conditions.append(TransactionModel.date >= date_from)
     if date_to:
