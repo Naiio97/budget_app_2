@@ -45,10 +45,10 @@ Next.js 16 (App Router) ← REST → FastAPI (Python 3.11) ← asyncpg → Postg
 - `config.py` — Pydantic `Settings` singleton (LRU-cached), reads `.env`
 - `database.py` — async SQLAlchemy engine + session factory
 - `models.py` — all SQLAlchemy ORM models
-- `routers/` — one file per domain: accounts, transactions, dashboard, sync, investments, budgets, categories, manual_accounts, contacts, settings, loans
+- `routers/` — one file per domain: accounts, transactions, dashboard, sync, investments, budgets, categories, manual_accounts, contacts, settings, loans, subscriptions
 - `services/` — GoCardless, Trading212, and exchange rate API clients
 
-**Database models** (all in `models.py`): `accounts`, `transactions`, `sync_status`, `settings`, `budgets`, `savings_goals`, `categories`, `monthly_budgets`, `monthly_income_items`, `monthly_expenses`, `category_rules`, `manual_accounts`, `manual_account_items`, `contacts`, `portfolio_snapshots`, `recurring_expenses`, `loans`, `loan_payments`
+**Database models** (all in `models.py`): `accounts`, `transactions`, `sync_status`, `settings`, `budgets`, `savings_goals`, `categories`, `monthly_budgets`, `monthly_income_items`, `monthly_expenses`, `category_rules`, `manual_accounts`, `manual_account_items`, `contacts`, `portfolio_snapshots`, `recurring_expenses`, `loans`, `loan_payments`, `subscriptions`
 
 ## External Integrations
 

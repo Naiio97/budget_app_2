@@ -2140,6 +2140,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 }
 .loan-card-title { font-size: 1.1rem; font-weight: 620; color: var(--text); }
 .loan-delete-btn {
+  display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer;
   opacity: 0.45; font-size: 1rem; flex-shrink: 0; padding: 2px 4px;
 }
@@ -2186,6 +2187,54 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   .loan-schedule-row > :nth-child(4),
   .loan-schedule-row > :nth-child(5) { display: none; }
+}
+
+/* ══ SUBSCRIPTIONS ═══════════════════════════════════════════ */
+.subs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: var(--spacing-md);
+}
+.subs-card-inactive { opacity: 0.55; }
+
+/* Reserve a fixed 2-line height for the title (long merchant names wrap,
+   short ones don't) so everything below — subtitle, amount, meta row —
+   lines up across cards in the same grid row instead of shifting per card. */
+.subs-card-title {
+  font-size: 1rem; font-weight: 620; color: var(--text);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; line-height: 1.25em; min-height: 2.5em;
+}
+.subs-card-subtitle {
+  font-size: 12px; margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.subs-meta-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 0.5px solid var(--border);
+}
+
+.subs-suggestion-list {
+  display: flex;
+  flex-direction: column;
+}
+.subs-suggestion-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: 10px 0;
+  border-bottom: 0.5px solid var(--border);
+}
+.subs-suggestion-row:last-child { border-bottom: none; }
+
+@media (max-width: 680px) {
+  .subs-grid { grid-template-columns: minmax(0, 1fr); }
+  .subs-suggestion-row { flex-wrap: wrap; }
 }
 
 /* ══ FOCUS ════════════════════════════════════════════════════ */
