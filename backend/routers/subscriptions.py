@@ -77,6 +77,39 @@ def _normalize_merchant(s: str) -> str:
     return s[:60]
 
 
+# Card/transfer descriptors often rotate a secondary detail between charges —
+# a city one month, a phone/reference number the next — while the brand name
+# itself stays put (e.g. "NETFLIX.COM Amsterdam NL" vs "NETFLIX.COM
+# 408-724-9160 NL"). Matching the whole descriptor as one substring silently
+# drops every charge that used the "other" variant. Anchoring on just the
+# single most distinctive token survives that rotation.
+_PURE_DIGIT_HYPHEN_RE = re.compile(r"^[\d\-]+$")
+_GEO_CODE_RE = re.compile(r"^[a-z]{2}$")
+_COMMON_GEO_WORDS = {
+    "amsterdam", "prague", "praha", "london", "dublin", "berlin",
+    "luxembourg", "paris", "madrid", "vienna", "wien", "zurich",
+    "bratislava", "warszawa", "warsaw", "budapest", "brno", "ostrava",
+}
+
+
+def _primary_token(text: str) -> str:
+    """Extract the single most distinctive token from a merchant pattern.
+
+    Picks the longest token that isn't a country code, a digit/reference
+    group, or a common city name. Falls back to the original text if nothing
+    survives the filter (e.g. a pattern that's just a country code).
+    """
+    tokens = [t for t in re.split(r"[^a-z0-9.\-]+", text.lower()) if t]
+    candidates = [
+        t for t in tokens
+        if len(t) >= 4
+        and not _PURE_DIGIT_HYPHEN_RE.match(t)
+        and not _GEO_CODE_RE.match(t)
+        and t not in _COMMON_GEO_WORDS
+    ]
+    return max(candidates, key=len) if candidates else text
+
+
 # === Pydantic schemas ===
 
 class SubscriptionCreate(BaseModel):
@@ -147,8 +180,13 @@ def _monthly_equivalent(amount: float, period: str) -> float:
 async def _load_charges(
     db: AsyncSession, user_id: int, pattern: str
 ) -> list[tuple[str, float]]:
-    """Odchozí platby odpovídající patternu — [(date, abs_amount)], nejnovější první."""
-    like = f"%{pattern}%"
+    """Odchozí platby odpovídající patternu — [(date, abs_amount)], nejnovější první.
+
+    Matchuje jen na `_primary_token(pattern)`, ne na celý uložený pattern —
+    tím to funguje i pro už dřív uložená předplatná se „širokým" patternem
+    (obsahujícím rotující město/telefon), aniž by bylo potřeba je opravovat v DB.
+    """
+    like = f"%{_primary_token(pattern)}%"
     result = await db.execute(
         select(TransactionModel.date, TransactionModel.amount)
         .where(
@@ -324,7 +362,11 @@ async def detect_subscriptions(
             except Exception:
                 pass
         source = creditor if len(creditor) >= 3 else (description or "")
-        key = _normalize_merchant(source)
+        # Anchor grouping on the same primary token as _load_charges uses, so
+        # rotating-descriptor merchants (city one month, phone number the
+        # next) form one group instead of being split into weak, under-the-
+        # threshold groups that never reach the occurrence minimum.
+        key = _primary_token(_normalize_merchant(source))
         if len(key) < 3:
             continue
         g = groups.setdefault(key, {"display": source.strip(), "charges": [], "categories": {}})
