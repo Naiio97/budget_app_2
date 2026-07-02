@@ -1,6 +1,6 @@
 import httpx
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from config import get_settings
 from schemas import (
@@ -21,6 +21,27 @@ _KEY_REFRESH_EXPIRES = "gocardless_refresh_expires"  # ISO-8601 UTC datetime str
 
 # How many seconds before expiry we consider the token "expired" (safety buffer)
 _EXPIRY_BUFFER_SECS = 60
+
+# Berlin Group balance types, best first: "available now" figures before booked
+# ones. Some banks omit interimAvailable entirely (Česká spořitelna sends only
+# expected + closingBooked), so expected must rank above the booked types or we
+# store a balance that ignores pending transactions.
+BALANCE_TYPE_PRIORITY = (
+    "interimAvailable",
+    "expected",
+    "closingBooked",
+    "interimBooked",
+    "openingBooked",
+)
+
+
+def select_balance(balances: list[BalanceSchema]) -> Optional[BalanceSchema]:
+    """Pick the balance entry that best reflects the account's current state."""
+    for balance_type in BALANCE_TYPE_PRIORITY:
+        for balance in balances:
+            if balance.balanceType == balance_type:
+                return balance
+    return balances[0] if balances else None
 
 
 async def get_gocardless_credentials():
@@ -243,6 +264,51 @@ class GoCardlessService:
         transactions_dict = raw_data.get("transactions", {})
         booked_raw = transactions_dict.get("booked", [])
         return [TransactionSchema(**tx) for tx in booked_raw]
+
+    async def get_agreement_expiry(self, agreement_id: str) -> Optional[datetime]:
+        """When the given End User Agreement stops granting account access.
+
+        Expiry = accepted (or created, if never explicitly accepted) plus
+        access_valid_for_days. Returned as naive UTC to match the DB columns.
+        """
+        agreement = await self._request("GET", f"/agreements/enduser/{agreement_id}/")
+        start_raw = agreement.get("accepted") or agreement.get("created")
+        valid_days = agreement.get("access_valid_for_days")
+        if not start_raw or not valid_days:
+            return None
+        start = datetime.fromisoformat(str(start_raw).replace("Z", "+00:00"))
+        if start.tzinfo:
+            start = start.astimezone(timezone.utc).replace(tzinfo=None)
+        return start + timedelta(days=int(valid_days))
+
+    async def get_consent_expirations(self) -> dict[str, datetime]:
+        """Map account id -> latest EUA expiry across all requisitions.
+
+        An account re-connected via a new requisition keeps its id, so the
+        newest agreement's expiry is the one that counts.
+        """
+        raw = await self._request("GET", "/requisitions/", params={"limit": 100})
+        expirations: dict[str, datetime] = {}
+        agreement_cache: dict[str, Optional[datetime]] = {}
+        for req in raw.get("results", []):
+            agreement_id = req.get("agreement")
+            account_ids = req.get("accounts") or []
+            if not agreement_id or not account_ids:
+                continue
+            if agreement_id not in agreement_cache:
+                try:
+                    agreement_cache[agreement_id] = await self.get_agreement_expiry(agreement_id)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch agreement {agreement_id}: {e}")
+                    agreement_cache[agreement_id] = None
+            expires = agreement_cache[agreement_id]
+            if not expires:
+                continue
+            for account_id in account_ids:
+                acc_id = str(account_id)
+                if acc_id not in expirations or expires > expirations[acc_id]:
+                    expirations[acc_id] = expires
+        return expirations
 
 
 # Singleton instance
