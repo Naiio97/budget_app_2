@@ -108,6 +108,7 @@ export interface Account {
     currency: string;
     institution?: string;
     is_visible?: boolean;
+    consent_expires_at?: string | null;
 }
 
 export interface Transaction {

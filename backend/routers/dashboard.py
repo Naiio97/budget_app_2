@@ -230,7 +230,8 @@ async def get_dashboard(
             "type": acc.type,
             "balance": balance,
             "currency": currency,
-            "institution": acc.institution
+            "institution": acc.institution,
+            "consent_expires_at": acc.consent_expires_at.isoformat() if acc.consent_expires_at else None
         })
     
     # Add manual accounts to the list

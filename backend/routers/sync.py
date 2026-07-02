@@ -10,7 +10,7 @@ import logging
 from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel, UserModel
-from services.gocardless import gocardless_service
+from services.gocardless import gocardless_service, select_balance
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 
@@ -613,7 +613,19 @@ async def sync_all_data(
                 )
             )
             bank_accounts = result.scalars().all()
-            
+
+            # Refresh EUA consent expiry before the balance loop — an expired
+            # consent 401s the account below, and that is exactly when the UI
+            # needs the expiry date to say "reconnect".
+            if bank_accounts:
+                try:
+                    consent_map = await gocardless_service.get_consent_expirations()
+                    for account in bank_accounts:
+                        if account.id in consent_map:
+                            account.consent_expires_at = consent_map[account.id]
+                except Exception as e:
+                    logger.warning(f"Failed to refresh consent expirations: {e}")
+
             for account in bank_accounts:
                 try:
                     balances, clean_transactions = await asyncio.gather(
@@ -626,21 +638,8 @@ async def sync_all_data(
                         balance_types = [b.balanceType for b in balance_list]
                         logger.debug(f"Account {account.id} has balance types: {balance_types}")
                         
-                        selected_balance = None
-                        selected_balance = next((b for b in balance_list if b.balanceType == "interimAvailable"), None)
-                        
-                        if not selected_balance:
-                            selected_balance = next((b for b in balance_list if b.balanceType == "closingBooked"), None)
-                            
-                        if not selected_balance:
-                            selected_balance = next((b for b in balance_list if b.balanceType == "interimBooked"), None)
-                            
-                        if not selected_balance:
-                             selected_balance = next((b for b in balance_list if b.balanceType == "openingBooked"), None)
-                             
-                        if not selected_balance:
-                            selected_balance = balance_list[0]
-                            
+                        selected_balance = select_balance(balance_list)
+
                         if selected_balance:
                             amount = float(selected_balance.balanceAmount.amount)
                             currency = selected_balance.balanceAmount.currency

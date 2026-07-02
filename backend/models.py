@@ -40,6 +40,8 @@ class AccountModel(Base):
     details_json = Column(Text, nullable=True)  # Raw JSON from API
     last_synced = Column(DateTime, default=datetime.utcnow)
     is_visible = Column(Boolean, default=True)
+    # When the GoCardless EUA consent expires (naive UTC); null for non-bank accounts
+    consent_expires_at = Column(DateTime, nullable=True)
     
     # Relationship to transactions
     transactions = relationship("TransactionModel", back_populates="account", cascade="all, delete-orphan")

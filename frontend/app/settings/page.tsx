@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, Account, apiFetch } from '@/lib/api';
+import { getConsentStatus } from '@/lib/consent';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
@@ -387,7 +388,11 @@ export default function SettingsPage() {
             const ref = urlParams.get('ref');
             if (ref) {
                 try {
-                    await apiFetch(`/accounts/connect/bank/callback?ref=${ref}`);
+                    const res = await apiFetch(`/accounts/connect/bank/callback?ref=${ref}`);
+                    if (!res.ok) {
+                        console.error('Bank connect callback failed:', res.status, await res.text().catch(() => ''));
+                        alert('Připojení banky se nepodařilo dokončit. Zkuste to prosím znovu, případně spusťte synchronizaci.');
+                    }
                     window.history.replaceState({}, '', '/settings');
                 } catch (err) { console.error(err); }
             }
@@ -619,6 +624,8 @@ export default function SettingsPage() {
                                     {accounts.map(acc => {
                                         const logo = getBankLogo(acc.institution);
                                         const visible = acc.is_visible !== false;
+                                        const consent = acc.type === 'bank' ? getConsentStatus(acc.consent_expires_at) : null;
+                                        const needsRenewal = !!consent && (consent.expired || consent.expiringSoon);
                                         return (
                                             <div
                                                 key={acc.id}
@@ -645,11 +652,24 @@ export default function SettingsPage() {
                                                         </div>
                                                         <div className="settings-account-meta">
                                                             {acc.institution || acc.type}{!visible && ' · skryto'}
+                                                            {consent && (
+                                                                <>
+                                                                    {' · '}
+                                                                    <span style={{ color: consent.color, fontWeight: needsRenewal ? 600 : undefined }}>
+                                                                        {consent.label}
+                                                                    </span>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 )}
                                                 {editingAccount !== acc.id && (
                                                     <div className="settings-account-actions">
+                                                        {needsRenewal && acc.institution && (
+                                                            <button className="btn btn-sm btn-primary" onClick={() => handleConnectBank(acc.institution!)} title="Obnovit souhlas banky">
+                                                                Obnovit
+                                                            </button>
+                                                        )}
                                                         <button className="btn btn-sm settings-account-rename" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); setSwipedAccount(null); }} title="Přejmenovat">{Icons.action.edit}</button>
                                                         <button className="btn btn-sm" onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)} title={visible ? 'Skrýt' : 'Zobrazit'}>
                                                             {visible ? Icons.action.visible : Icons.action.hidden}
