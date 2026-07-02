@@ -327,9 +327,6 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
             <div className="loan-card-head" style={{ marginBottom: 'var(--spacing-sm)' }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="subs-card-title" title={sub.name}>{sub.name}</div>
-                    <div className="text-tertiary subs-card-subtitle">
-                        {sub.category ? `${sub.category} · ` : ''}„{sub.merchant_pattern}“
-                    </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                     <button className="loan-delete-btn" onClick={onEdit} title="Upravit">{LineIcons.edit}</button>
