@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import { queryKeys } from '@/lib/queryKeys';
-import { Icons } from '@/lib/icons';
+import { LineIcons } from '@/lib/line-icons';
 import {
     Subscription, DetectedSubscription, SubscriptionsSummary, SubscriptionCreateInput,
     getSubscriptions, getSubscriptionsSummary, detectSubscriptions,
@@ -143,7 +143,7 @@ export default function SubscriptionsPage() {
                             onClick={() => { setShowDetect(true); runDetect(); }}
                             disabled={detecting}
                         >
-                            {detecting ? 'Hledám…' : `${Icons.action.search} Najít v historii`}
+                            {detecting ? 'Hledám…' : <>{LineIcons.search} Najít v historii</>}
                         </button>
                         <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
                             {showForm ? 'Zrušit' : '+ Přidat ručně'}
@@ -300,11 +300,11 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                    <button className="loan-delete-btn" onClick={onEdit} title="Upravit">{Icons.action.edit}</button>
+                    <button className="loan-delete-btn" onClick={onEdit} title="Upravit">{LineIcons.edit}</button>
                     <button className="loan-delete-btn" onClick={onToggleActive} title={sub.is_active ? 'Označit jako zrušené' : 'Znovu aktivovat'}>
-                        {sub.is_active ? '⏸' : '▶'}
+                        {sub.is_active ? LineIcons.pause : LineIcons.play}
                     </button>
-                    <button className="loan-delete-btn" onClick={onDelete} title="Smazat">{Icons.action.delete}</button>
+                    <button className="loan-delete-btn" onClick={onDelete} title="Smazat">{LineIcons.delete}</button>
                 </div>
             </div>
 

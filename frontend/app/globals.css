@@ -2140,6 +2140,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 }
 .loan-card-title { font-size: 1.1rem; font-weight: 620; color: var(--text); }
 .loan-delete-btn {
+  display: inline-flex; align-items: center; justify-content: center;
   background: none; border: none; cursor: pointer;
   opacity: 0.45; font-size: 1rem; flex-shrink: 0; padding: 2px 4px;
 }

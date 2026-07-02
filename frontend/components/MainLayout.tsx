@@ -28,7 +28,7 @@ const APPBAR_ICONS: Record<string, ReactNode> = {
     '/reports': <Svg><path d="M6 20v-4M12 20v-9M18 20V8" /></Svg>,
     '/investments': <Svg><path d="m22 7-8.5 8.5-5-5L2 17" /><path d="M16 7h6v6" /></Svg>,
     '/loans': <Svg><path d="M3 22h18" /><path d="M6 18v-7M10 18v-7M14 18v-7M18 18v-7" /><path d="M12 2 21 7H3z" /></Svg>,
-    '/subscriptions': <Svg><path d="M17 2v4H7a4 4 0 0 0-4 4v1" /><path d="m13 6 4-4" /><path d="M7 22v-4h10a4 4 0 0 0 4-4v-1" /><path d="m11 18-4 4" /></Svg>,
+    '/subscriptions': <Svg><path d="m17 2 4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" /><path d="m7 22-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" /></Svg>,
     '/settings': <Svg><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.6 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 12.6H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 7.6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 11 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1.82 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21 9.09V9a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></Svg>,
 };
 const MenuIcon = <Svg><path d="M3 12h18M3 6h18M3 18h18" /></Svg>;
