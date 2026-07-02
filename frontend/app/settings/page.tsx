@@ -415,7 +415,11 @@ export default function SettingsPage() {
             const ref = urlParams.get('ref');
             if (ref) {
                 try {
-                    await apiFetch(`/accounts/connect/bank/callback?ref=${ref}`);
+                    const res = await apiFetch(`/accounts/connect/bank/callback?ref=${ref}`);
+                    if (!res.ok) {
+                        console.error('Bank connect callback failed:', res.status, await res.text().catch(() => ''));
+                        alert('Připojení banky se nepodařilo dokončit. Zkuste to prosím znovu, případně spusťte synchronizaci.');
+                    }
                     window.history.replaceState({}, '', '/settings');
                 } catch (err) { console.error(err); }
             }
@@ -645,6 +649,8 @@ export default function SettingsPage() {
                                     {accounts.map(acc => {
                                         const logo = getBankLogo(acc.institution);
                                         const visible = acc.is_visible !== false;
+                                        const consent = acc.type === 'bank' ? getConsentStatus(acc.consent_expires_at) : null;
+                                        const needsRenewal = !!consent && (consent.expired || consent.expiringSoon);
                                         return (
                                             <div key={acc.id} className={`set-acc-row ${visible ? '' : 'is-hidden'}`} style={{ opacity: processingAccount === acc.id ? 0.5 : undefined }}>
                                                 <span className="set-acc-logo" style={logo ? { background: '#fff' } : undefined}>

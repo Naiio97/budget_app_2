@@ -9,6 +9,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
+import { getConsentStatus } from '@/lib/consent';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { exitDemo, isDemoMode } from '@/lib/demo-mode';
@@ -69,6 +70,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         { href: '/reports', label: 'Přehledy', icon: Icons.nav.reports },
         { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
         { href: '/loans', label: 'Úvěry', icon: Icons.nav.loans },
+        { href: '/subscriptions', label: 'Předplatné', icon: Icons.nav.subscriptions },
         { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 
@@ -218,7 +220,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     <span>Koruna</span>
                 </Link>
                 <nav className="appbar-nav">
-                    {navItems.slice(0, 7).map((item) => (
+                    {navItems.slice(0, 8).map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
@@ -307,6 +309,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 accounts.map((account) => {
                                     const logoUrl = getBankLogo(account.institution);
                                     const href = getAccountHref(account);
+                                    const consent = getConsentStatus(account.consent_expires_at);
+                                    const consentWarning = consent && (consent.expired || consent.expiringSoon);
                                     return (
                                         <Link key={account.id} href={href} className="acc-card">
                                             {logoUrl ? (
@@ -320,7 +324,13 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                             )}
                                             <div style={{ minWidth: 0, flex: 1 }}>
                                                 <div className="acc-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.name}</div>
-                                                <div className="acc-balance">{account.currency}</div>
+                                                {consentWarning ? (
+                                                    <div className="acc-balance" style={{ color: consent.color, fontWeight: 600 }} title={consent.label}>
+                                                        {consent.shortLabel}
+                                                    </div>
+                                                ) : (
+                                                    <div className="acc-balance">{account.currency}</div>
+                                                )}
                                             </div>
                                             <div className="num" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', flexShrink: 0, color: account.balance < 0 ? 'var(--neg)' : 'var(--text)' }}>
                                                 {formatCurrency(account.balance, account.currency)}
@@ -422,6 +432,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                         <div className="mobile-empty">Žádné účty</div>
                                     ) : accounts.map((account) => {
                                         const logoUrl = getBankLogo(account.institution);
+                                        const consent = getConsentStatus(account.consent_expires_at);
+                                        const consentWarning = consent && (consent.expired || consent.expiringSoon);
                                         return (
                                             <Link
                                                 key={account.id}
@@ -440,7 +452,11 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                                 )}
                                                 <span className="mobile-account-copy">
                                                     <strong>{account.name}</strong>
-                                                    <span>{account.currency}</span>
+                                                    {consentWarning ? (
+                                                        <span style={{ color: consent.color, fontWeight: 600 }}>{consent.shortLabel}</span>
+                                                    ) : (
+                                                        <span>{account.currency}</span>
+                                                    )}
                                                 </span>
                                                 <span className="num mobile-account-balance">{formatCurrency(account.balance, account.currency)}</span>
                                             </Link>
@@ -456,6 +472,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     <Link href="/transactions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/transactions']}Transakce</Link>
                                     <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/reports']}Přehledy</Link>
                                     <Link href="/loans" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/loans']}Úvěry</Link>
+                                    <Link href="/subscriptions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/subscriptions']}Předplatné</Link>
                                 </div>
                                 <button
                                     className="btn btn-sm"

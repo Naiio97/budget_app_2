@@ -13,6 +13,7 @@ export const Icons = {
         reports: '📊',
         investments: '📈',
         loans: '🏧',
+        subscriptions: '🔁',
         settings: '⚙️',
         more: '☰',
     },

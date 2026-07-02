@@ -31,4 +31,7 @@ export const queryKeys = {
   loans: ['loans'] as const,
   loansSummary: ['loans-summary'] as const,
   loanSchedule: (id: number) => ['loan-schedule', id] as const,
+  subscriptions: ['subscriptions'] as const,
+  subscriptionsSummary: ['subscriptions-summary'] as const,
+  subscriptionsDetect: ['subscriptions-detect'] as const,
 };

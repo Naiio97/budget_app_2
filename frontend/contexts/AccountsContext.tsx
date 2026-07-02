@@ -12,6 +12,7 @@ interface Account {
     balance: number;
     currency: string;
     institution?: string;
+    consent_expires_at?: string | null;
 }
 
 interface AccountsContextType {

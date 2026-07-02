@@ -14,13 +14,10 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3. Kopírování zbytku kódu
-COPY . .
+# 3. Kopírování zbytku kódu a předání vlastnictví složky našemu novému uživateli
+COPY --chown=appuser:appuser . .
 
-# 4. Předání vlastnictví složky našemu novému uživateli
-RUN chown -R appuser:appuser /app
-
-# 5. PŘEPNUTÍ: Od tohoto řádku dál (včetně CMD) už neběžíme jako root
+# 4. PŘEPNUTÍ: Od tohoto řádku dál (včetně CMD) už neběžíme jako root
 USER appuser
 
 CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"]
