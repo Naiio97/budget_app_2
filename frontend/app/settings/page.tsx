@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch } from '@/lib/api';
+import { getConsentStatus } from '@/lib/consent';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
@@ -666,10 +667,25 @@ export default function SettingsPage() {
                                                     <>
                                                         <div className="set-acc-info">
                                                             <div className="set-acc-name">{acc.name}</div>
-                                                            <div className="set-acc-meta">{acc.institution || acc.type}</div>
+                                                            <div className="set-acc-meta">
+                                                                {acc.institution || acc.type}
+                                                                {consent && (
+                                                                    <>
+                                                                        {' · '}
+                                                                        <span style={{ color: consent.color, fontWeight: needsRenewal ? 600 : undefined }}>
+                                                                            {consent.label}
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         {!visible && <span className="set-tag">Skryto</span>}
                                                         <div className="set-row-actions">
+                                                            {needsRenewal && acc.institution && (
+                                                                <button className="btn btn-sm btn-primary" onClick={() => handleConnectBank(acc.institution!)} title="Obnovit souhlas banky">
+                                                                    Obnovit
+                                                                </button>
+                                                            )}
                                                             <button className="set-icon-btn" title="Přejmenovat" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); }}>{EditIcon}</button>
                                                             <button className="set-icon-btn" title={visible ? 'Skrýt' : 'Zobrazit'} onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)}>{visible ? EyeIcon : EyeOffIcon}</button>
                                                             <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDeleteAccount(acc.id)}>{TrashIcon}</button>
