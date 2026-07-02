@@ -814,8 +814,13 @@ export interface Subscription {
     first_seen_date: string | null;
     note: string | null;
     is_active: boolean;
+    my_percentage: number;
+    my_amount_override: number | null;
+    my_amount: number;
     monthly_equivalent: number;
     yearly_cost: number;
+    my_monthly_equivalent: number;
+    my_yearly_cost: number;
     last_charged_date: string | null;
     last_amount: number | null;
     charges_count: number;
@@ -844,6 +849,8 @@ export interface SubscriptionsSummary {
     active_count: number;
     monthly_total: number;
     yearly_total: number;
+    my_monthly_total: number;
+    my_yearly_total: number;
     currency: string;
 }
 
@@ -856,6 +863,8 @@ export interface SubscriptionCreateInput {
     category?: string | null;
     first_seen_date?: string | null;
     note?: string | null;
+    my_percentage?: number | null;
+    my_amount_override?: number | null;
 }
 
 export async function getSubscriptions(): Promise<Subscription[]> {

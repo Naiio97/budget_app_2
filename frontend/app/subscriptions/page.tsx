@@ -34,6 +34,8 @@ const emptyForm = {
     period: 'monthly' as Subscription['period'],
     category: '',
     note: '',
+    my_percentage: '100',
+    my_amount_override: '',
 };
 
 export default function SubscriptionsPage() {
@@ -92,6 +94,8 @@ export default function SubscriptionsPage() {
             period: sub.period,
             category: sub.category ?? '',
             note: sub.note ?? '',
+            my_percentage: String(sub.my_percentage),
+            my_amount_override: sub.my_amount_override != null ? String(sub.my_amount_override) : '',
         });
         setShowForm(true);
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -107,6 +111,8 @@ export default function SubscriptionsPage() {
             period: form.period,
             category: form.category.trim() || null,
             note: form.note.trim() || null,
+            my_percentage: form.my_percentage.trim() ? parseInt(form.my_percentage, 10) : 100,
+            my_amount_override: form.my_amount_override.trim() ? parseFloat(form.my_amount_override) : null,
         };
         if (editingId != null) updateMutation.mutate({ id: editingId, data });
         else createMutation.mutate(data);
@@ -151,16 +157,21 @@ export default function SubscriptionsPage() {
                     </div>
                 </div>
 
-                {/* Summary */}
+                {/* Summary — "moje část" je hlavní číslo, celková částka jen jako kontext u sdílených */}
                 {summary && summary.active_count > 0 && (
                     <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-sm)' }}>
                         <GlassCard>
-                            <div className="stat-label">Měsíčně celkem</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{formatCurrency(summary.monthly_total)}</div>
+                            <div className="stat-label">Platím měsíčně</div>
+                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{formatCurrency(summary.my_monthly_total)}</div>
+                            {summary.my_monthly_total !== summary.monthly_total && (
+                                <div className="text-tertiary" style={{ fontSize: 12, marginTop: 2 }}>
+                                    z celkových {formatCurrency(summary.monthly_total)} (sdíleno s ostatními)
+                                </div>
+                            )}
                         </GlassCard>
                         <GlassCard>
-                            <div className="stat-label">Ročně celkem</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem', color: 'var(--warn)' }}>{formatCurrency(summary.yearly_total)}</div>
+                            <div className="stat-label">Platím ročně</div>
+                            <div className="stat-value" style={{ fontSize: '1.8rem', color: 'var(--warn)' }}>{formatCurrency(summary.my_yearly_total)}</div>
                         </GlassCard>
                         <GlassCard>
                             <div className="stat-label">Aktivních předplatných</div>
@@ -244,7 +255,27 @@ export default function SubscriptionsPage() {
                                 <span>Poznámka (nepovinné)</span>
                                 <input className="input" placeholder="Sdílené s rodinou…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
                             </label>
+                            <label className="loan-field">
+                                <span>Kolik z toho platím já (%)</span>
+                                <input
+                                    className="input" type="number" min={0} max={100} placeholder="100"
+                                    value={form.my_percentage}
+                                    disabled={!!form.my_amount_override.trim()}
+                                    onChange={e => setForm({ ...form, my_percentage: e.target.value })}
+                                />
+                            </label>
+                            <label className="loan-field">
+                                <span>Nebo moje částka přímo (Kč, nepovinné)</span>
+                                <input
+                                    className="input" type="number" placeholder="např. platím jen půlku"
+                                    value={form.my_amount_override}
+                                    onChange={e => setForm({ ...form, my_amount_override: e.target.value })}
+                                />
+                            </label>
                         </div>
+                        <p className="text-tertiary" style={{ fontSize: 12, marginTop: 8 }}>
+                            U sdíleného předplatného (např. s partnerkou nebo rodinou) nastav, kolik z celkové částky reálně platíš ty — buď procentem, nebo přímou částkou (ta má přednost).
+                        </p>
                         <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
                             <button className="btn btn-primary" onClick={submit} disabled={saving}>
                                 {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit'}
@@ -290,6 +321,7 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
     onToggleActive: () => void;
     onDelete: () => void;
 }) {
+    const isShared = sub.my_amount_override != null || sub.my_percentage !== 100;
     return (
         <GlassCard className={sub.is_active ? '' : 'subs-card-inactive'}>
             <div className="loan-card-head" style={{ marginBottom: 'var(--spacing-sm)' }}>
@@ -308,17 +340,24 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
                 </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span className="num" style={{ fontSize: '1.5rem', fontWeight: 650 }}>{formatCurrency(sub.amount, sub.currency)}</span>
                 <span className="text-tertiary" style={{ fontSize: 13 }}>{PERIOD_LABEL[sub.period]}</span>
                 {sub.period !== 'monthly' && (
                     <span className="text-tertiary" style={{ fontSize: 12 }}>(≈ {formatCurrency(sub.monthly_equivalent)}/měs)</span>
                 )}
             </div>
+            {isShared && (
+                <div className="num" style={{ fontSize: 13, color: 'var(--accent)', marginTop: 3 }}>
+                    Moje část: {formatCurrency(sub.my_amount, sub.currency)}
+                    {sub.my_amount_override == null && ` (${sub.my_percentage} %)`}
+                </div>
+            )}
 
             {/* Badges */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'var(--spacing-sm)', minHeight: 20 }}>
                 {!sub.is_active && <span className="chip">Zrušené</span>}
+                {isShared && <span className="chip chip-accent">Sdíleno</span>}
                 {sub.is_active && sub.renewing_soon && <span className="chip chip-accent">Obnovení do 7 dní</span>}
                 {sub.is_active && sub.is_stale && <span className="chip chip-warn">Dlouho žádná platba — zrušené?</span>}
                 {sub.price_change_from != null && sub.price_change_to != null && (

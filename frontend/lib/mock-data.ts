@@ -250,7 +250,8 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
     {
         id: 1, name: 'Vodafone', merchant_pattern: 'vodafone', amount: 649, currency: 'CZK',
         period: 'monthly', category: 'Utilities', first_seen_date: daysFromNow(-400), note: null, is_active: true,
-        monthly_equivalent: 649, yearly_cost: 7788,
+        my_percentage: 100, my_amount_override: null, my_amount: 649,
+        monthly_equivalent: 649, yearly_cost: 7788, my_monthly_equivalent: 649, my_yearly_cost: 7788,
         last_charged_date: daysFromNow(-26), last_amount: 649, charges_count: 13,
         next_due_date: daysFromNow(4), renewing_soon: true, is_stale: false,
         price_change_from: null, price_change_to: null,
@@ -258,15 +259,17 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
     {
         id: 2, name: 'Netflix', merchant_pattern: 'netflix', amount: 319, currency: 'CZK',
         period: 'monthly', category: 'Entertainment', first_seen_date: daysFromNow(-700), note: null, is_active: true,
-        monthly_equivalent: 319, yearly_cost: 3828,
+        my_percentage: 100, my_amount_override: null, my_amount: 319,
+        monthly_equivalent: 319, yearly_cost: 3828, my_monthly_equivalent: 319, my_yearly_cost: 3828,
         last_charged_date: daysFromNow(-12), last_amount: 319, charges_count: 23,
         next_due_date: daysFromNow(18), renewing_soon: false, is_stale: false,
         price_change_from: 269, price_change_to: 319,
     },
     {
         id: 3, name: 'Spotify', merchant_pattern: 'spotify', amount: 169, currency: 'CZK',
-        period: 'monthly', category: 'Entertainment', first_seen_date: daysFromNow(-900), note: 'Family plán', is_active: true,
-        monthly_equivalent: 169, yearly_cost: 2028,
+        period: 'monthly', category: 'Entertainment', first_seen_date: daysFromNow(-900), note: 'Family plán — sdíleno napůl', is_active: true,
+        my_percentage: 50, my_amount_override: null, my_amount: 84.5,
+        monthly_equivalent: 169, yearly_cost: 2028, my_monthly_equivalent: 84.5, my_yearly_cost: 1014,
         last_charged_date: daysFromNow(-8), last_amount: 169, charges_count: 29,
         next_due_date: daysFromNow(22), renewing_soon: false, is_stale: false,
         price_change_from: null, price_change_to: null,
@@ -274,7 +277,8 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
     {
         id: 4, name: 'iCloud+', merchant_pattern: 'apple.com/bill', amount: 990, currency: 'CZK',
         period: 'yearly', category: 'Utilities', first_seen_date: daysFromNow(-500), note: null, is_active: true,
-        monthly_equivalent: 82.5, yearly_cost: 990,
+        my_percentage: 100, my_amount_override: null, my_amount: 990,
+        monthly_equivalent: 82.5, yearly_cost: 990, my_monthly_equivalent: 82.5, my_yearly_cost: 990,
         last_charged_date: daysFromNow(-140), last_amount: 990, charges_count: 2,
         next_due_date: daysFromNow(225), renewing_soon: false, is_stale: false,
         price_change_from: null, price_change_to: null,
@@ -282,7 +286,8 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
     {
         id: 5, name: 'HBO Max', merchant_pattern: 'hbo', amount: 199, currency: 'CZK',
         period: 'monthly', category: 'Entertainment', first_seen_date: daysFromNow(-600), note: null, is_active: true,
-        monthly_equivalent: 199, yearly_cost: 2388,
+        my_percentage: 100, my_amount_override: null, my_amount: 199,
+        monthly_equivalent: 199, yearly_cost: 2388, my_monthly_equivalent: 199, my_yearly_cost: 2388,
         last_charged_date: daysFromNow(-95), last_amount: 199, charges_count: 16,
         next_due_date: daysFromNow(-65), renewing_soon: false, is_stale: true,
         price_change_from: null, price_change_to: null,
@@ -293,6 +298,8 @@ export const MOCK_SUBSCRIPTIONS_SUMMARY: SubscriptionsSummary = {
     active_count: 5,
     monthly_total: 1418.5,
     yearly_total: 17022,
+    my_monthly_total: 1334,
+    my_yearly_total: 16008,
     currency: 'CZK',
 };
 

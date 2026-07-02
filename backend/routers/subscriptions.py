@@ -121,6 +121,8 @@ class SubscriptionCreate(BaseModel):
     category: Optional[str] = None
     first_seen_date: Optional[str] = None
     note: Optional[str] = None
+    my_percentage: Optional[int] = 100
+    my_amount_override: Optional[float] = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -131,6 +133,8 @@ class SubscriptionUpdate(BaseModel):
     category: Optional[str] = None
     note: Optional[str] = None
     is_active: Optional[bool] = None
+    my_percentage: Optional[int] = None
+    my_amount_override: Optional[float] = None
 
 
 class SubscriptionResponse(BaseModel):
@@ -144,9 +148,15 @@ class SubscriptionResponse(BaseModel):
     first_seen_date: Optional[str]
     note: Optional[str]
     is_active: bool
+    # Sdílené předplatné — kolik z `amount` reálně platím já
+    my_percentage: int = 100
+    my_amount_override: Optional[float] = None
+    my_amount: float = 0            # efektivní moje část za periodu
     # Živě dopočítané z transakcí:
-    monthly_equivalent: float
-    yearly_cost: float
+    monthly_equivalent: float       # celková částka/měsíc (co odchází z karty)
+    yearly_cost: float              # celková částka/rok
+    my_monthly_equivalent: float = 0   # moje část/měsíc
+    my_yearly_cost: float = 0          # moje část/rok
     last_charged_date: Optional[str] = None
     last_amount: Optional[float] = None
     charges_count: int = 0
@@ -175,6 +185,14 @@ class DetectedSubscription(BaseModel):
 
 def _monthly_equivalent(amount: float, period: str) -> float:
     return round(amount / PERIOD_MONTHS.get(period, 1), 2)
+
+
+def _my_amount(sub: SubscriptionModel) -> float:
+    """Efektivní částka za periodu, kterou reálně platím já (sdílené předplatné)."""
+    if sub.my_amount_override is not None:
+        return sub.my_amount_override
+    pct = sub.my_percentage if sub.my_percentage is not None else 100
+    return round(sub.amount * pct / 100, 2)
 
 
 async def _load_charges(
@@ -250,8 +268,13 @@ def _build_response(sub: SubscriptionModel, charges: list[tuple[str, float]]) ->
         first_seen_date=sub.first_seen_date,
         note=sub.note,
         is_active=sub.is_active,
+        my_percentage=sub.my_percentage if sub.my_percentage is not None else 100,
+        my_amount_override=sub.my_amount_override,
+        my_amount=_my_amount(sub),
         monthly_equivalent=_monthly_equivalent(sub.amount, sub.period),
         yearly_cost=round(_monthly_equivalent(sub.amount, sub.period) * 12, 2),
+        my_monthly_equivalent=_monthly_equivalent(_my_amount(sub), sub.period),
+        my_yearly_cost=round(_monthly_equivalent(_my_amount(sub), sub.period) * 12, 2),
         last_charged_date=last_date_str,
         last_amount=last_amount,
         charges_count=len(charges),
@@ -302,7 +325,13 @@ async def get_subscriptions_summary(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Souhrn: kolik měsíčně/ročně platím za aktivní předplatná."""
+    """Souhrn: kolik měsíčně/ročně platím za aktivní předplatná.
+
+    `my_monthly_total`/`my_yearly_total` počítají jen moji reálnou část u
+    sdílených předplatných (`my_percentage`/`my_amount_override`) — to je
+    hlavní číslo, co mě zajímá. `monthly_total`/`yearly_total` je celková
+    částka odcházející z karty (včetně částí ostatních), pro srovnání.
+    """
     result = await db.execute(
         select(SubscriptionModel).where(
             SubscriptionModel.user_id == current_user.id,
@@ -311,10 +340,13 @@ async def get_subscriptions_summary(
     )
     subs = list(result.scalars().all())
     monthly_total = sum(_monthly_equivalent(s.amount, s.period) for s in subs)
+    my_monthly_total = sum(_monthly_equivalent(_my_amount(s), s.period) for s in subs)
     return {
         "active_count": len(subs),
         "monthly_total": round(monthly_total, 2),
         "yearly_total": round(monthly_total * 12, 2),
+        "my_monthly_total": round(my_monthly_total, 2),
+        "my_yearly_total": round(my_monthly_total * 12, 2),
         "currency": "CZK",
     }
 
@@ -449,6 +481,10 @@ async def create_subscription(
         raise HTTPException(status_code=400, detail=f"period must be one of {VALID_PERIODS}")
     if data.amount <= 0 or not data.name.strip() or not data.merchant_pattern.strip():
         raise HTTPException(status_code=400, detail="name, merchant_pattern and positive amount are required")
+    if data.my_percentage is not None and not (0 <= data.my_percentage <= 100):
+        raise HTTPException(status_code=400, detail="my_percentage must be between 0 and 100")
+    if data.my_amount_override is not None and data.my_amount_override < 0:
+        raise HTTPException(status_code=400, detail="my_amount_override must not be negative")
 
     sub = SubscriptionModel(
         user_id=current_user.id,
@@ -460,6 +496,8 @@ async def create_subscription(
         category=data.category,
         first_seen_date=data.first_seen_date,
         note=data.note,
+        my_percentage=data.my_percentage if data.my_percentage is not None else 100,
+        my_amount_override=data.my_amount_override,
     )
     db.add(sub)
     await db.commit()
@@ -483,6 +521,10 @@ async def update_subscription(
         raise HTTPException(status_code=400, detail=f"period must be one of {VALID_PERIODS}")
     if data.amount is not None and data.amount <= 0:
         raise HTTPException(status_code=400, detail="amount must be positive")
+    if data.my_percentage is not None and not (0 <= data.my_percentage <= 100):
+        raise HTTPException(status_code=400, detail="my_percentage must be between 0 and 100")
+    if data.my_amount_override is not None and data.my_amount_override < 0:
+        raise HTTPException(status_code=400, detail="my_amount_override must not be negative")
 
     updates = data.model_dump(exclude_unset=True)
     if "merchant_pattern" in updates and updates["merchant_pattern"]:

@@ -420,13 +420,18 @@ class SubscriptionModel(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String, nullable=False)              # "Netflix", "Vodafone"
     merchant_pattern = Column(String, nullable=False)  # lowercase pattern pro párování transakcí
-    amount = Column(Float, nullable=False)             # očekávaná částka za periodu
+    amount = Column(Float, nullable=False)             # celková částka strhávaná z karty za periodu
     currency = Column(String, nullable=False, default="CZK")
     period = Column(String, nullable=False, default="monthly")  # "monthly" | "quarterly" | "yearly"
     category = Column(String, nullable=True)
     first_seen_date = Column(String, nullable=True)    # YYYY-MM-DD první zachycené platby
     note = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Sdílené předplatné — celá částka odchází z mojí karty, ale část hradí
+    # ostatní. my_amount_override (přímá částka v Kč) má přednost před
+    # my_percentage, stejně jako u MonthlyExpenseModel.
+    my_percentage = Column(Integer, nullable=True, default=100)
+    my_amount_override = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
