@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime
 import asyncio
@@ -191,7 +191,14 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
                     raw = json.loads(tx.raw_json) if tx.raw_json else {}
                 except Exception:
                     raw = {}
-                tx.category = categorize_transaction(raw if isinstance(raw, dict) else {})
+                new_category = await categorize_transaction_with_rules(
+                    raw if isinstance(raw, dict) else {}, db, user_id
+                )
+                # The whole point of this pass is to strip the transfer label —
+                # never let a rule re-apply it here.
+                if new_category in ("Internal Transfer", "Family Transfer"):
+                    new_category = categorize_transaction(raw if isinstance(raw, dict) else {})
+                tx.category = new_category
             unmarked_excluded += 1
             logger.info(f"Un-marked transfer to excluded account: {tx.date} {tx.description[:50]} ({tx.amount})")
 
@@ -416,80 +423,19 @@ def categorize_by_mcc(tx: dict) -> str | None:
 
 
 def categorize_transaction(tx: dict) -> str:
-    """Smart category detection: purposeCode → MCC → keyword matching"""
-    # 1. purposeCode
+    """Category detection from transaction metadata only: purposeCode → MCC.
+
+    Keyword matching moved to category_rules in the DB (is_builtin=True, see
+    services/default_rules.py) — merchant keywords are the learned-rules bucket
+    now, so callers that want them must go through the rule-based variants.
+    """
     by_purpose = categorize_by_purpose_code(tx)
     if by_purpose:
         return by_purpose
 
-    # 2. MCC
     by_mcc = categorize_by_mcc(tx)
     if by_mcc:
         return by_mcc
-
-    # 3. Keyword matching
-    raw_desc = (tx.get("remittanceInformationUnstructured") or
-                tx.get("creditorName") or
-                tx.get("debtorName") or
-                "")
-    desc = str(raw_desc).lower()
-
-    categories = {
-        "food": [
-            "lidl", "albert", "tesco", "billa", "kaufland", "penny", "globus", "makro", "coop", "norma", "žabka",
-            "restaurant", "restaurace", "bistro", "food", "wolt", "dáme jídlo", "damejidlo", "bolt food", "foodora",
-            "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa",
-            "pizza", "sushi", "kebab", "banh mi", "thai", "vietnam", "čína", "china", "asia", "grill",
-            "kavárna", "kavarna", "café", "cafe", "pekárna", "pekarna", "cukrárna", "cukrarna", "bakery",
-            "hospoda", "pub", "pivnice", "bar", "pivovar", "brewery",
-            "bageterie", "qerko", "rohlik", "rohlík", "košík", "kosik",
-            "řeznictví", "reznictvi", "uzeniny", "maso",
-            "luxor", "miners", "cinestar bar",
-        ],
-        "transport": [
-            "uber", "bolt", "liftago", "taxi",
-            "benzina", "orlen", "omv", "shell", "mol", "eni", "cng", "euro oil", "pap oil",
-            "mhd", "jízdenka", "jizdenka", "prague transport", "dpp", "pid", "litacka", "lítačka",
-            "parking", "parkovani", "parkoviště", "parkování",
-            "dálnice", "dalnice", "mýto", "myto",
-            "autoservis", "pneuservis", "autopůjčovna",
-        ],
-        "utilities": [
-            "čez", "cez", "pražské vodovody", "innogy", "eon", "pre", "pražská energetika",
-            "vodafone", "t-mobile", "o2", "nordic telecom", "nej.cz",
-            "upc", "skylink", "digi",
-            "pojištění", "pojisteni", "allianz", "generali", "kooperativa", "čpp", "cpp",
-            "nájem", "najem", "rent", "svj", "bytové",
-            "plyn", "elektřina", "elektrina", "voda", "teplo",
-        ],
-        "entertainment": [
-            "netflix", "spotify", "hbo", "disney", "apple tv", "youtube", "deezer", "tidal",
-            "cinema", "kino", "cinestar", "cinema city", "divadlo", "theatre",
-            "steam", "playstation", "xbox", "nintendo", "epic games", "tipsport", "fortuna", "sazka",
-            "fitness", "gym", "posilovna", "bazén", "bazen", "wellness", "sauna", "squash", "tenis",
-            "ticketmaster", "ticketportal", "goout", "eventim",
-            "audioteka", "bookbeat",
-        ],
-        "shopping": [
-            "amazon", "alza", "mall.cz", "czc", "datart", "electro world", "planeo", "okay",
-            "zara", "h&m", "reserved", "about you", "zalando", "answear", "bata", "deichmann",
-            "ikea", "obi", "hornbach", "bauhaus", "baumax", "jysk", "sconto", "xxxlutz", "asko", "möbelix",
-            "tesco", "dm", "rossmann", "douglas", "sephora",
-            "heureka", "aliexpress", "wish", "shein", "temu",
-            "decathlon", "sportisimo", "hervis",
-        ],
-        "salary": [
-            "mzda", "plat", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie",
-        ],
-        "health": [
-            "lékárna", "lekarna", "pharmacy", "doktor", "doctor", "nemocnice", "hospital", "klinika", "clinic",
-            "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni",
-        ],
-    }
-
-    for category, keywords in categories.items():
-        if any(kw in desc for kw in keywords):
-            return category.capitalize()
 
     return "Other"
 
@@ -526,7 +472,8 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession, user_id:
     if by_mcc:
         return by_mcc
 
-    # 4. Learned rules (from previous categorizations)
+    # 4. Learned + builtin rules (longer pattern = more specific wins on ties,
+    #    e.g. "dáme jídlo" before "dm")
     if desc:
         learned_rules = await db.execute(
             select(CategoryRuleModel)
@@ -534,14 +481,14 @@ async def categorize_transaction_with_rules(tx: dict, db: AsyncSession, user_id:
                 CategoryRuleModel.user_id == user_id,
                 CategoryRuleModel.is_user_defined == False,
             )
-            .order_by(CategoryRuleModel.match_count.desc())
+            .order_by(CategoryRuleModel.match_count.desc(), func.length(CategoryRuleModel.pattern).desc())
         )
         for rule in learned_rules.scalars():
             if rule.pattern.lower() in desc:
                 rule.match_count += 1
                 return rule.category
 
-    # 5. Keyword matching fallback
+    # 5. Metadata fallback (purposeCode / MCC)
     return categorize_transaction(tx)
 
 
@@ -662,7 +609,7 @@ async def sync_all_data(
             CategoryRuleModel.user_id == current_user.id,
             CategoryRuleModel.is_user_defined == False,
         )
-        .order_by(CategoryRuleModel.match_count.desc())
+        .order_by(CategoryRuleModel.match_count.desc(), func.length(CategoryRuleModel.pattern).desc())
     )
     preloaded_learned_rules = list(learned_rules_result.scalars())
 
