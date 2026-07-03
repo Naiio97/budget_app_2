@@ -250,6 +250,11 @@ async def get_dashboard(
             "currency": currency,
             "institution": acc.institution,
             "is_visible": acc.is_visible,
+            # consent_expires_at se ztratil při merge fix/fe_bugs — bez něj
+            # UI nemá jak varovat před vypršelým souhlasem banky
+            "consent_expires_at": acc.consent_expires_at.isoformat() if acc.consent_expires_at else None,
+            "last_synced": acc.last_synced.isoformat() if acc.last_synced else None,
+            "last_sync_error": acc.last_sync_error,
         })
 
     # Add manual accounts to the list

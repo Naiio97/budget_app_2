@@ -42,6 +42,8 @@ class AccountModel(Base):
     is_visible = Column(Boolean, default=True)
     # When the GoCardless EUA consent expires (naive UTC); null for non-bank accounts
     consent_expires_at = Column(DateTime, nullable=True)
+    # Last per-account sync failure (cleared on success) — surfaces silent breakage in UI
+    last_sync_error = Column(Text, nullable=True)
     
     # Relationship to transactions
     transactions = relationship("TransactionModel", back_populates="account", cascade="all, delete-orphan")
@@ -138,6 +140,18 @@ class CategoryRuleModel(Base):
     is_user_defined = Column(Boolean, default=True)  # True = user created, False = learned/builtin
     is_builtin = Column(Boolean, default=False)  # True = seeded default rule (was hardcoded in sync.py)
     match_count = Column(Integer, default=0)  # How many times this rule matched
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PushSubscriptionModel(Base):
+    """Web Push subscription (PWA) — jeden řádek na prohlížeč/zařízení"""
+    __tablename__ = "push_subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(String, nullable=False)
+    auth = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

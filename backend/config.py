@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     auth_secret: str = ""
     auth_jwt_ttl_hours: int = 24
 
+    # Web Push (VAPID) — prázdné = notifikace vypnuté (endpointy vrací 503)
+    vapid_private_key: str = ""
+    vapid_public_key: str = ""
+    vapid_subject: str = "mailto:admin@example.com"
+
     # Google OAuth client ID — MUST equal the one Auth.js uses on the frontend.
     # Used as the expected `aud` when the backend verifies the Google ID token
     # at /auth/oauth-upsert. Empty means Google login is refused (fail closed).
