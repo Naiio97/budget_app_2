@@ -36,6 +36,7 @@ const emptyForm = {
     note: '',
     my_percentage: '100',
     my_amount_override: '',
+    contribution_pattern: '',
 };
 
 export default function SubscriptionsPage() {
@@ -96,6 +97,7 @@ export default function SubscriptionsPage() {
             note: sub.note ?? '',
             my_percentage: String(sub.my_percentage),
             my_amount_override: sub.my_amount_override != null ? String(sub.my_amount_override) : '',
+            contribution_pattern: sub.contribution_pattern ?? '',
         });
         setShowForm(true);
         if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -113,6 +115,7 @@ export default function SubscriptionsPage() {
             note: form.note.trim() || null,
             my_percentage: form.my_percentage.trim() ? parseInt(form.my_percentage, 10) : 100,
             my_amount_override: form.my_amount_override.trim() ? parseFloat(form.my_amount_override) : null,
+            contribution_pattern: form.contribution_pattern.trim() || null,
         };
         if (editingId != null) updateMutation.mutate({ id: editingId, data });
         else createMutation.mutate(data);
@@ -272,6 +275,14 @@ export default function SubscriptionsPage() {
                                     onChange={e => setForm({ ...form, my_amount_override: e.target.value })}
                                 />
                             </label>
+                            <label className="loan-field">
+                                <span>Vzor příchozího příspěvku (nepovinné)</span>
+                                <input
+                                    className="input" placeholder="např. jméno / IBAN sestry"
+                                    value={form.contribution_pattern}
+                                    onChange={e => setForm({ ...form, contribution_pattern: e.target.value })}
+                                />
+                            </label>
                         </div>
                         <p className="text-tertiary" style={{ fontSize: 12, marginTop: 8 }}>
                             U sdíleného předplatného (např. s partnerkou nebo rodinou) nastav, kolik z celkové částky reálně platíš ty — buď procentem, nebo přímou částkou (ta má přednost).
@@ -360,6 +371,16 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
                 {sub.price_change_from != null && sub.price_change_to != null && (
                     <span className={`chip ${sub.price_change_to > sub.price_change_from ? 'chip-danger' : 'chip-success'}`}>
                         {sub.price_change_to > sub.price_change_from ? 'Zdraženo' : 'Zlevněno'}: {formatCurrency(sub.price_change_from)} → {formatCurrency(sub.price_change_to)}
+                    </span>
+                )}
+                {sub.is_active && sub.contribution_received_this_period === true && (
+                    <span className="chip chip-success" title={`Poslední příspěvek ${formatDate(sub.last_contribution_date)}${sub.last_contribution_amount != null ? ` · ${formatCurrency(sub.last_contribution_amount, sub.currency)}` : ''}`}>
+                        Podíl přišel ✓
+                    </span>
+                )}
+                {sub.is_active && sub.contribution_received_this_period === false && (
+                    <span className="chip chip-warn" title={sub.last_contribution_date ? `Poslední příspěvek ${formatDate(sub.last_contribution_date)}` : 'Zatím žádný příspěvek'}>
+                        Podíl nepřišel
                     </span>
                 )}
             </div>

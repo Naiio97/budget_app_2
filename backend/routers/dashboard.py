@@ -15,6 +15,16 @@ import json
 router = APIRouter()
 
 
+def _my_expense_amount(tx) -> float:
+    """Expense amount that counts as MINE (VYLEPSENI.md 3.1). A shared expense
+    with `my_share_amount` set counts only my part — the rest is owed by wife.
+    Clamped to the full amount so a stale split can never inflate expenses."""
+    full = abs(tx.amount)
+    if tx.my_share_amount is not None:
+        return min(tx.my_share_amount, full)
+    return full
+
+
 def _build_recent_tx(parsed, contacts_by_iban):
     result = []
     for tx, account_name, creditor_name, debtor_name, creditor_iban, debtor_iban in parsed:
@@ -45,6 +55,10 @@ def _build_recent_tx(parsed, contacts_by_iban):
             "account_name": account_name,
             "transaction_type": tx.transaction_type or "normal",
             "is_excluded": tx.is_excluded or False,
+            "my_share_amount": tx.my_share_amount,
+            "settlement_flag": tx.settlement_flag or False,
+            "settlement_note": tx.settlement_note,
+            "share_counterparty": tx.share_counterparty,
             "creditor_name": creditor_name,
             "debtor_name": debtor_name,
             "creditor_iban": creditor_iban,
@@ -184,9 +198,10 @@ async def get_dashboard(
     all_tx_result = await db.execute(all_tx_q.limit(1000))
     all_tx = all_tx_result.scalars().all()
     
-    # Calculate income vs expenses (excluding internal/family transfers)
-    income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank" and not tx.is_excluded)
-    expenses = sum(abs(tx.amount) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank" and not tx.is_excluded)
+    # Calculate income vs expenses (excluding internal/family transfers;
+    # settlement transfers from wife are not income, shared expenses count only my part)
+    income = sum(tx.amount for tx in all_tx if tx.amount > 0 and tx.account_type == "bank" and not tx.is_excluded and not tx.settlement_flag)
+    expenses = sum(_my_expense_amount(tx) for tx in all_tx if tx.amount < 0 and tx.account_type == "bank" and not tx.is_excluded)
     
     # Calculate categories (only true expense categories — exclude income categories
     # like Salary/Dividend even if a misclassified negative tx slips through)
@@ -206,7 +221,7 @@ async def get_dashboard(
                 continue
             if cat not in categories:
                 categories[cat] = 0
-            categories[cat] += abs(tx.amount)
+            categories[cat] += _my_expense_amount(tx)
     
     # Build accounts list including manual accounts
     # For investment accounts, re-convert balance if sync stored wrong rate (fallback 1.0)
@@ -470,10 +485,15 @@ async def get_net_worth_history(
 @router.get("/monthly-report")
 async def get_monthly_report(
     months: int = Query(6, ge=1, le=24),
+    full_amounts: bool = Query(False, description="True = bank-statement view: full amounts, settlements count as income"),
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get monthly report with income/expenses and category breakdown"""
+    """Get monthly report with income/expenses and category breakdown.
+
+    Default counts only MY part of shared expenses and drops settlements from
+    income; `full_amounts=true` shows raw bank amounts (matches the statement).
+    """
 
     income_cat_result = await db.execute(
         select(CategoryModel.name).where(
@@ -515,9 +535,11 @@ async def get_monthly_report(
             monthly_data[month] = {"income": 0, "expenses": 0}
 
         if tx.amount >= 0:
-            monthly_data[month]["income"] += tx.amount
+            # Settlement transfers are repayments, not income (unless full view)
+            if full_amounts or not tx.settlement_flag:
+                monthly_data[month]["income"] += tx.amount
         else:
-            monthly_data[month]["expenses"] += abs(tx.amount)
+            monthly_data[month]["expenses"] += abs(tx.amount) if full_amounts else _my_expense_amount(tx)
 
         # Category breakdown — only true expense categories
         if tx.amount < 0:
@@ -528,7 +550,7 @@ async def get_monthly_report(
                 category_data[month] = {}
             if cat not in category_data[month]:
                 category_data[month][cat] = 0
-            category_data[month][cat] += abs(tx.amount)
+            category_data[month][cat] += abs(tx.amount) if full_amounts else _my_expense_amount(tx)
     
     # Sort by month and limit to requested months
     sorted_months = sorted(monthly_data.keys(), reverse=True)[:months]

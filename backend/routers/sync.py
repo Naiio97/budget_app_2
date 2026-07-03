@@ -9,7 +9,8 @@ import logging
 
 from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel, UserModel
+from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel, UserModel, ShareRuleModel
+from services.share_rules import match_share_rule, compute_my_share
 from services.gocardless import gocardless_service, select_balance
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
@@ -38,6 +39,21 @@ async def get_my_account_patterns(db: AsyncSession, user_id: int) -> list[str]:
         select(SettingsModel).where(
             SettingsModel.user_id == user_id,
             SettingsModel.key == "my_account_patterns",
+        )
+    )
+    setting = result.scalar_one_or_none()
+    if setting and setting.value:
+        return json.loads(setting.value)
+    return []
+
+
+async def get_transfer_excluded_accounts(db: AsyncSession, user_id: int) -> list[str]:
+    """Accounts (numbers/IBANs) that must NOT count as 'mine' in internal transfer
+    detection — e.g. a credit card: repaying it is a real expense, not a transfer."""
+    result = await db.execute(
+        select(SettingsModel).where(
+            SettingsModel.user_id == user_id,
+            SettingsModel.key == "transfer_excluded_accounts",
         )
     )
     setting = result.scalar_one_or_none()
@@ -113,6 +129,29 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     # Load text-based patterns from settings (e.g. "spořící", "savings", etc.)
     my_account_patterns = await get_my_account_patterns(db, user_id)
 
+    # Accounts excluded from detection (e.g. credit card — its repayment is a real
+    # expense). Their identifiers never count as "mine".
+    excluded_identifiers: set = set()
+    for acc_no in await get_transfer_excluded_accounts(db, user_id):
+        excluded_identifiers.update(extract_account_number(acc_no))
+    excluded_identifiers.discard("")
+    my_account_identifiers -= excluded_identifiers
+
+    def tx_counterparty_ids(tx) -> set:
+        """All account identifiers (creditor + debtor) of a transaction."""
+        ids: set = set()
+        try:
+            raw = json.loads(tx.raw_json) if tx.raw_json else {}
+            if isinstance(raw, dict):
+                for side in ("creditorAccount", "debtorAccount"):
+                    acc = raw.get(side) or {}
+                    ids.update(extract_account_number(acc.get("iban", "") or ""))
+                    ids.update(extract_account_number(acc.get("bban", "") or ""))
+        except Exception:
+            pass
+        ids.discard("")
+        return ids
+
     logger.debug(f"My account identifiers for transfer detection: {my_account_identifiers}")
     logger.debug(f"My account text patterns: {my_account_patterns}")
     logger.debug(f"Manual accounts with numbers: {[(a.name, a.account_number) for a in manual_accounts if a.account_number]}")
@@ -130,8 +169,32 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     marked_internal = 0
     marked_family = 0
     marked_my_account = 0
+    unmarked_excluded = 0
     manual_balance_updates: dict[int, float] = {}  # manual_account_id -> balance delta
-    
+
+    # Cleanup pass: transfers previously auto-marked to/from an excluded account
+    # (or categorized as transfer by a learned rule) go back to being normal
+    # expenses. Runs every detection, so the exclusion is self-healing even if a
+    # category rule keeps re-labelling new payments on insert.
+    if excluded_identifiers:
+        for tx in transactions:
+            is_marked = tx.transaction_type in ("internal_transfer", "my_account_transfer")
+            has_transfer_category = tx.category in ("Internal Transfer", "Family Transfer")
+            if not is_marked and not has_transfer_category:
+                continue
+            if not (tx_counterparty_ids(tx) & excluded_identifiers):
+                continue
+            tx.transaction_type = "normal"
+            tx.is_excluded = False
+            if has_transfer_category:
+                try:
+                    raw = json.loads(tx.raw_json) if tx.raw_json else {}
+                except Exception:
+                    raw = {}
+                tx.category = categorize_transaction(raw if isinstance(raw, dict) else {})
+            unmarked_excluded += 1
+            logger.info(f"Un-marked transfer to excluded account: {tx.date} {tx.description[:50]} ({tx.amount})")
+
     for tx in transactions:
         if tx.is_excluded and tx.transaction_type != "normal":
             continue
@@ -226,7 +289,7 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
                 break
     
     await db.commit()
-    return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": marked_my_account}
+    return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": marked_my_account, "unmarked_excluded": unmarked_excluded}
 
 
 # ISO 20022 purpose codes → category
@@ -603,6 +666,15 @@ async def sync_all_data(
     )
     preloaded_learned_rules = list(learned_rules_result.scalars())
 
+    # Auto-split rules — new expenses matching a rule get my_share_amount at insert
+    share_rules_result = await db.execute(
+        select(ShareRuleModel).where(
+            ShareRuleModel.user_id == current_user.id,
+            ShareRuleModel.is_active == True,
+        )
+    )
+    preloaded_share_rules = list(share_rules_result.scalars())
+
     try:
         # Sync bank accounts from GoCardless
         try:
@@ -668,19 +740,33 @@ async def sync_all_data(
                         )
                         
                         tx_dict = tx_data.model_dump(mode="json")
-                        
+
+                        tx_amount = float(tx_data.transactionAmount.amount)
+                        # Auto-split: a new shared expense (rent, utilities…) gets my
+                        # share set right away per the user's share rules.
+                        my_share = share_counterparty = share_note = None
+                        share_rule = match_share_rule(tx_dict, tx_amount, preloaded_share_rules)
+                        if share_rule:
+                            my_share = compute_my_share(tx_amount, share_rule)
+                            share_counterparty = share_rule.counterparty
+                            share_note = share_rule.note
+                            share_rule.match_count += 1
+
                         rows_to_upsert.append({
                             "id": tx_id,
                             "user_id": current_user.id,
                             "account_id": account.id,
                             "date": str(tx_data.bookingDate) if tx_data.bookingDate else "",
                             "description": description,
-                            "amount": float(tx_data.transactionAmount.amount),
+                            "amount": tx_amount,
                             "currency": tx_data.transactionAmount.currency,
                             "category": _categorize_with_preloaded_rules(tx_dict, preloaded_user_rules, preloaded_learned_rules),
                             "account_type": "bank",
                             "transaction_type": "normal",
                             "is_excluded": False,
+                            "my_share_amount": my_share,
+                            "share_counterparty": share_counterparty,
+                            "settlement_note": share_note,
                             "raw_json": json.dumps(tx_dict),
                         })
                     
@@ -1045,5 +1131,6 @@ async def detect_transfers(
         "status": "completed",
         "marked_internal_transfers": result["marked_internal"],
         "marked_family_transfers": result["marked_family"],
-        "marked_my_account_transfers": result["marked_my_account"]
+        "marked_my_account_transfers": result["marked_my_account"],
+        "unmarked_excluded_accounts": result["unmarked_excluded"],
     }

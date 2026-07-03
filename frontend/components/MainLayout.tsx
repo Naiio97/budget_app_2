@@ -71,6 +71,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
         { href: '/loans', label: 'Úvěry', icon: Icons.nav.loans },
         { href: '/subscriptions', label: 'Předplatné', icon: Icons.nav.subscriptions },
+        { href: '/vyporadani', label: 'Vypořádání', icon: Icons.nav.settlement },
         { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 

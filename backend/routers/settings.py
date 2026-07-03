@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_, and_
 from datetime import datetime
 
 from auth import get_current_user
 from database import get_db
-from models import SettingsModel, CategoryRuleModel, UserModel
+from models import SettingsModel, CategoryRuleModel, UserModel, ShareRuleModel, TransactionModel
+from services.share_rules import compute_my_share
 
 router = APIRouter()
 
@@ -337,3 +338,171 @@ async def delete_my_account_patterns(
         await db.delete(existing)
     await db.commit()
     return {"status": "deleted"}
+
+
+# ============== Share rules (auto-split of shared expenses) ==============
+# Pravidlo "nájem → moje část 50 %": nové transakce odpovídající patternu
+# dostanou my_share_amount automaticky při syncu; při založení se pravidlo
+# aplikuje i zpětně na existující výdaje bez ručního rozdělení.
+
+class ShareRuleRequest(BaseModel):
+    pattern: str
+    my_percentage: Optional[float] = None      # 0-100
+    my_amount_override: Optional[float] = None  # pevná moje část v Kč (přednost)
+    counterparty: Optional[str] = None          # kdo dluží zbytek ("Žena")
+    note: Optional[str] = None
+    apply_retroactively: bool = True
+
+
+def _share_rule_response(rule: ShareRuleModel) -> dict:
+    return {
+        "id": rule.id,
+        "pattern": rule.pattern,
+        "my_percentage": rule.my_percentage,
+        "my_amount_override": rule.my_amount_override,
+        "counterparty": rule.counterparty,
+        "note": rule.note,
+        "is_active": rule.is_active,
+        "match_count": rule.match_count,
+    }
+
+
+@router.get("/share-rules")
+async def get_share_rules(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Pravidla automatického dělení výdajů"""
+    result = await db.execute(
+        select(ShareRuleModel)
+        .where(ShareRuleModel.user_id == current_user.id)
+        .order_by(ShareRuleModel.match_count.desc())
+    )
+    return {"rules": [_share_rule_response(r) for r in result.scalars().all()]}
+
+
+@router.post("/share-rules")
+async def create_share_rule(
+    request: ShareRuleRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Založit pravidlo dělení a (volitelně) aplikovat zpětně na existující výdaje"""
+    pattern = request.pattern.lower().strip()
+    if len(pattern) < 3:
+        raise HTTPException(status_code=400, detail="Pattern must be at least 3 characters")
+    if request.my_amount_override is None and request.my_percentage is None:
+        raise HTTPException(status_code=400, detail="Set my_percentage or my_amount_override")
+    if request.my_percentage is not None and not (0 <= request.my_percentage <= 100):
+        raise HTTPException(status_code=400, detail="my_percentage must be between 0 and 100")
+    if request.my_amount_override is not None and request.my_amount_override < 0:
+        raise HTTPException(status_code=400, detail="my_amount_override must not be negative")
+
+    existing = await db.execute(
+        select(ShareRuleModel).where(
+            ShareRuleModel.user_id == current_user.id,
+            ShareRuleModel.pattern == pattern,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Rule with this pattern already exists")
+
+    rule = ShareRuleModel(
+        user_id=current_user.id,
+        pattern=pattern,
+        my_percentage=request.my_percentage,
+        my_amount_override=request.my_amount_override,
+        counterparty=(request.counterparty or "").strip() or None,
+        note=(request.note or "").strip() or None,
+    )
+    db.add(rule)
+
+    applied = 0
+    if request.apply_retroactively:
+        # Jen normální bankovní výdaje bez ručního rozdělení — ruční hodnoty nepřepisujeme.
+        like = f"%{pattern}%"
+        retro = await db.execute(
+            select(TransactionModel).where(
+                and_(
+                    TransactionModel.user_id == current_user.id,
+                    TransactionModel.account_type == "bank",
+                    TransactionModel.amount < 0,
+                    TransactionModel.transaction_type == "normal",
+                    TransactionModel.is_excluded.isnot(True),
+                    TransactionModel.settlement_flag.isnot(True),
+                    TransactionModel.my_share_amount.is_(None),
+                    or_(
+                        TransactionModel.description.ilike(like),
+                        TransactionModel.raw_json.ilike(like),
+                    ),
+                )
+            )
+        )
+        for tx in retro.scalars():
+            tx.my_share_amount = compute_my_share(tx.amount, rule)
+            if rule.counterparty and not tx.share_counterparty:
+                tx.share_counterparty = rule.counterparty
+            if rule.note and not tx.settlement_note:
+                tx.settlement_note = rule.note
+            applied += 1
+        rule.match_count = applied
+
+    await db.commit()
+    await db.refresh(rule)
+    return {"rule": _share_rule_response(rule), "applied_to": applied}
+
+
+@router.delete("/share-rules/{rule_id}")
+async def delete_share_rule(
+    rule_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Smazat pravidlo dělení (už rozdělené transakce zůstávají rozdělené)"""
+    result = await db.execute(
+        select(ShareRuleModel).where(
+            ShareRuleModel.id == rule_id,
+            ShareRuleModel.user_id == current_user.id,
+        )
+    )
+    rule = result.scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+    await db.delete(rule)
+    await db.commit()
+    return {"status": "deleted", "id": rule_id}
+
+
+# ============== Transfer-excluded accounts (credit card etc.) ==============
+# Own accounts that must NOT be treated as "mine" by internal transfer detection.
+# Typical case: credit card — sending money there is repayment, i.e. a real
+# expense, not a transfer between own accounts.
+
+class TransferExcludedAccountsRequest(BaseModel):
+    accounts: list[str]
+
+
+@router.get("/transfer-excluded-accounts")
+async def get_transfer_excluded_accounts(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get accounts (numbers/IBANs) excluded from internal transfer detection"""
+    import json
+    accounts_json = await get_setting(db, current_user.id, "transfer_excluded_accounts")
+    accounts = json.loads(accounts_json) if accounts_json else []
+    return {"accounts": accounts}
+
+
+@router.post("/transfer-excluded-accounts")
+async def save_transfer_excluded_accounts(
+    request: TransferExcludedAccountsRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save accounts excluded from internal transfer detection"""
+    import json
+    clean_accounts = [a.strip() for a in request.accounts if a.strip()]
+    await set_setting(db, current_user.id, "transfer_excluded_accounts", json.dumps(clean_accounts))
+    await db.commit()
+    return {"status": "saved", "accounts": clean_accounts}

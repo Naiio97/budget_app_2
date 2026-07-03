@@ -123,6 +123,10 @@ export interface Transaction {
     account_name?: string;
     transaction_type?: 'normal' | 'internal_transfer' | 'family_transfer';
     is_excluded?: boolean;
+    my_share_amount?: number | null;
+    settlement_flag?: boolean;
+    settlement_note?: string | null;
+    share_counterparty?: string | null;
     creditor_name?: string;
     debtor_name?: string;
     creditor_iban?: string | null;
@@ -460,6 +464,10 @@ export interface TransactionDetail {
     account_type: string;
     transaction_type: string;
     is_excluded: boolean;
+    my_share_amount: number | null;
+    settlement_flag: boolean;
+    settlement_note: string | null;
+    share_counterparty: string | null;
     creditor_name: string | null;
     debtor_name: string | null;
     creditor_iban: string | null;
@@ -478,6 +486,101 @@ export interface TransactionDetail {
 
 export async function getTransactionDetail(id: string): Promise<TransactionDetail> {
     return fetchApi<TransactionDetail>(`/transactions/${id}`);
+}
+
+// === Shared costs & settlement (VYLEPSENI.md 3.1) ===
+
+export interface TransactionShare {
+    my_share_amount: number | null;
+    settlement_flag: boolean;
+    settlement_note: string | null;
+    share_counterparty?: string | null;
+}
+
+export interface TransactionShareResult extends TransactionShare {
+    transaction_type?: 'normal' | 'internal_transfer' | 'family_transfer';
+    is_excluded?: boolean;
+    category?: string;
+}
+
+export async function updateTransactionShare(id: string, share: TransactionShare): Promise<TransactionShareResult> {
+    const response = await apiMutate(`/transactions/${id}/share`, {
+        method: 'PATCH',
+        body: JSON.stringify(share),
+    });
+    if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || 'Failed to update transaction share');
+    }
+    return response.json();
+}
+
+export interface SettlementTxSnippet {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    currency: string;
+    category: string | null;
+    my_share_amount: number | null;
+    their_amount: number | null;
+    note: string | null;
+    counterparty: string | null;
+}
+
+export interface SettlementSummary {
+    total_owed: number;
+    total_received: number;
+    balance: number;
+    counterparties: Array<{ name: string | null; owed: number; received: number; balance: number }>;
+    months: Array<{ month: string; owed: number; received: number }>;
+    expenses: SettlementTxSnippet[];
+    settlements: SettlementTxSnippet[];
+    currency: string;
+}
+
+export async function getSettlementSummary(months = 12): Promise<SettlementSummary> {
+    return fetchApi<SettlementSummary>(`/transactions/settlement-summary?months=${months}`);
+}
+
+export interface ShareRule {
+    id: number;
+    pattern: string;
+    my_percentage: number | null;
+    my_amount_override: number | null;
+    counterparty: string | null;
+    note: string | null;
+    is_active: boolean;
+    match_count: number;
+}
+
+export async function getShareRules(): Promise<ShareRule[]> {
+    const data = await fetchApi<{ rules: ShareRule[] }>(`/settings/share-rules`);
+    return data.rules || [];
+}
+
+export async function createShareRule(rule: {
+    pattern: string;
+    my_percentage?: number | null;
+    my_amount_override?: number | null;
+    counterparty?: string | null;
+    note?: string | null;
+    apply_retroactively?: boolean;
+}): Promise<{ rule: ShareRule; applied_to: number }> {
+    const response = await apiMutate(`/settings/share-rules`, {
+        method: 'POST',
+        body: JSON.stringify(rule),
+    });
+    if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || 'Failed to create share rule');
+    }
+    return response.json();
+}
+
+export async function deleteShareRule(id: number): Promise<void> {
+    const response = await apiMutate(`/settings/share-rules/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Failed to delete share rule');
 }
 
 // === Contacts (IBAN address book) ===
@@ -830,6 +933,10 @@ export interface Subscription {
     is_stale: boolean;
     price_change_from: number | null;
     price_change_to: number | null;
+    contribution_pattern: string | null;
+    last_contribution_date: string | null;
+    last_contribution_amount: number | null;
+    contribution_received_this_period: boolean | null;
 }
 
 export interface DetectedSubscription {
@@ -866,6 +973,7 @@ export interface SubscriptionCreateInput {
     note?: string | null;
     my_percentage?: number | null;
     my_amount_override?: number | null;
+    contribution_pattern?: string | null;
 }
 
 export async function getSubscriptions(): Promise<Subscription[]> {

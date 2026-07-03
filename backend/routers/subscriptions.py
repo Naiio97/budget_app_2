@@ -123,6 +123,7 @@ class SubscriptionCreate(BaseModel):
     note: Optional[str] = None
     my_percentage: Optional[int] = 100
     my_amount_override: Optional[float] = None
+    contribution_pattern: Optional[str] = None
 
 
 class SubscriptionUpdate(BaseModel):
@@ -135,6 +136,7 @@ class SubscriptionUpdate(BaseModel):
     is_active: Optional[bool] = None
     my_percentage: Optional[int] = None
     my_amount_override: Optional[float] = None
+    contribution_pattern: Optional[str] = None
 
 
 class SubscriptionResponse(BaseModel):
@@ -165,6 +167,11 @@ class SubscriptionResponse(BaseModel):
     is_stale: bool = False               # >2 periody bez platby → možná zrušené
     price_change_from: Optional[float] = None  # předposlední cena, pokud se liší
     price_change_to: Optional[float] = None
+    # Příspěvky ostatních (sestra posílá podíl) — sledované přes contribution_pattern
+    contribution_pattern: Optional[str] = None
+    last_contribution_date: Optional[str] = None
+    last_contribution_amount: Optional[float] = None
+    contribution_received_this_period: Optional[bool] = None  # None = nesleduje se
 
 
 class DetectedSubscription(BaseModel):
@@ -225,7 +232,37 @@ async def _load_charges(
     return [(row[0], round(abs(row[1]), 2)) for row in result.all()]
 
 
-def _build_response(sub: SubscriptionModel, charges: list[tuple[str, float]]) -> SubscriptionResponse:
+async def _load_contributions(
+    db: AsyncSession, user_id: int, pattern: Optional[str]
+) -> list[tuple[str, float]]:
+    """Příchozí platby odpovídající contribution_pattern — [(date, amount)], nejnovější první."""
+    if not pattern:
+        return []
+    like = f"%{pattern.lower().strip()}%"
+    result = await db.execute(
+        select(TransactionModel.date, TransactionModel.amount)
+        .where(
+            and_(
+                TransactionModel.user_id == user_id,
+                TransactionModel.account_type == "bank",
+                TransactionModel.amount > 0,
+                or_(
+                    TransactionModel.description.ilike(like),
+                    TransactionModel.raw_json.ilike(like),
+                ),
+            )
+        )
+        .order_by(TransactionModel.date.desc())
+        .limit(24)
+    )
+    return [(row[0], round(row[1], 2)) for row in result.all()]
+
+
+def _build_response(
+    sub: SubscriptionModel,
+    charges: list[tuple[str, float]],
+    contributions: Optional[list[tuple[str, float]]] = None,
+) -> SubscriptionResponse:
     today = date.today()
     last_date_str: Optional[str] = charges[0][0] if charges else None
     last_amount: Optional[float] = charges[0][1] if charges else None
@@ -257,6 +294,19 @@ def _build_response(sub: SubscriptionModel, charges: list[tuple[str, float]]) ->
         if prev_amount is not None and streak <= 3:
             price_from, price_to = prev_amount, last_amount
 
+    # Příspěvky ostatních: podíl "přišel v této periodě", pokud poslední příchozí
+    # příspěvek není starší než jedna perioda (s tolerancí na posun dne platby).
+    last_contribution_date: Optional[str] = None
+    last_contribution_amount: Optional[float] = None
+    contribution_received: Optional[bool] = None
+    if sub.contribution_pattern:
+        contribution_received = False
+        if contributions:
+            last_contribution_date, last_contribution_amount = contributions[0]
+            c_date = _parse_date(last_contribution_date)
+            if c_date:
+                contribution_received = (today - c_date).days <= period_months * 31
+
     return SubscriptionResponse(
         id=sub.id,
         name=sub.name,
@@ -283,6 +333,10 @@ def _build_response(sub: SubscriptionModel, charges: list[tuple[str, float]]) ->
         is_stale=is_stale,
         price_change_from=price_from,
         price_change_to=price_to,
+        contribution_pattern=sub.contribution_pattern,
+        last_contribution_date=last_contribution_date,
+        last_contribution_amount=last_contribution_amount,
+        contribution_received_this_period=contribution_received,
     )
 
 
@@ -316,7 +370,8 @@ async def get_subscriptions(
     out = []
     for sub in subs:
         charges = await _load_charges(db, current_user.id, sub.merchant_pattern)
-        out.append(_build_response(sub, charges))
+        contributions = await _load_contributions(db, current_user.id, sub.contribution_pattern)
+        out.append(_build_response(sub, charges, contributions))
     return out
 
 
@@ -498,13 +553,15 @@ async def create_subscription(
         note=data.note,
         my_percentage=data.my_percentage if data.my_percentage is not None else 100,
         my_amount_override=data.my_amount_override,
+        contribution_pattern=(data.contribution_pattern or "").lower().strip() or None,
     )
     db.add(sub)
     await db.commit()
     await db.refresh(sub)
 
     charges = await _load_charges(db, current_user.id, sub.merchant_pattern)
-    return _build_response(sub, charges)
+    contributions = await _load_contributions(db, current_user.id, sub.contribution_pattern)
+    return _build_response(sub, charges, contributions)
 
 
 @router.patch("/{sub_id}", response_model=SubscriptionResponse)
@@ -529,6 +586,8 @@ async def update_subscription(
     updates = data.model_dump(exclude_unset=True)
     if "merchant_pattern" in updates and updates["merchant_pattern"]:
         updates["merchant_pattern"] = updates["merchant_pattern"].lower().strip()
+    if "contribution_pattern" in updates:
+        updates["contribution_pattern"] = (updates["contribution_pattern"] or "").lower().strip() or None
     for field, value in updates.items():
         setattr(sub, field, value)
 
@@ -536,7 +595,8 @@ async def update_subscription(
     await db.refresh(sub)
 
     charges = await _load_charges(db, current_user.id, sub.merchant_pattern)
-    return _build_response(sub, charges)
+    contributions = await _load_contributions(db, current_user.id, sub.contribution_pattern)
+    return _build_response(sub, charges, contributions)
 
 
 @router.delete("/{sub_id}")

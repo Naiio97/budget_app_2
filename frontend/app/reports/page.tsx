@@ -57,10 +57,12 @@ const formatMonth = (monthStr: string) => {
 
 export default function ReportsPage() {
     const [months, setMonths] = useState(6);
+    // false = jen moje podíly (rozdělené výdaje + bez vypořádání), true = plné částky z výpisu
+    const [fullAmounts, setFullAmounts] = useState(false);
 
     const { data: report, isLoading: loading, error } = useQuery<MonthlyReport>({
-        queryKey: queryKeys.monthlyReport(months),
-        queryFn: () => apiFetch(`/dashboard/monthly-report?months=${months}`).then(r => r.json()),
+        queryKey: [...queryKeys.monthlyReport(months), fullAmounts],
+        queryFn: () => apiFetch(`/dashboard/monthly-report?months=${months}&full_amounts=${fullAmounts}`).then(r => r.json()),
     });
 
     const { data: categoriesData = [] } = useQuery<Category[]>({
@@ -175,16 +177,29 @@ export default function ReportsPage() {
                         <h1>Přehledy</h1>
                         <div className="sub">Trendy a srovnání měsíců</div>
                     </div>
-                    <div className="seg">
-                        {[3, 6, 12].map(m => (
-                            <div
-                                key={m}
-                                className={`seg-item ${months === m ? 'active' : ''}`}
-                                onClick={() => setMonths(m)}
-                            >
-                                {m}M
-                            </div>
-                        ))}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <div className="seg" title="Moje podíly: rozdělené výdaje jen mojí částí, vypořádání mimo příjmy. Plné částky: co reálně odešlo/přišlo na účtu.">
+                            {([[false, 'Moje podíly'], [true, 'Plné částky']] as [boolean, string][]).map(([val, label]) => (
+                                <div
+                                    key={label}
+                                    className={`seg-item ${fullAmounts === val ? 'active' : ''}`}
+                                    onClick={() => setFullAmounts(val)}
+                                >
+                                    {label}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="seg">
+                            {[3, 6, 12].map(m => (
+                                <div
+                                    key={m}
+                                    className={`seg-item ${months === m ? 'active' : ''}`}
+                                    onClick={() => setMonths(m)}
+                                >
+                                    {m}M
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 

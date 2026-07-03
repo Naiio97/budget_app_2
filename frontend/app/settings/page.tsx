@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
@@ -327,6 +327,148 @@ function MyAccountPatterns() {
     );
 }
 
+// ── Share rules (auto-split of shared expenses) ───────────────
+function ShareRulesSettings() {
+    const [rules, setRules] = useState<ShareRule[]>([]);
+    const [pattern, setPattern] = useState('');
+    const [percentage, setPercentage] = useState('50');
+    const [counterparty, setCounterparty] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [lastResult, setLastResult] = useState<string | null>(null);
+
+    const load = async () => {
+        try { setRules(await getShareRules()); } catch (err) { console.error(err); }
+    };
+    useEffect(() => { load(); }, []);
+
+    const add = async () => {
+        const p = pattern.toLowerCase().trim();
+        const pct = parseFloat(percentage.replace(',', '.'));
+        if (p.length < 3 || !(pct >= 0 && pct <= 100)) return;
+        setSaving(true);
+        try {
+            const result = await createShareRule({
+                pattern: p,
+                my_percentage: pct,
+                counterparty: counterparty.trim() || null,
+                apply_retroactively: true,
+            });
+            setLastResult(`Pravidlo uloženo, zpětně rozděleno ${result.applied_to} transakcí.`);
+            setPattern('');
+            setCounterparty('');
+            await load();
+        } catch (err) {
+            setLastResult(err instanceof Error ? err.message : 'Uložení selhalo');
+        } finally { setSaving(false); }
+    };
+
+    const remove = async (id: number) => {
+        try { await deleteShareRule(id); await load(); } catch (err) { console.error(err); }
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                Výdaje odpovídající vzoru se automaticky rozdělí — do rozpočtu jde jen tvoje
+                procento, zbytek je pohledávka (viz stránka Vypořádání). Např. „nájem&ldquo; → 50 %.
+            </div>
+            {rules.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {rules.map(r => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                            <span className="chip" style={{ flexShrink: 0 }}>{r.pattern}</span>
+                            <span style={{ color: 'var(--text-2)' }}>
+                                moje {r.my_amount_override != null ? `${r.my_amount_override} Kč` : `${r.my_percentage} %`}
+                                {r.counterparty ? ` · dluží ${r.counterparty}` : ''}
+                                {` · ${r.match_count}×`}
+                            </span>
+                            <button onClick={() => remove(r.id)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)' }}>✕</button>
+                        </div>
+                    ))}
+                </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input className="input" placeholder="Vzor (protistrana, popis, IBAN…)" value={pattern}
+                    onChange={e => setPattern(e.target.value)} style={{ flex: '2 1 160px' }} />
+                <input className="input" type="number" min={0} max={100} placeholder="Moje %" value={percentage}
+                    onChange={e => setPercentage(e.target.value)} style={{ flex: '0 1 90px' }} />
+                <input className="input" placeholder="Kdo dluží (Žena…)" value={counterparty}
+                    onChange={e => setCounterparty(e.target.value)} style={{ flex: '1 1 120px' }} />
+                <button className="btn btn-primary" onClick={add} disabled={saving || pattern.trim().length < 3}>
+                    {saving ? 'Ukládám...' : Icons.action.add}
+                </button>
+            </div>
+            {lastResult && <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{lastResult}</div>}
+        </div>
+    );
+}
+
+// ── Transfer-excluded accounts (credit card etc.) ─────────────
+function TransferExcludedAccounts() {
+    const [accounts, setAccounts] = useState<string[]>([]);
+    const [newAccount, setNewAccount] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                const res = await apiFetch(`/settings/transfer-excluded-accounts`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setAccounts(data.accounts || []);
+                }
+            } catch (err) { console.error(err); }
+        })();
+    }, []);
+
+    const addAccount = () => {
+        const t = newAccount.trim();
+        if (!t || accounts.includes(t)) return;
+        setAccounts([...accounts, t]);
+        setNewAccount('');
+    };
+
+    const removeAccount = (a: string) => setAccounts(accounts.filter(x => x !== a));
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const res = await apiFetch(`/settings/transfer-excluded-accounts`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accounts }),
+            });
+            if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2000); }
+        } finally { setSaving(false); }
+    };
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                Vlastní účty, na které se platba počítá jako <b>běžný výdaj</b>, ne interní převod
+                (typicky kreditka — splátka je reálný výdaj). Zadej číslo účtu nebo IBAN.
+            </div>
+            {accounts.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {accounts.map(a => (
+                        <span key={a} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            {a}
+                            <button onClick={() => removeAccount(a)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0 }}>✕</button>
+                        </span>
+                    ))}
+                </div>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+                <input className="input" placeholder="Např. 1028717374/0800 nebo IBAN..." value={newAccount} onChange={e => setNewAccount(e.target.value)} onKeyDown={e => e.key === 'Enter' && addAccount()} style={{ flex: 1 }} />
+                <button className="btn" onClick={addAccount} disabled={!newAccount.trim()}>{Icons.action.add}</button>
+            </div>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'Ukládám...' : saved ? '✓ Uloženo' : 'Uložit vyloučené účty'}
+            </button>
+        </div>
+    );
+}
+
 // ── Main settings page ────────────────────────────────────────
 type Tab = 'accounts' | 'categories' | 'advanced';
 
@@ -556,7 +698,7 @@ export default function SettingsPage() {
             const res = await apiFetch(`/sync/detect-transfers`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                alert(`Detekce hotová.\nInterní převody: ${data.marked_internal_transfers ?? 0}\nMoje účty: ${data.marked_my_account_transfers ?? 0}\nRodinné: ${data.marked_family_transfers ?? 0}`);
+                alert(`Detekce hotová.\nInterní převody: ${data.marked_internal_transfers ?? 0}\nMoje účty: ${data.marked_my_account_transfers ?? 0}\nRodinné: ${data.marked_family_transfers ?? 0}\nVráceno na běžný výdaj (vyloučené účty): ${data.unmarked_excluded_accounts ?? 0}`);
             }
         } finally { setDetecting(false); }
     };
@@ -966,6 +1108,14 @@ export default function SettingsPage() {
                                     <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
                                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{Icons.section.myAccounts} Moje další účty (spořicí, atd.)</div>
                                         <MyAccountPatterns />
+                                    </div>
+                                    <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>💳 Účty vyloučené z interních převodů (kreditka…)</div>
+                                        <TransferExcludedAccounts />
+                                    </div>
+                                    <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>👫 Pravidla dělení společných nákladů</div>
+                                        <ShareRulesSettings />
                                     </div>
                                     <button className="btn" onClick={handleDetectTransfers} disabled={detecting}>
                                         {detecting ? 'Detekuji...' : `${Icons.action.search} Detekovat převody nyní`}
