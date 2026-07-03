@@ -255,6 +255,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
         last_charged_date: daysFromNow(-26), last_amount: 649, charges_count: 13,
         next_due_date: daysFromNow(4), renewing_soon: true, is_stale: false,
         price_change_from: null, price_change_to: null,
+        contribution_pattern: null, last_contribution_date: null, last_contribution_amount: null, contribution_received_this_period: null,
     },
     {
         id: 2, name: 'Netflix', merchant_pattern: 'netflix', amount: 319, currency: 'CZK',
@@ -264,6 +265,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
         last_charged_date: daysFromNow(-12), last_amount: 319, charges_count: 23,
         next_due_date: daysFromNow(18), renewing_soon: false, is_stale: false,
         price_change_from: 269, price_change_to: 319,
+        contribution_pattern: null, last_contribution_date: null, last_contribution_amount: null, contribution_received_this_period: null,
     },
     {
         id: 3, name: 'Spotify', merchant_pattern: 'spotify', amount: 169, currency: 'CZK',
@@ -273,6 +275,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
         last_charged_date: daysFromNow(-8), last_amount: 169, charges_count: 29,
         next_due_date: daysFromNow(22), renewing_soon: false, is_stale: false,
         price_change_from: null, price_change_to: null,
+        contribution_pattern: 'sestra', last_contribution_date: daysFromNow(-10), last_contribution_amount: 85, contribution_received_this_period: true,
     },
     {
         id: 4, name: 'iCloud+', merchant_pattern: 'apple.com/bill', amount: 990, currency: 'CZK',
@@ -282,6 +285,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
         last_charged_date: daysFromNow(-140), last_amount: 990, charges_count: 2,
         next_due_date: daysFromNow(225), renewing_soon: false, is_stale: false,
         price_change_from: null, price_change_to: null,
+        contribution_pattern: null, last_contribution_date: null, last_contribution_amount: null, contribution_received_this_period: null,
     },
     {
         id: 5, name: 'HBO Max', merchant_pattern: 'hbo', amount: 199, currency: 'CZK',
@@ -291,6 +295,7 @@ export const MOCK_SUBSCRIPTIONS: Subscription[] = [
         last_charged_date: daysFromNow(-95), last_amount: 199, charges_count: 16,
         next_due_date: daysFromNow(-65), renewing_soon: false, is_stale: true,
         price_change_from: null, price_change_to: null,
+        contribution_pattern: null, last_contribution_date: null, last_contribution_amount: null, contribution_received_this_period: null,
     },
 ];
 
@@ -567,6 +572,22 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         return { account: MOCK_ACCOUNTS[0], transactions: MOCK_TRANSACTIONS.items, total: 20, pages: 1, current_page: 1 };
     }
     if (path.startsWith('/accounts/')) return MOCK_ACCOUNTS;
+    if (path.startsWith('/transactions/settlement-summary')) return {
+        total_owed: 45000, total_received: 30000, balance: 15000,
+        counterparties: [{ name: 'Žena', owed: 45000, received: 30000, balance: 15000 }],
+        months: [
+            { month: '2026-05', owed: 15000, received: 15000 },
+            { month: '2026-06', owed: 15000, received: 15000 },
+            { month: '2026-07', owed: 15000, received: 0 },
+        ],
+        expenses: [
+            { id: 'demo-split-1', date: '2026-07-01', description: 'Nájem', amount: -30000, currency: 'CZK', category: 'Utilities', my_share_amount: 15000, their_amount: 15000, note: 'nájem', counterparty: 'Žena' },
+        ],
+        settlements: [
+            { id: 'demo-settle-1', date: '2026-06-15', description: 'Převod', amount: 15000, currency: 'CZK', category: 'Other', my_share_amount: null, their_amount: null, note: 'vratka za červen', counterparty: 'Žena' },
+        ],
+        currency: 'CZK',
+    };
     if (path.startsWith('/transactions/')) {
         // Detail endpoint hits /transactions/{id}; the list is /transactions/
         // or /transactions/?... — anything after the trailing slash is the id.
@@ -590,6 +611,10 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/settings/category-rules')) return MOCK_CATEGORY_RULES;
     if (path.startsWith('/settings/family-accounts')) return MOCK_FAMILY_ACCOUNTS;
     if (path.startsWith('/settings/my-account-patterns')) return MOCK_MY_ACCOUNT_PATTERNS;
+    if (path.startsWith('/settings/transfer-excluded-accounts')) return { accounts: ['1234567890/0800'] };
+    if (path.startsWith('/settings/share-rules')) return {
+        rules: [{ id: 1, pattern: 'nájem', my_percentage: 50, my_amount_override: null, counterparty: 'Žena', note: 'nájem', is_active: true, match_count: 6 }],
+    };
     if (path.startsWith('/categories/')) return MOCK_CATEGORIES;
     if (path.startsWith('/recurring-expenses')) return MOCK_RECURRING_EXPENSES;
     if (path.startsWith('/monthly-budget/')) return MOCK_MONTHLY_BUDGET;

@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Optional
@@ -24,6 +25,10 @@ class Transaction(BaseModel):
     account_name: Optional[str] = None
     transaction_type: str = "normal"  # "normal", "internal_transfer", "family_transfer"
     is_excluded: bool = False
+    my_share_amount: Optional[float] = None  # my part of a shared expense; aggregations use it instead of amount
+    settlement_flag: bool = False  # incoming settlement transfer (repayment) — excluded from income
+    settlement_note: Optional[str] = None
+    share_counterparty: Optional[str] = None  # who owes / repaid ("Žena", "Sestra"…)
     creditor_name: Optional[str] = None  # From raw_json creditorName (or contacts fallback)
     debtor_name: Optional[str] = None  # From raw_json debtorName (or contacts fallback)
     creditor_iban: Optional[str] = None  # Normalized IBAN, used for inline rename in UI
@@ -162,6 +167,10 @@ async def get_transactions(
             account_name=account_name,
             transaction_type=tx.transaction_type or "normal",
             is_excluded=tx.is_excluded or False,
+            my_share_amount=tx.my_share_amount,
+            settlement_flag=tx.settlement_flag or False,
+            settlement_note=tx.settlement_note,
+            share_counterparty=tx.share_counterparty,
             creditor_name=creditor_name,
             debtor_name=debtor_name,
             creditor_iban=creditor_iban,
@@ -176,6 +185,108 @@ async def get_transactions(
         size=limit,
         pages=pages
     )
+
+
+@router.get("/settlement-summary")
+async def get_settlement_summary(
+    months: int = Query(12, ge=1, le=36),
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Saldo vypořádání (VYLEPSENI.md 3.1): kolik mi protistrany dluží
+    (jejich podíly na rozdělených výdajích) vs. kolik už poslaly (vypořádání).
+    """
+    visible_accounts = select(AccountModel.id).where(
+        AccountModel.user_id == current_user.id,
+        AccountModel.is_visible == True,
+    )
+    result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "bank",
+            TransactionModel.account_id.in_(visible_accounts),
+            or_(
+                and_(TransactionModel.my_share_amount.isnot(None), TransactionModel.amount < 0),
+                and_(TransactionModel.settlement_flag == True, TransactionModel.amount > 0),  # noqa: E712
+            ),
+        ).order_by(TransactionModel.date.desc())
+    )
+    txs = result.scalars().all()
+
+    def tx_snippet(tx, their_amount=None):
+        return {
+            "id": tx.id,
+            "date": tx.date,
+            "description": tx.description,
+            "amount": tx.amount,
+            "currency": tx.currency,
+            "category": tx.category,
+            "my_share_amount": tx.my_share_amount,
+            "their_amount": their_amount,
+            "note": tx.settlement_note,
+            "counterparty": tx.share_counterparty,
+        }
+
+    total_owed = 0.0
+    total_received = 0.0
+    by_month: dict[str, dict] = {}
+    by_cp: dict[str, dict] = {}
+    expenses = []
+    settlements = []
+
+    for tx in txs:
+        month = (tx.date or "")[:7]
+        cp = tx.share_counterparty or ""
+        month_row = by_month.setdefault(month, {"owed": 0.0, "received": 0.0})
+        cp_row = by_cp.setdefault(cp, {"owed": 0.0, "received": 0.0})
+
+        if tx.amount < 0 and tx.my_share_amount is not None:
+            their = max(abs(tx.amount) - min(tx.my_share_amount, abs(tx.amount)), 0.0)
+            total_owed += their
+            month_row["owed"] += their
+            cp_row["owed"] += their
+            if len(expenses) < 30:
+                expenses.append(tx_snippet(tx, their_amount=round(their, 2)))
+        else:
+            total_received += tx.amount
+            month_row["received"] += tx.amount
+            cp_row["received"] += tx.amount
+            if len(settlements) < 30:
+                settlements.append(tx_snippet(tx))
+
+    # Souvislá řada posledních N měsíců (i prázdné), nejstarší první — pro graf
+    today = datetime.now()
+    month_series = []
+    for i in range(months - 1, -1, -1):
+        y, m = today.year, today.month - i
+        while m <= 0:
+            y, m = y - 1, m + 12
+        key = f"{y:04d}-{m:02d}"
+        row = by_month.get(key, {"owed": 0.0, "received": 0.0})
+        month_series.append({
+            "month": key,
+            "owed": round(row["owed"], 2),
+            "received": round(row["received"], 2),
+        })
+
+    return {
+        "total_owed": round(total_owed, 2),
+        "total_received": round(total_received, 2),
+        "balance": round(total_owed - total_received, 2),
+        "counterparties": [
+            {
+                "name": name or None,
+                "owed": round(row["owed"], 2),
+                "received": round(row["received"], 2),
+                "balance": round(row["owed"] - row["received"], 2),
+            }
+            for name, row in sorted(by_cp.items(), key=lambda kv: kv[1]["owed"], reverse=True)
+        ],
+        "months": month_series,
+        "expenses": expenses,
+        "settlements": settlements,
+        "currency": "CZK",
+    }
 
 
 def categorize_transaction(tx: dict) -> str:
@@ -265,8 +376,14 @@ async def update_transaction_category(
         # Reset to normal if changing away from transfer
         tx.transaction_type = "normal"
     
-    # Extract merchant name for learning
-    if data.learn and tx.description:
+    # Extract merchant name for learning.
+    # NEVER learn rules for transfer categories: transfers are detected reliably
+    # by IBAN matching, while a name pattern (typically the user's OWN name,
+    # which every incoming payment without a message gets as description) would
+    # retroactively exclude unrelated payments — this exact bug once hid the
+    # credit-card repayments and sister's payments (rule "bureš nicolas").
+    learnable = data.category not in excluded_categories
+    if data.learn and learnable and tx.description:
         # Prefer creditorName from raw_json — it's cleaner than the full description
         # (e.g. "Lidl" instead of "Nákup 5465LIDL CZ S.R.O BRNO ref 12345678")
         pattern = None
@@ -339,7 +456,7 @@ async def update_transaction_category(
         "old_category": old_category,
         "new_category": data.category,
         "is_excluded": tx.is_excluded,
-        "rule_created": data.learn
+        "rule_created": data.learn and learnable
     }
 
 
@@ -419,6 +536,10 @@ async def get_transaction_detail(
         "account_type": tx.account_type,
         "transaction_type": tx.transaction_type,
         "is_excluded": tx.is_excluded,
+        "my_share_amount": tx.my_share_amount,
+        "settlement_flag": tx.settlement_flag or False,
+        "settlement_note": tx.settlement_note,
+        "share_counterparty": tx.share_counterparty,
         "creditor_name": creditor_name,
         "debtor_name": debtor_name,
         "creditor_iban": creditor_iban,
@@ -500,6 +621,82 @@ async def update_transaction_type(
         "old_type": old_type,
         "new_type": data.transaction_type,
         "is_excluded": tx.is_excluded
+    }
+
+
+class ShareUpdate(BaseModel):
+    """Full desired state of the shared-cost fields — not a partial patch.
+
+    - `my_share_amount` set on an EXPENSE = only this part counts as my spending
+      (the rest is owed by the counterparty). None clears the split.
+    - `settlement_flag` set on an INCOME = the transfer is a settlement (repayment),
+      not real income, so it stays out of income aggregations.
+    - `share_counterparty` = who owes / repaid ("Žena", "Sestra"…), optional.
+    """
+    my_share_amount: Optional[float] = None
+    settlement_flag: bool = False
+    settlement_note: Optional[str] = None
+    share_counterparty: Optional[str] = None
+
+
+@router.patch("/{transaction_id}/share")
+async def update_transaction_share(
+    transaction_id: str,
+    data: ShareUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Set shared-cost split / settlement flag on a transaction (VYLEPSENI.md 3.1)"""
+
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
+    )
+    tx = tx_result.scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if data.my_share_amount is not None:
+        if tx.amount >= 0:
+            raise HTTPException(status_code=400, detail="my_share_amount can only be set on an expense")
+        if data.my_share_amount < 0 or data.my_share_amount > abs(tx.amount):
+            raise HTTPException(
+                status_code=400,
+                detail=f"my_share_amount must be between 0 and {abs(tx.amount)}",
+            )
+    if data.settlement_flag and tx.amount <= 0:
+        raise HTTPException(status_code=400, detail="settlement_flag can only be set on an incoming transaction")
+
+    tx.my_share_amount = data.my_share_amount
+    tx.settlement_flag = data.settlement_flag
+    note = (data.settlement_note or "").strip()
+    tx.settlement_note = note or None
+    counterparty = (data.share_counterparty or "").strip()
+    tx.share_counterparty = counterparty or None
+
+    # An incoming transfer auto-marked as family_transfer (wife's IBAN/pattern)
+    # that the user marks as settlement gets normalized back to a normal
+    # transaction — settlement_flag alone keeps it out of income, and the
+    # settlement summary can count it as "received".
+    if data.settlement_flag and tx.transaction_type != "normal":
+        tx.transaction_type = "normal"
+        tx.is_excluded = False
+        if tx.category in ("Internal Transfer", "Family Transfer"):
+            tx.category = "Other"
+
+    await db.commit()
+
+    return {
+        "id": transaction_id,
+        "my_share_amount": tx.my_share_amount,
+        "settlement_flag": tx.settlement_flag,
+        "settlement_note": tx.settlement_note,
+        "share_counterparty": tx.share_counterparty,
+        "transaction_type": tx.transaction_type,
+        "is_excluded": tx.is_excluded,
+        "category": tx.category,
     }
 
 

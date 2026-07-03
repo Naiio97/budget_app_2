@@ -14,6 +14,7 @@ export const Icons = {
         investments: '📈',
         loans: '🏧',
         subscriptions: '🔁',
+        settlement: '🤝',
         settings: '⚙️',
         more: '☰',
     },

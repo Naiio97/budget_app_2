@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Transaction, TransactionDetail, getTransactionDetail, saveContact, apiFetch } from '@/lib/api';
+import { Transaction, TransactionDetail, TransactionShare, getTransactionDetail, saveContact, updateTransactionShare, createShareRule, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 
 interface TransactionListProps {
@@ -37,6 +37,13 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [namingIban, setNamingIban] = useState<string | null>(null);
     const [nameInput, setNameInput] = useState('');
     const [savingContact, setSavingContact] = useState(false);
+    // Shared cost / settlement (VYLEPSENI.md 3.1)
+    const [shareEditing, setShareEditing] = useState(false);
+    const [shareInput, setShareInput] = useState('');
+    const [shareNoteInput, setShareNoteInput] = useState('');
+    const [shareCounterpartyInput, setShareCounterpartyInput] = useState('');
+    const [shareLearnRule, setShareLearnRule] = useState(false);
+    const [savingShare, setSavingShare] = useState(false);
 
     // Build icon map from categories
     useEffect(() => {
@@ -69,7 +76,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     // Fetch rich detail when modal opens
     useEffect(() => {
-        if (!selectedTx) { setTxDetail(null); setModalPickingCategory(false); setNamingIban(null); setNameInput(''); return; }
+        if (!selectedTx) { setTxDetail(null); setModalPickingCategory(false); setNamingIban(null); setNameInput(''); setShareEditing(false); setShareInput(''); setShareNoteInput(''); setShareCounterpartyInput(''); setShareLearnRule(false); return; }
         setDetailLoading(true);
         getTransactionDetail(selectedTx.id)
             .then(setTxDetail)
@@ -113,10 +120,12 @@ export default function TransactionList({ transactions: initialTransactions, sho
     };
 
     const getDailySummary = (txs: Transaction[]) => {
-        const income = txs.filter(t => !t.is_excluded && t.transaction_type === 'normal' && t.amount > 0)
+        // Mirrors backend aggregation: settlements from wife don't count as income,
+        // shared expenses count only my part (my_share_amount).
+        const income = txs.filter(t => !t.is_excluded && t.transaction_type === 'normal' && t.amount > 0 && !t.settlement_flag)
             .reduce((s, t) => s + t.amount, 0);
         const expense = txs.filter(t => !t.is_excluded && t.transaction_type === 'normal' && t.amount < 0)
-            .reduce((s, t) => s + t.amount, 0);
+            .reduce((s, t) => s + (t.my_share_amount != null ? -Math.min(t.my_share_amount, Math.abs(t.amount)) : t.amount), 0);
         return { income, expense };
     };
 
@@ -180,6 +189,42 @@ export default function TransactionList({ transactions: initialTransactions, sho
             console.error('Failed to save contact:', err);
         } finally {
             setSavingContact(false);
+        }
+    };
+
+    const handleSaveShare = async (tx: Transaction, share: TransactionShare, learnRule = false) => {
+        setSavingShare(true);
+        try {
+            const saved = await updateTransactionShare(tx.id, share);
+            // Propagate locally (same pattern as contacts) so list + detail stay in sync without refetch.
+            setTransactions(prev => prev.map(t => t.id === tx.id ? { ...t, ...saved } : t));
+            setTxDetail(prev => prev && { ...prev, ...saved });
+            setShareEditing(false);
+
+            // "Dělit takhle i příště" — learn a share rule from this split. Pattern
+            // anchors on the counterparty name (stable), % derived from this split.
+            if (learnRule && share.my_share_amount != null && tx.amount < 0) {
+                const pattern = (tx.creditor_name || tx.description || '').toLowerCase().trim();
+                if (pattern.length >= 3) {
+                    const pct = Math.round((share.my_share_amount / Math.abs(tx.amount)) * 10000) / 100;
+                    try {
+                        await createShareRule({
+                            pattern,
+                            my_percentage: pct,
+                            counterparty: share.share_counterparty || null,
+                            note: share.settlement_note || null,
+                            apply_retroactively: true,
+                        });
+                    } catch (err) {
+                        // duplicate rule etc. — the split itself is already saved
+                        console.error('Failed to create share rule:', err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to update transaction share:', err);
+        } finally {
+            setSavingShare(false);
         }
     };
 
@@ -250,6 +295,11 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     }}>
                         {modalTx.amount >= 0 ? '+' : ''}{formatCurrency(modalTx.amount, modalTx.currency)}
                     </div>
+                    {modalTx.my_share_amount != null && modalTx.amount < 0 && (
+                        <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4 }}>
+                            z toho moje část {formatCurrency(-modalTx.my_share_amount, modalTx.currency)}
+                        </div>
+                    )}
                 </div>
 
                 {/* ── Detail rows ── */}
@@ -390,6 +440,157 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             </div>
                         )}
 
+                        {/* ── Společný náklad / vypořádání (VYLEPSENI.md 3.1) ── */}
+                        {modalTx.account_type === 'bank' && modalTx.transaction_type === 'normal' && !modalTx.is_excluded && modalTx.amount < 0 && (
+                            <div className="label-row">
+                                <dt>Společný náklad</dt>
+                                <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: 0 }}>
+                                    {!shareEditing ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                            {modalTx.my_share_amount != null ? (
+                                                <span className="chip chip-accent">
+                                                    👫 Moje část {formatCurrency(modalTx.my_share_amount, modalTx.currency)}
+                                                    {modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Celý výdaj je můj</span>
+                                            )}
+                                            <button className="btn btn-sm"
+                                                onClick={() => {
+                                                    setShareEditing(true);
+                                                    setShareInput(String(modalTx.my_share_amount ?? Math.round(Math.abs(modalTx.amount) / 2 * 100) / 100));
+                                                    setShareNoteInput(modalTx.settlement_note || '');
+                                                    setShareCounterpartyInput(modalTx.share_counterparty || '');
+                                                    setShareLearnRule(false);
+                                                }}>
+                                                {modalTx.my_share_amount != null ? `${Icons.action.edit} Upravit` : 'Rozdělit náklad'}
+                                            </button>
+                                            {modalTx.my_share_amount != null && (
+                                                <button className="btn btn-sm" disabled={savingShare}
+                                                    onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
+                                                    Zrušit rozdělení
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }} onClick={e => e.stopPropagation()}>
+                                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                                {[25, 50, 75].map(pct => (
+                                                    <button key={pct} className="chip" style={{ cursor: 'pointer', border: 'none' }}
+                                                        onClick={() => setShareInput(String(Math.round(Math.abs(modalTx.amount) * pct / 100 * 100) / 100))}>
+                                                        {pct} %
+                                                    </button>
+                                                ))}
+                                                <input type="number" inputMode="decimal" min={0} max={Math.abs(modalTx.amount)} step="0.01"
+                                                    value={shareInput} onChange={e => setShareInput(e.target.value)}
+                                                    style={{ width: 110, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none', textAlign: 'right' }}
+                                                />
+                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 400 }}>z {formatCurrency(Math.abs(modalTx.amount), modalTx.currency)}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <input value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
+                                                    placeholder="Kdo dluží zbytek (např. Žena)" list="share-counterparties"
+                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                />
+                                                <datalist id="share-counterparties">
+                                                    <option value="Žena" />
+                                                    <option value="Sestra" />
+                                                </datalist>
+                                                <input value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
+                                                    placeholder="Poznámka (nájem…)"
+                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                />
+                                            </div>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: 'var(--text-2)', justifyContent: 'flex-end', cursor: 'pointer' }}>
+                                                <input type="checkbox" checked={shareLearnRule} onChange={e => setShareLearnRule(e.target.checked)} />
+                                                Dělit takhle i příště (vytvořit pravidlo)
+                                            </label>
+                                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                                <button className="btn btn-primary btn-sm"
+                                                    disabled={savingShare || !(parseFloat(shareInput.replace(',', '.')) >= 0 && parseFloat(shareInput.replace(',', '.')) <= Math.abs(modalTx.amount))}
+                                                    onClick={() => handleSaveShare(modalTx, {
+                                                        my_share_amount: parseFloat(shareInput.replace(',', '.')),
+                                                        settlement_flag: false,
+                                                        settlement_note: shareNoteInput.trim() || null,
+                                                        share_counterparty: shareCounterpartyInput.trim() || null,
+                                                    }, shareLearnRule)}>
+                                                    {savingShare ? '…' : 'Uložit'}
+                                                </button>
+                                                <button className="btn btn-sm" onClick={() => setShareEditing(false)}>✕</button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </dd>
+                            </div>
+                        )}
+                        {modalTx.account_type === 'bank' && modalTx.amount > 0
+                            && ((modalTx.transaction_type === 'normal' && !modalTx.is_excluded) || modalTx.transaction_type === 'family_transfer') && (
+                            <div className="label-row">
+                                <dt>Vypořádání</dt>
+                                <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: 0 }}>
+                                    {modalTx.settlement_flag ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                                <span className="chip chip-accent">
+                                                    🤝 Vypořádání{modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
+                                                </span>
+                                                <button className="btn btn-sm" disabled={savingShare}
+                                                    onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
+                                                    Zrušit
+                                                </button>
+                                            </div>
+                                            {modalTx.settlement_note && (
+                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 400 }}>{modalTx.settlement_note}</span>
+                                            )}
+                                        </div>
+                                    ) : shareEditing ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }} onClick={e => e.stopPropagation()}>
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <input autoFocus value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
+                                                    placeholder="Od koho (např. Žena)" list="share-counterparties"
+                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                />
+                                                <datalist id="share-counterparties">
+                                                    <option value="Žena" />
+                                                    <option value="Sestra" />
+                                                </datalist>
+                                                <input value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: true, settlement_note: shareNoteInput.trim() || null, share_counterparty: shareCounterpartyInput.trim() || null });
+                                                        if (e.key === 'Escape') setShareEditing(false);
+                                                    }}
+                                                    placeholder="Poznámka (nájem + kreditka…)"
+                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                />
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                                <button className="btn btn-primary btn-sm" disabled={savingShare}
+                                                    onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: true, settlement_note: shareNoteInput.trim() || null, share_counterparty: shareCounterpartyInput.trim() || null })}>
+                                                    {savingShare ? '…' : 'Potvrdit'}
+                                                </button>
+                                                <button className="btn btn-sm" onClick={() => setShareEditing(false)}>✕</button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                                            {modalTx.transaction_type === 'family_transfer' && (
+                                                <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 500 }}>
+                                                    Vypadá jako vratka — označ ji a započítá se do salda vypořádání.
+                                                </span>
+                                            )}
+                                            <button className="btn btn-sm" onClick={() => {
+                                                setShareEditing(true);
+                                                setShareNoteInput('');
+                                                setShareCounterpartyInput(modalTx.transaction_type === 'family_transfer' ? 'Žena' : '');
+                                            }}>
+                                                🤝 Označit jako vypořádání
+                                            </button>
+                                        </div>
+                                    )}
+                                </dd>
+                            </div>
+                        )}
+
                         {/* Footer — badges + ID */}
                         <div style={{ padding: '10px var(--spacing-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -397,6 +598,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 {modalTx.transaction_type === 'internal_transfer' && <span className="chip">{Icons.category.internalTransfer} Interní převod</span>}
                                 {modalTx.transaction_type === 'family_transfer' && <span className="chip">{Icons.category.familyTransfer} Rodinný převod</span>}
                                 {modalTx.is_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
+                                {modalTx.settlement_flag && <span className="chip">🤝 Vypořádání — mimo příjmy</span>}
+                                {modalTx.my_share_amount != null && modalTx.amount < 0 && <span className="chip">👫 Společný náklad</span>}
                             </div>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{modalTx.id}</span>
                         </div>
@@ -441,7 +644,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     className="transaction-item animate-fade-in"
                                     onClick={() => setSelectedTx(tx)}
                                     style={{
-                                        opacity: isExcluded ? 0.55 : 1,
+                                        opacity: isExcluded || tx.settlement_flag ? 0.55 : 1,
                                         cursor: 'pointer',
                                     }}
                                 >
@@ -470,6 +673,12 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             </span>
                                             {showAccount && tx.account_name && (
                                                 <span className="tx-account-label">• {tx.account_name}</span>
+                                            )}
+                                            {tx.my_share_amount != null && tx.amount < 0 && (
+                                                <span className="tx-account-label">• 👫 moje {formatCurrency(tx.my_share_amount, tx.currency)}</span>
+                                            )}
+                                            {tx.settlement_flag && (
+                                                <span className="tx-account-label">• 🤝 vypořádání</span>
                                             )}
                                         </div>
                                     </div>

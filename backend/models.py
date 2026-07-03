@@ -62,6 +62,11 @@ class TransactionModel(Base):
     account_type = Column(String, nullable=False)  # "bank" or "investment"
     transaction_type = Column(String, default="normal")  # "normal", "internal_transfer", "family_transfer"
     is_excluded = Column(Boolean, default=False)  # True = excluded from income/expense calculations
+    # Shared costs & settlement (VYLEPSENI.md 3.1, light variant):
+    my_share_amount = Column(Float, nullable=True)  # my part of a shared expense (positive); aggregations count this instead of the full amount
+    settlement_flag = Column(Boolean, default=False)  # True = incoming settlement transfer — excluded from income
+    settlement_note = Column(String, nullable=True)  # e.g. "nájem + kreditka boty"
+    share_counterparty = Column(String, nullable=True)  # who owes / sent the settlement ("Žena", "Sestra"…); NULL = unspecified
     raw_json = Column(Text, nullable=True)  # Original API response
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -434,6 +439,31 @@ class SubscriptionModel(Base):
     # my_percentage, stejně jako u MonthlyExpenseModel.
     my_percentage = Column(Integer, nullable=True, default=100)
     my_amount_override = Column(Float, nullable=True)
+    # Pattern pro párování PŘÍCHOZÍCH příspěvků od ostatních (sestra posílá podíl
+    # za předplatné) — NULL = příspěvky nesledujeme.
+    contribution_pattern = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ShareRuleModel(Base):
+    """Pravidlo automatického dělení výdaje (VYLEPSENI.md 3.1 — auto-split).
+
+    Když nová transakce (výdaj) odpovídá patternu, sync jí rovnou nastaví
+    `my_share_amount` (procentem nebo pevnou částkou) — nájem/energie se tak
+    dělí samy. Aplikuje se jen při INSERTu nové transakce a při retroaktivním
+    založení pravidla; ruční hodnoty nikdy nepřepisuje.
+    """
+    __tablename__ = "share_rules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    pattern = Column(String, nullable=False)          # lowercase substring (popis / protistrana / IBAN)
+    my_percentage = Column(Float, nullable=True)      # 0-100; my_amount_override má přednost
+    my_amount_override = Column(Float, nullable=True)  # pevná moje část v měně transakce
+    counterparty = Column(String, nullable=True)      # kdo dluží zbytek ("Žena")
+    note = Column(String, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    match_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
