@@ -11,18 +11,19 @@ import {
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { getCategoryIcon as lineCategoryIcon } from '@/lib/category-icons';
 
 const CATEGORIES = [
-    { value: 'Food', label: `${Icons.category.food} Jídlo`, icon: Icons.category.food },
-    { value: 'Transport', label: `${Icons.category.transport} Doprava`, icon: Icons.category.transport },
-    { value: 'Utilities', label: `${Icons.category.utilities} Energie & Služby`, icon: Icons.category.utilities },
-    { value: 'Entertainment', label: `${Icons.category.entertainment} Zábava`, icon: Icons.category.entertainment },
-    { value: 'Shopping', label: `${Icons.category.shopping} Nákupy`, icon: Icons.category.shopping },
-    { value: 'Other', label: `${Icons.category.other} Ostatní`, icon: Icons.category.other },
+    { value: 'Food', label: 'Jídlo', icon: 'utensils' },
+    { value: 'Transport', label: 'Doprava', icon: 'car' },
+    { value: 'Utilities', label: 'Energie & Služby', icon: 'bulb' },
+    { value: 'Entertainment', label: 'Zábava', icon: 'film' },
+    { value: 'Shopping', label: 'Nákupy', icon: 'cart' },
+    { value: 'Other', label: 'Ostatní', icon: 'box' },
 ];
 
-function getCategoryIcon(category: string): string {
-    return CATEGORIES.find(c => c.value === category)?.icon || Icons.category.other;
+function getCategoryIcon(category: string, size = 15) {
+    return lineCategoryIcon(CATEGORIES.find(c => c.value === category)?.icon || 'box', size);
 }
 
 function progressColor(pct: number): string {
@@ -119,7 +120,7 @@ export default function BudgetsPage() {
                                     <CustomSelect
                                         value={newBudget.category}
                                         onChange={(val) => setNewBudget({ ...newBudget, category: val })}
-                                        options={CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => ({ value: cat.value, label: cat.label }))}
+                                        options={CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => ({ value: cat.value, label: cat.label, icon: lineCategoryIcon(cat.icon, 15) }))}
                                         placeholder="Vyberte kategorii..."
                                     />
                                 </div>

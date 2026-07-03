@@ -11,6 +11,7 @@ import { Transaction, getTransactions, getDashboard, apiFetch } from '@/lib/api'
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { getCategoryIcon } from '@/lib/category-icons';
 
 interface Category {
     id: number;
@@ -240,7 +241,7 @@ function TransactionsPageContent() {
                                 options={categoriesData.filter((c: Category) => c.is_active).map((cat: Category) => ({
                                     value: cat.name,
                                     label: cat.name,
-                                    icon: cat.icon,
+                                    icon: getCategoryIcon(cat.icon, 15),
                                 }))}
                                 value={selectedCategory}
                                 onChange={val => { setSelectedCategory(val); resetFilters(); }}

@@ -7,6 +7,7 @@ import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { getCategoryIcon } from '@/lib/category-icons';
 import { apiFetch } from '@/lib/api';
 
 interface Envelope {
@@ -273,7 +274,7 @@ export default function ManualAccountDetailPage() {
                 {/* 5. Nerozděleno */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>{Icons.category.other}</span>
+                        <span style={{ fontSize: '1.25rem' }}>{getCategoryIcon(Icons.category.other, 20)}</span>
                         <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Nerozděleno</div>
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: unallocated !== 0 ? 'var(--accent-primary)' : 'var(--text-tertiary)', marginTop: 'auto' }}>

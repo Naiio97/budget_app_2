@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch } from '@/lib/api';
+import { getCategoryIcon } from '@/lib/category-icons';
 
 interface CategoryChartProps {
     categories: Record<string, number>;
@@ -51,7 +52,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
     }, {} as Record<string, { color: string; icon: string }>);
 
     const getColor = (name: string) => meta[name]?.color || FALLBACK_COLORS[name] || '#6b7280';
-    const getIcon = (name: string) => meta[name]?.icon || FALLBACK_ICONS[name] || '📦';
+    const getIcon = (name: string) => getCategoryIcon(meta[name]?.icon || FALLBACK_ICONS[name] || '📦', 15);
 
     const fmt = (amount: number) =>
         new Intl.NumberFormat('cs-CZ', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);

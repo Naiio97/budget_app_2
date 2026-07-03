@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useSyncExternalStore } from 'react';
+import { ReactNode, useState, useRef, useEffect, useLayoutEffect, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
 interface Option {
     value: string;
     label: string;
-    icon?: string;
+    icon?: ReactNode;
 }
 
 interface CustomSelectProps {

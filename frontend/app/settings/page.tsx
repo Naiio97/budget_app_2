@@ -7,6 +7,8 @@ import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
+import { getCategoryIcon, categoryIconKey, CATEGORY_ICON_OPTIONS } from '@/lib/category-icons';
+import { NAV_PAGES, NavPlacement, setNavPlacement, useNavPlacements } from '@/lib/nav-preferences';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
@@ -18,7 +20,8 @@ const CATEGORY_PALETTE = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981', '#14b8a6',
     '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#6b7280', '#111827',
 ];
-const EMOJI_OPTIONS = ['🍔', '🚗', '💡', '🎬', '🛒', '💰', '📈', '💵', '🔄', '📦', '🏥', '🏠', '✈️', '🎮', '📱', '👕', '💄', '🐕', '🎁', '⚡'];
+// Nabídka ikon kategorií (čárové ikony, ukládá se klíč) — viz lib/category-icons.
+const ICON_OPTIONS = CATEGORY_ICON_OPTIONS.map(o => ({ value: o.value, label: o.label, icon: getCategoryIcon(o.value, 15) }));
 
 // ── Card helpers ──────────────────────────────────────────────
 // Crisp line icons for the settings redesign (the global Icons map is emoji).
@@ -54,7 +57,7 @@ function CategoryManager({ onCategoriesChange, showAdd, setShowAdd }: { onCatego
     const queryClient = useQueryClient();
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
-    const [newCategory, setNewCategory] = useState({ name: '', icon: '📦', color: CATEGORY_PALETTE[0], is_income: false });
+    const [newCategory, setNewCategory] = useState({ name: '', icon: 'box', color: CATEGORY_PALETTE[0], is_income: false });
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editData, setEditData] = useState({ name: '', icon: '', color: '', is_income: false });
 
@@ -74,7 +77,7 @@ function CategoryManager({ onCategoriesChange, showAdd, setShowAdd }: { onCatego
     const handleAdd = async () => {
         if (!newCategory.name.trim()) return;
         await apiFetch(`/categories/`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCategory) });
-        setNewCategory({ name: '', icon: '📦', color: CATEGORY_PALETTE[0], is_income: false });
+        setNewCategory({ name: '', icon: 'box', color: CATEGORY_PALETTE[0], is_income: false });
         setShowAdd(false);
         loadCategories();
         invalidate();
@@ -127,8 +130,8 @@ function CategoryManager({ onCategoriesChange, showAdd, setShowAdd }: { onCatego
                                     <CustomSelect
                                         value={editData.icon}
                                         onChange={(val) => setEditData({ ...editData, icon: val })}
-                                        style={{ width: 80 }}
-                                        options={EMOJI_OPTIONS.map(e => ({ value: e, label: e }))}
+                                        style={{ width: 150 }}
+                                        options={ICON_OPTIONS}
                                     />
                                     <input
                                         className="input"
@@ -146,11 +149,11 @@ function CategoryManager({ onCategoriesChange, showAdd, setShowAdd }: { onCatego
                         ) : (
                             <>
                                 <span className="set-cat-accent" style={{ background: cat.color }} />
-                                <span className="set-cat-emoji">{cat.icon}</span>
+                                <span className="set-cat-emoji">{getCategoryIcon(cat.icon, 17)}</span>
                                 <span className="set-cat-name">{cat.name}</span>
                                 <span className={`set-tag ${cat.is_income ? 'income' : ''}`}>{cat.is_income ? 'Příjem' : 'Výdaj'}</span>
                                 <div className="set-row-actions">
-                                    <button className="set-icon-btn" title="Upravit" onClick={() => { setEditingId(cat.id); setEditData({ name: cat.name, icon: cat.icon, color: cat.color, is_income: cat.is_income }); }}>{EditIcon}</button>
+                                    <button className="set-icon-btn" title="Upravit" onClick={() => { setEditingId(cat.id); setEditData({ name: cat.name, icon: categoryIconKey(cat.icon), color: cat.color, is_income: cat.is_income }); }}>{EditIcon}</button>
                                     <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDelete(cat.id)}>{TrashIcon}</button>
                                 </div>
                             </>
@@ -172,8 +175,8 @@ function CategoryManager({ onCategoriesChange, showAdd, setShowAdd }: { onCatego
                                 <CustomSelect
                                     value={newCategory.icon}
                                     onChange={(val) => setNewCategory({ ...newCategory, icon: val })}
-                                    style={{ width: 80 }}
-                                    options={EMOJI_OPTIONS.map(e => ({ value: e, label: e }))}
+                                    style={{ width: 150 }}
+                                    options={ICON_OPTIONS}
                                 />
                                 <input
                                     className="input"
@@ -470,7 +473,7 @@ function TransferExcludedAccounts() {
 }
 
 // ── Main settings page ────────────────────────────────────────
-type Tab = 'accounts' | 'categories' | 'advanced';
+type Tab = 'accounts' | 'categories' | 'menu' | 'advanced';
 
 export default function SettingsPage() {
     const queryClient = useQueryClient();
@@ -509,6 +512,7 @@ export default function SettingsPage() {
 
     // Sync
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+    const navPlacements = useNavPlacements();
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncError, setSyncError] = useState<string | null>(null);
     const [detecting, setDetecting] = useState(false);
@@ -763,7 +767,7 @@ export default function SettingsPage() {
 
                 {/* Tabs */}
                 <div className="seg" style={{ alignSelf: 'flex-start' }}>
-                    {([['accounts', 'Účty'], ['categories', 'Kategorie'], ['advanced', 'Pokročilé']] as [Tab, string][]).map(([val, label]) => (
+                    {([['accounts', 'Účty'], ['categories', 'Kategorie'], ['menu', 'Menu'], ['advanced', 'Pokročilé']] as [Tab, string][]).map(([val, label]) => (
                         <div key={val} className={`seg-item ${tab === val ? 'active' : ''}`} onClick={() => setTab(val)}>
                             {label}
                         </div>
@@ -993,7 +997,7 @@ export default function SettingsPage() {
                                 <CustomSelect
                                     value={newRuleCategory}
                                     onChange={setNewRuleCategory}
-                                    options={ruleCategories.filter(c => c.is_active).map(c => ({ value: c.name, label: c.name, icon: c.icon }))}
+                                    options={ruleCategories.filter(c => c.is_active).map(c => ({ value: c.name, label: c.name, icon: getCategoryIcon(c.icon, 15) }))}
                                 />
                             </div>
                             <button className="btn btn-primary" onClick={handleAddRule} disabled={savingRule || !newPattern.trim()}>
@@ -1145,6 +1149,44 @@ export default function SettingsPage() {
                             </SurfaceCard>
 
                         </div>
+                    </div>
+                )}
+
+                {/* TAB: MENU */}
+                {tab === 'menu' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                        <SurfaceCard title="Menu a navigace" sub="Vyber, které stránky chceš v hlavním menu">
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {NAV_PAGES.map(page => {
+                                    const locked = page.href === '/';
+                                    const placement = navPlacements[page.href];
+                                    return (
+                                        <div key={page.href} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '4px 0' }}>
+                                            <span style={{ fontSize: 14, fontWeight: 500 }}>{page.label}</span>
+                                            {locked ? (
+                                                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>vždy v menu</span>
+                                            ) : (
+                                                <div className="seg">
+                                                    {([['menu', 'Menu'], ['quick', 'Rychlé akce'], ['hidden', 'Skrýt']] as [NavPlacement, string][]).map(([val, label]) => (
+                                                        <button
+                                                            key={val}
+                                                            type="button"
+                                                            className={`seg-item ${placement === val ? 'active' : ''}`}
+                                                            onClick={() => setNavPlacement(page.href, val)}
+                                                        >
+                                                            {label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+                                    Na mobilu jsou první 4 položky menu ve spodní liště, zbytek v menu draweru. Skryté stránky zůstávají dostupné přes přímý odkaz.
+                                </div>
+                            </div>
+                        </SurfaceCard>
                     </div>
                 )}
             </div>

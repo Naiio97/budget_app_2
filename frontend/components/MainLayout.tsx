@@ -10,6 +10,7 @@ import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/l
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { getConsentStatus } from '@/lib/consent';
+import { NAV_PAGES, useNavPlacements } from '@/lib/nav-preferences';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { exitDemo, isDemoMode } from '@/lib/demo-mode';
@@ -64,30 +65,36 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         refetchInterval: 60_000,
     });
 
+    const NAV_EMOJI: Record<string, string> = {
+        '/': Icons.nav.dashboard,
+        '/transactions': Icons.nav.transactions,
+        '/rozpocet': Icons.nav.monthlyBudget,
+        '/budgets': Icons.nav.budgets,
+        '/reports': Icons.nav.reports,
+        '/investments': Icons.nav.investments,
+        '/loans': Icons.nav.loans,
+        '/subscriptions': Icons.nav.subscriptions,
+        '/vyporadani': Icons.nav.settlement,
+    };
+
+    // Rozmístění si uživatel volí v Nastavení → Pokročilé → Menu a navigace:
+    // stránka je v hlavním menu, v rychlých akcích, nebo skrytá úplně.
+    const placements = useNavPlacements();
+    const pages = NAV_PAGES.map(p => ({ ...p, icon: NAV_EMOJI[p.href] }));
+    const menuPages = pages.filter(p => placements[p.href] === 'menu');
+    const quickPages = pages.filter(p => placements[p.href] === 'quick');
+
+    // Drawer (hamburger) ukazuje všechno nescryté + Nastavení, ať se uživatel
+    // vždycky dostane všude i bez appbaru.
     const navItems = [
-        { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
-        { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
-        { href: '/rozpocet', label: 'Rozpočet', icon: Icons.nav.monthlyBudget },
-        { href: '/budgets', label: 'Rozpočty', icon: Icons.nav.budgets },
-        { href: '/reports', label: 'Přehledy', icon: Icons.nav.reports },
-        { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
-        { href: '/loans', label: 'Úvěry', icon: Icons.nav.loans },
-        { href: '/subscriptions', label: 'Předplatné', icon: Icons.nav.subscriptions },
-        { href: '/vyporadani', label: 'Vypořádání', icon: Icons.nav.settlement },
+        ...menuPages,
+        ...quickPages,
         { href: '/settings', label: 'Nastavení', icon: Icons.nav.settings },
     ];
 
     // Bottom nav holds the four primary sections + a Menu button that opens
     // the drawer (which itself surfaces Settings, accounts, sync, logout).
-    // Nastavení moved into the drawer's Rychlé akce — kept off the bottom
-    // nav so the menu button can take its slot instead of floating over
-    // the page content.
-    const bottomNavItems = [
-        { href: '/', label: 'Dashboard', icon: Icons.nav.dashboard },
-        { href: '/transactions', label: 'Transakce', icon: Icons.nav.transactions },
-        { href: '/rozpocet', label: 'Rozpočet', icon: Icons.nav.monthlyBudget },
-        { href: '/investments', label: 'Investice', icon: Icons.nav.investments },
-    ];
+    const bottomNavItems = menuPages.slice(0, 4);
 
     useEffect(() => {
         setHasMounted(true);
@@ -223,7 +230,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     <span>Koruna</span>
                 </Link>
                 <nav className="appbar-nav">
-                    {navItems.filter((item) => item.href !== '/settings').map((item) => (
+                    {menuPages.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
@@ -362,12 +369,11 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <Link href="/settings" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
                                 <span>{APPBAR_ICONS['/settings']}</span><span>Nastavení</span>
                             </Link>
-                            <Link href="/transactions" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{APPBAR_ICONS['/transactions']}</span><span>Transakce</span>
-                            </Link>
-                            <Link href="/reports" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{APPBAR_ICONS['/reports']}</span><span>Přehledy</span>
-                            </Link>
+                            {quickPages.map((item) => (
+                                <Link key={item.href} href={item.href} className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
+                                    <span>{APPBAR_ICONS[item.href]}</span><span>{item.label}</span>
+                                </Link>
+                            ))}
                             <button className="btn btn-sm" onClick={handleLogout}
                                 style={{ justifyContent: 'center', gridColumn: '1 / -1', color: 'var(--neg)' }}>
                                 <span>↩</span><span>Odhlásit se</span>
@@ -483,11 +489,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 <div className="mobile-tools-title">Rychlé akce</div>
                                 <div className="mobile-quick-grid">
                                     <Link href="/settings" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/settings']}Nastavení</Link>
-                                    <Link href="/transactions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/transactions']}Transakce</Link>
-                                    <Link href="/reports" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/reports']}Přehledy</Link>
-                                    <Link href="/loans" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/loans']}Úvěry</Link>
-                                    <Link href="/subscriptions" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/subscriptions']}Předplatné</Link>
-                                    <Link href="/vyporadani" className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS['/vyporadani']}Vypořádání</Link>
+                                    {/* Menu stránky, co se nevešly do bottom navu, + rychlé akce */}
+                                    {[...menuPages.slice(4), ...quickPages].map((item) => (
+                                        <Link key={item.href} href={item.href} className="btn btn-sm" onClick={() => setIsMobileToolsOpen(false)}>{APPBAR_ICONS[item.href]}{item.label}</Link>
+                                    ))}
                                 </div>
                                 <button
                                     className="btn btn-sm"

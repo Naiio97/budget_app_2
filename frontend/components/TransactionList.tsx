@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Transaction, TransactionDetail, TransactionShare, getTransactionDetail, saveContact, updateTransactionShare, createShareRule, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
+import { getCategoryIcon } from '@/lib/category-icons';
 
 interface TransactionListProps {
     transactions: Transaction[];
@@ -284,7 +285,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         style={{ position: 'absolute', top: 12, left: 12 }}>✕</button>
 
                     <div style={{ fontSize: '2.8rem', lineHeight: 1, marginBottom: 10 }}>
-                        {categoryIcons[modalTx.category || 'Other'] || Icons.category.fallback}
+                        {getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 40)}
                     </div>
                     <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 4, fontWeight: 500 }}>
                         {getDisplayName(modalTx)}
@@ -316,7 +317,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             <dd style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 {updatingId === modalTx.id
                                     ? <span style={{ color: 'var(--text-3)' }}>Ukládám…</span>
-                                    : <span className="chip chip-accent">{categoryIcons[modalTx.category || 'Other']} {modalTx.category || 'Other'}</span>
+                                    : <span className="chip chip-accent">{getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 13)} {modalTx.category || 'Other'}</span>
                                 }
                                 <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{Icons.action.edit}</span>
                             </dd>
@@ -333,7 +334,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                         onClick={() => { handleCategorySelect(modalTx.id, cat.name); setModalPickingCategory(false); }}
                                         className={`chip ${modalTx.category === cat.name ? 'chip-accent' : ''}`}
                                         style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        {cat.icon} {cat.name}
+                                        {getCategoryIcon(cat.icon, 13)} {cat.name}
                                     </button>
                                 ))}
                             </div>
@@ -595,8 +596,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         <div style={{ padding: '10px var(--spacing-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <span className="chip chip-success">✓ Zaúčtováno</span>
-                                {modalTx.transaction_type === 'internal_transfer' && <span className="chip">{Icons.category.internalTransfer} Interní převod</span>}
-                                {modalTx.transaction_type === 'family_transfer' && <span className="chip">{Icons.category.familyTransfer} Rodinný převod</span>}
+                                {modalTx.transaction_type === 'internal_transfer' && <span className="chip">{getCategoryIcon(Icons.category.internalTransfer, 13)} Interní převod</span>}
+                                {modalTx.transaction_type === 'family_transfer' && <span className="chip">{getCategoryIcon(Icons.category.familyTransfer, 13)} Rodinný převod</span>}
                                 {modalTx.is_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
                                 {modalTx.settlement_flag && <span className="chip">🤝 Vypořádání — mimo příjmy</span>}
                                 {modalTx.my_share_amount != null && modalTx.amount < 0 && <span className="chip">👫 Společný náklad</span>}
@@ -637,7 +638,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         {/* Transactions for this day */}
                         {dayTxs.map((tx) => {
                             const isExcluded = tx.is_excluded || tx.transaction_type !== 'normal';
-                            const catIcon = categoryIcons[tx.category || 'Other'] || Icons.category.fallback;
+                            const catIcon = getCategoryIcon(categoryIcons[tx.category || 'Other'], 18);
                             return (
                                 <div
                                     key={tx.id}
@@ -659,7 +660,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                 borderRadius: '50%', width: '14px', height: '14px',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                             }}>
-                                                {tx.transaction_type === 'internal_transfer' ? Icons.category.internalTransfer : Icons.category.familyTransfer}
+                                                {tx.transaction_type === 'internal_transfer' ? getCategoryIcon(Icons.category.internalTransfer, 9) : getCategoryIcon(Icons.category.familyTransfer, 9)}
                                             </span>
                                         )}
                                     </div>
