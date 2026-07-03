@@ -2602,7 +2602,10 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 
   .mobile-tools-head {
     display: flex;
-    align-items: center;
+    /* flex-start (not center) — the left block has 2 rows ("Menu" + toggle,
+       then account count below), so centering against the whole block put
+       the close button between them instead of level with "Menu". */
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
   }
