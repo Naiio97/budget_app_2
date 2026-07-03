@@ -163,7 +163,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         if (isSyncing) return;
         setIsSyncing(true);
         try {
-            await syncData();
+            const result = await syncData();
+            if (result.failed_accounts && result.failed_accounts.length > 0) {
+                alert(`Sync se nepovedl pro: ${result.failed_accounts.join(', ')}. Zkontroluj připojení banky v Nastavení.`);
+            }
             await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
             queryClient.invalidateQueries({ queryKey: queryKeys.budgetOverview });
             queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
@@ -321,6 +324,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     const href = getAccountHref(account);
                                     const consent = getConsentStatus(account.consent_expires_at);
                                     const consentWarning = consent && (consent.expired || consent.expiringSoon);
+                                    const syncBroken = !consentWarning && !!account.last_sync_error;
                                     return (
                                         <Link key={account.id} href={href} className="acc-card">
                                             {logoUrl ? (
@@ -337,6 +341,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                                 {consentWarning ? (
                                                     <div className="acc-balance" style={{ color: consent.color, fontWeight: 600 }} title={consent.label}>
                                                         {consent.shortLabel}
+                                                    </div>
+                                                ) : syncBroken ? (
+                                                    <div className="acc-balance" style={{ color: 'var(--warn)', fontWeight: 600 }} title={account.last_sync_error ?? undefined}>
+                                                        sync selhává
                                                     </div>
                                                 ) : (
                                                     <div className="acc-balance">{account.currency}</div>
@@ -454,6 +462,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                         const logoUrl = getBankLogo(account.institution);
                                         const consent = getConsentStatus(account.consent_expires_at);
                                         const consentWarning = consent && (consent.expired || consent.expiringSoon);
+                                        const syncBroken = !consentWarning && !!account.last_sync_error;
                                         return (
                                             <Link
                                                 key={account.id}
@@ -474,6 +483,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                                     <strong>{account.name}</strong>
                                                     {consentWarning ? (
                                                         <span style={{ color: consent.color, fontWeight: 600 }}>{consent.shortLabel}</span>
+                                                    ) : syncBroken ? (
+                                                        <span style={{ color: 'var(--warn)', fontWeight: 600 }}>sync selhává</span>
                                                     ) : (
                                                         <span>{account.currency}</span>
                                                     )}

@@ -13,6 +13,8 @@ interface Account {
     currency: string;
     institution?: string;
     consent_expires_at?: string | null;
+    last_synced?: string | null;
+    last_sync_error?: string | null;
 }
 
 interface AccountsContextType {

@@ -109,6 +109,8 @@ export interface Account {
     institution?: string;
     is_visible?: boolean;
     consent_expires_at?: string | null;
+    last_synced?: string | null;
+    last_sync_error?: string | null;
 }
 
 export interface Tag {
@@ -283,6 +285,35 @@ export async function setTransactionTags(transactionId: string, tagIds: number[]
     return response.json();
 }
 
+// ── Push notifications ──────────────────────────────────────────
+
+export async function getVapidPublicKey(): Promise<string> {
+    const data = await fetchApi<{ key: string }>('/notifications/vapid-public-key');
+    return data.key;
+}
+
+export async function subscribePush(subscription: PushSubscriptionJSON): Promise<void> {
+    const response = await apiMutate('/notifications/subscribe', {
+        method: 'POST',
+        body: JSON.stringify(subscription),
+    });
+    if (!response.ok) throw new Error('Failed to subscribe to push notifications');
+}
+
+export async function unsubscribePush(endpoint: string): Promise<void> {
+    const response = await apiMutate('/notifications/unsubscribe', {
+        method: 'POST',
+        body: JSON.stringify({ endpoint }),
+    });
+    if (!response.ok) throw new Error('Failed to unsubscribe from push notifications');
+}
+
+export async function sendTestPush(): Promise<{ sent: number }> {
+    const response = await apiMutate('/notifications/test', { method: 'POST' });
+    if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || 'Failed to send test notification');
+    return response.json();
+}
+
 export async function getBalanceHistory(days: number = 30): Promise<BalanceHistory> {
     return fetchApi<BalanceHistory>(`/dashboard/balance-history?days=${days}`);
 }
@@ -353,6 +384,8 @@ export interface SyncResult {
     status: 'completed' | 'failed';
     accounts_synced: number;
     transactions_synced: number;
+    failed_accounts?: string[];
+    error?: string | null;
 }
 
 export async function syncData(): Promise<SyncResult> {

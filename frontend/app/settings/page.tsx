@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule, Tag, getTags, createTag, deleteTag } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule, Tag, getTags, createTag, deleteTag, getVapidPublicKey, subscribePush, unsubscribePush, sendTestPush } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
 import { getCategoryIcon, categoryIconKey, CATEGORY_ICON_OPTIONS } from '@/lib/category-icons';
 import { NAV_PAGES, NavPlacement, setNavPlacement, useNavPlacements } from '@/lib/nav-preferences';
@@ -520,6 +520,68 @@ export default function SettingsPage() {
     // Category rules
     const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
 
+    // Push notifikace
+    const [pushSupported, setPushSupported] = useState(false);
+    const [pushSubscribed, setPushSubscribed] = useState(false);
+    const [pushBusy, setPushBusy] = useState(false);
+
+    useEffect(() => {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        setPushSupported(true);
+        navigator.serviceWorker.getRegistration()
+            .then(reg => reg?.pushManager.getSubscription())
+            .then(sub => setPushSubscribed(!!sub))
+            .catch(() => {});
+    }, []);
+
+    const enablePush = async () => {
+        setPushBusy(true);
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (!reg) {
+                alert('Service worker neběží (na localhostu je vypnutý) — notifikace fungují jen v nasazené appce.');
+                return;
+            }
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                alert('Notifikace jsou v prohlížeči zamítnuté. Povol je v nastavení prohlížeče.');
+                return;
+            }
+            const key = await getVapidPublicKey();
+            const padding = '='.repeat((4 - (key.length % 4)) % 4);
+            const raw = atob((key + padding).replace(/-/g, '+').replace(/_/g, '/'));
+            const applicationServerKey = Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+            const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+            await subscribePush(sub.toJSON());
+            setPushSubscribed(true);
+        } catch (err) {
+            console.error('Push subscribe failed:', err);
+            alert('Zapnutí notifikací selhalo.');
+        } finally { setPushBusy(false); }
+    };
+
+    const disablePush = async () => {
+        setPushBusy(true);
+        try {
+            const reg = await navigator.serviceWorker.getRegistration();
+            const sub = await reg?.pushManager.getSubscription();
+            if (sub) {
+                await unsubscribePush(sub.endpoint);
+                await sub.unsubscribe();
+            }
+            setPushSubscribed(false);
+        } catch (err) { console.error(err); }
+        finally { setPushBusy(false); }
+    };
+
+    const handleTestPush = async () => {
+        try {
+            await sendTestPush();
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Test se nepodařil');
+        }
+    };
+
     // Tagy — volné štítky napříč kategoriemi
     const [tagsList, setTagsList] = useState<Tag[]>([]);
     const [newTagText, setNewTagText] = useState('');
@@ -855,6 +917,14 @@ export default function SettingsPage() {
                                                                         {' · '}
                                                                         <span style={{ color: consent.color, fontWeight: needsRenewal ? 600 : undefined }}>
                                                                             {consent.label}
+                                                                        </span>
+                                                                    </>
+                                                                )}
+                                                                {acc.last_sync_error && (
+                                                                    <>
+                                                                        {' · '}
+                                                                        <span style={{ color: 'var(--neg)', fontWeight: 600 }} title={acc.last_sync_error}>
+                                                                            sync selhává
                                                                         </span>
                                                                     </>
                                                                 )}
@@ -1223,6 +1293,33 @@ export default function SettingsPage() {
                                             ]}
                                         />
                                     </div>
+                                </div>
+                            </SurfaceCard>
+
+                            <SurfaceCard title="Notifikace" sub="Push upozornění na selhaný sync a končící souhlas banky">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {!pushSupported ? (
+                                        <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                                            Tenhle prohlížeč push notifikace nepodporuje.
+                                        </div>
+                                    ) : pushSubscribed ? (
+                                        <>
+                                            <div style={{ fontSize: 13, color: 'var(--pos)' }}>✓ Notifikace jsou na tomhle zařízení zapnuté.</div>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <button className="btn btn-sm" onClick={handleTestPush}>Poslat test</button>
+                                                <button className="btn btn-sm" onClick={disablePush} disabled={pushBusy} style={{ color: 'var(--neg)' }}>Vypnout</button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                                                Dostaneš upozornění, když sync některého účtu selže nebo když bude souhlas s bankou do 7 dní vypršet.
+                                            </div>
+                                            <button className="btn btn-primary" onClick={enablePush} disabled={pushBusy}>
+                                                {pushBusy ? 'Zapínám…' : 'Zapnout notifikace'}
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </SurfaceCard>
 

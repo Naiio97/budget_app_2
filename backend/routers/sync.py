@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from datetime import datetime
+from datetime import datetime, timedelta
 import asyncio
 import json
 import logging
@@ -12,6 +12,7 @@ from database import get_db
 from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel, UserModel, ShareRuleModel
 from services.share_rules import match_share_rule, compute_my_share
 from services.gocardless import gocardless_service, select_balance
+from services.push import send_push_to_user
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 
@@ -573,6 +574,47 @@ def _categorize_with_preloaded_rules(
     return categorize_transaction(tx)
 
 
+async def notify_after_sync(db: AsyncSession, user_id: int, failed_accounts: list[str]) -> None:
+    """Push notifikace po syncu: selhané účty a souhlasy před vypršením.
+
+    Volá se z ručního syncu i (v budoucnu) z automatického — je to jediné
+    místo, kde se vyhodnocují 'po syncu' podmínky.
+    """
+    if failed_accounts:
+        names = ", ".join(failed_accounts)
+        await send_push_to_user(
+            db, user_id,
+            title="Sync selhal",
+            body=f"Nepodařilo se synchronizovat: {names}. Zkontroluj připojení banky.",
+            url="/settings",
+        )
+
+    # Souhlasy končící do 7 dnů (nebo už vypršelé) — jednou denně by stačilo,
+    # ale sync běží max 4×/den, takže duplicity jsou snesitelné.
+    week_ahead = datetime.utcnow() + timedelta(days=7)
+    result = await db.execute(
+        select(AccountModel).where(
+            AccountModel.user_id == user_id,
+            AccountModel.type == "bank",
+            AccountModel.consent_expires_at != None,
+            AccountModel.consent_expires_at <= week_ahead,
+        )
+    )
+    for account in result.scalars():
+        expired = account.consent_expires_at <= datetime.utcnow()
+        days_left = max(0, (account.consent_expires_at - datetime.utcnow()).days)
+        await send_push_to_user(
+            db, user_id,
+            title="Souhlas banky " + ("vypršel" if expired else "brzy vyprší"),
+            body=(
+                f"{account.name}: souhlas vypršel — obnov připojení v Nastavení."
+                if expired else
+                f"{account.name}: souhlas vyprší za {days_left} dní. Obnov ho v Nastavení."
+            ),
+            url="/settings",
+        )
+
+
 @router.post("/")
 async def sync_all_data(
     current_user: UserModel = Depends(get_current_user),
@@ -591,6 +633,7 @@ async def sync_all_data(
 
     accounts_synced = 0
     transactions_synced = 0
+    failed_accounts: list[str] = []
 
     # Preload all category rules ONCE so categorization during the sync respects user choices
     # (e.g. "billa → Supermarkets") without N+1 DB roundtrips.
@@ -730,10 +773,13 @@ async def sync_all_data(
                         transactions_synced += len(rows_to_upsert)
                     
                     accounts_synced += 1
-                    
+                    account.last_sync_error = None
+
                 except Exception as inner_e:
                     error_msg = f"Failed to sync account {account.id}: {str(inner_e)}"
                     logger.error(error_msg)
+                    account.last_sync_error = str(inner_e)[:500]
+                    failed_accounts.append(account.name)
                     sync_status.error_message = (sync_status.error_message or "") + error_msg + "; "
                     continue
                     
@@ -994,10 +1040,18 @@ async def sync_all_data(
 
         transfer_result = await detect_and_mark_transfers(db, current_user.id)
 
+        # Post-sync notifikace (selhané účty, končící souhlasy) — nesmí shodit sync
+        try:
+            await notify_after_sync(db, current_user.id, failed_accounts)
+        except Exception as notify_e:
+            logger.warning(f"Post-sync notifications failed: {notify_e}")
+
         return {
             "status": "completed",
             "accounts_synced": accounts_synced,
             "transactions_synced": transactions_synced,
+            "failed_accounts": failed_accounts,
+            "error": sync_status.error_message,
             "marked_internal_transfers": transfer_result["marked_internal"],
             "marked_family_transfers": transfer_result["marked_family"],
             "marked_my_account_transfers": transfer_result["marked_my_account"]
