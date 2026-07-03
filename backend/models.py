@@ -135,7 +135,8 @@ class CategoryRuleModel(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     pattern = Column(String, nullable=False)  # Text pattern to match (lowercase)
     category = Column(String, nullable=False)  # Target category (Food, Transport, etc.)
-    is_user_defined = Column(Boolean, default=True)  # True = user created, False = learned
+    is_user_defined = Column(Boolean, default=True)  # True = user created, False = learned/builtin
+    is_builtin = Column(Boolean, default=False)  # True = seeded default rule (was hardcoded in sync.py)
     match_count = Column(Integer, default=0)  # How many times this rule matched
     created_at = Column(DateTime, default=datetime.utcnow)
 

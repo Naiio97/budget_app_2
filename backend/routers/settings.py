@@ -147,6 +147,7 @@ class CategoryRuleResponse(BaseModel):
     pattern: str
     category: str
     is_user_defined: bool
+    is_builtin: bool
     match_count: int
 
 
@@ -159,7 +160,12 @@ async def get_category_rules(
     result = await db.execute(
         select(CategoryRuleModel)
         .where(CategoryRuleModel.user_id == current_user.id)
-        .order_by(CategoryRuleModel.is_user_defined.desc(), CategoryRuleModel.match_count.desc())
+        # Vlastní → naučená → výchozí (builtin), uvnitř podle úspěšnosti
+        .order_by(
+            CategoryRuleModel.is_user_defined.desc(),
+            CategoryRuleModel.is_builtin.asc(),
+            CategoryRuleModel.match_count.desc(),
+        )
     )
     rules = result.scalars().all()
 
@@ -170,6 +176,7 @@ async def get_category_rules(
                 pattern=r.pattern,
                 category=r.category,
                 is_user_defined=r.is_user_defined,
+                is_builtin=r.is_builtin,
                 match_count=r.match_count
             )
             for r in rules

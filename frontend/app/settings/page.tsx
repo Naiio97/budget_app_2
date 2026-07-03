@@ -13,7 +13,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 
 interface Institution { id: string; name: string; logo?: string; bic?: string; }
-interface CategoryRule { id: number; pattern: string; category: string; is_user_defined: boolean; match_count: number; }
+interface CategoryRule { id: number; pattern: string; category: string; is_user_defined: boolean; is_builtin: boolean; match_count: number; }
 interface Category { id: number; name: string; icon: string; color: string; order_index: number; is_income: boolean; is_active: boolean; }
 
 const CATEGORY_PALETTE = [
@@ -1028,7 +1028,7 @@ export default function SettingsPage() {
                             </div>
                             <div>
                                 <label className="set-field-label">Původ</label>
-                                <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
+                                <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : detailRule.is_builtin ? 'Výchozí pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
                             </div>
                             <button className="btn" style={{ color: 'var(--neg)' }} onClick={() => { handleDeleteRule(detailRule.id); setDetailRule(null); }}>
                                 {TrashIcon} Smazat pravidlo

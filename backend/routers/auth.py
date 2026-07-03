@@ -16,6 +16,7 @@ from auth import create_access_token, get_current_user, hash_password, limiter, 
 from config import get_settings
 from database import get_db
 from models import UserModel
+from services.default_rules import seed_default_rules
 from services.oauth_verify import verify_google_id_token
 
 router = APIRouter()
@@ -137,6 +138,7 @@ async def oauth_upsert(
         )
         db.add(user)
         await db.flush()
+        await seed_default_rules(db, user.id)
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
@@ -186,6 +188,7 @@ async def register(
     )
     db.add(user)
     await db.flush()
+    await seed_default_rules(db, user.id)
 
     user.last_login_at = datetime.utcnow()
     await db.commit()
