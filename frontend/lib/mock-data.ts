@@ -615,6 +615,27 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/settings/share-rules')) return {
         rules: [{ id: 1, pattern: 'nájem', my_percentage: 50, my_amount_override: null, counterparty: 'Žena', note: 'nájem', is_active: true, match_count: 6 }],
     };
+    if (path.match(/^\/tags\/\d+\/summary/)) return {
+        tag: { id: 1, name: 'dovolená 2026', color: '#f97316', usage_count: 3 },
+        transaction_count: 3,
+        total_expenses: 28450,
+        total_income: 0,
+        net: -28450,
+        by_category: [
+            { category: 'Transport', amount: 14200 },
+            { category: 'Food', amount: 8250 },
+            { category: 'Entertainment', amount: 6000 },
+        ],
+        date_from: '2026-06-12',
+        date_to: '2026-07-01',
+        currency: 'CZK',
+    };
+    if (path.startsWith('/tags/')) return {
+        tags: [
+            { id: 1, name: 'dovolená 2026', color: '#f97316', usage_count: 3 },
+            { id: 2, name: 'rekonstrukce', color: '#3b82f6', usage_count: 5 },
+        ],
+    };
     if (path.startsWith('/categories/')) return MOCK_CATEGORIES;
     if (path.startsWith('/recurring-expenses')) return MOCK_RECURRING_EXPENSES;
     if (path.startsWith('/monthly-budget/')) return MOCK_MONTHLY_BUDGET;

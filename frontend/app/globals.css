@@ -697,6 +697,7 @@ select.input {
 }
 .tx-category-label { font-size: 11.5px; color: var(--text-3); }
 .tx-account-label  { font-size: 11.5px; color: var(--text-3); }
+.tx-tag-label      { font-size: 11.5px; opacity: 0.85; }
 
 .transaction-item {
   display: flex; align-items: center; gap: 12px;

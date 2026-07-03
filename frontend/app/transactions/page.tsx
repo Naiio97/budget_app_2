@@ -7,7 +7,7 @@ import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
 import CustomSelect from '@/components/CustomSelect';
-import { Transaction, getTransactions, getDashboard, apiFetch } from '@/lib/api';
+import { Transaction, getTransactions, getDashboard, getTags, getTagSummary, apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
@@ -55,6 +55,7 @@ function TransactionsPageContent() {
     const [selectedAccount, setSelectedAccount] = useState<string>(initialAccount);
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [amountType, setAmountType] = useState<string>('');
+    const [selectedTag, setSelectedTag] = useState<string>('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState<number>(20);
 
@@ -103,6 +104,7 @@ function TransactionsPageContent() {
         date_from,
         date_to,
         amount_type: amountType || undefined,
+        tag_id: selectedTag ? Number(selectedTag) : undefined,
     };
 
     const { data: txData, isLoading: loading } = useQuery({
@@ -123,6 +125,19 @@ function TransactionsPageContent() {
                 .then(r => r.json())
                 .then(d => Array.isArray(d) ? d : []),
         staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: tagsData } = useQuery({
+        queryKey: ['tags'],
+        queryFn: getTags,
+        staleTime: 60 * 1000,
+    });
+    const tags = tagsData?.tags ?? [];
+
+    const { data: tagSummary } = useQuery({
+        queryKey: ['tag-summary', selectedTag],
+        queryFn: () => getTagSummary(Number(selectedTag)),
+        enabled: !!selectedTag,
     });
 
     const allTransactions = useMemo(() => txData?.items ?? [], [txData]);
@@ -258,8 +273,49 @@ function TransactionsPageContent() {
                                 placeholder="Všechny účty"
                             />
                         </div>
+                        {tags.length > 0 && (
+                            <div style={{ flex: '1 1 160px' }}>
+                                <CustomSelect
+                                    options={tags.map(tag => ({ value: String(tag.id), label: `#${tag.name}` }))}
+                                    value={selectedTag}
+                                    onChange={val => { setSelectedTag(val); resetFilters(); }}
+                                    placeholder="Všechny tagy"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
+
+                {/* Tag summary — kolik stál "projekt" napříč kategoriemi */}
+                {selectedTag && tagSummary && (
+                    <div className="surface" style={{ padding: 'var(--spacing-md) var(--spacing-lg)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--spacing-lg)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="chip chip-accent" style={{ fontSize: '0.85rem' }}>#{tagSummary.tag.name}</span>
+                            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                                {tagSummary.transaction_count} transakcí
+                                {tagSummary.date_from && ` · ${new Date(tagSummary.date_from).toLocaleDateString('cs-CZ')} – ${tagSummary.date_to ? new Date(tagSummary.date_to).toLocaleDateString('cs-CZ') : ''}`}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 'var(--spacing-lg)', marginLeft: 'auto', flexWrap: 'wrap' }}>
+                            <div>
+                                <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Výdaje</div>
+                                <div className="num" style={{ fontSize: 16, fontWeight: 600 }}>{formatCurrency(tagSummary.total_expenses)}</div>
+                            </div>
+                            {tagSummary.total_income > 0 && (
+                                <div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Příjmy</div>
+                                    <div className="num" style={{ fontSize: 16, fontWeight: 600, color: 'var(--pos)' }}>{formatCurrency(tagSummary.total_income)}</div>
+                                </div>
+                            )}
+                            {tagSummary.by_category.slice(0, 3).map(bc => (
+                                <div key={bc.category}>
+                                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{bc.category}</div>
+                                    <div className="num" style={{ fontSize: 16 }}>{formatCurrency(bc.amount)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Transaction list */}
                 <div className="surface">

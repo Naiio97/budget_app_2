@@ -7,10 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from auth import get_current_user
 from database import get_db
-from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel, UserModel
+from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel, UserModel, TagModel, TransactionTagModel
 from routers.contacts import normalize_iban
 
 router = APIRouter()
+
+
+class TransactionTag(BaseModel):
+    id: int
+    name: str
+    color: Optional[str] = None
 
 
 class Transaction(BaseModel):
@@ -34,6 +40,7 @@ class Transaction(BaseModel):
     creditor_iban: Optional[str] = None  # Normalized IBAN, used for inline rename in UI
     debtor_iban: Optional[str] = None
     counterparty_name_source: Optional[str] = None  # "bank" | "contact_auto" | "contact_manual" | None
+    tags: List[TransactionTag] = []
 
 
 class PaginatedTransactions(BaseModel):
@@ -54,6 +61,7 @@ async def get_transactions(
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
     amount_type: Optional[str] = Query(None, description="income, expense, or all"),
+    tag_id: Optional[int] = Query(None, description="only transactions carrying this tag"),
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -85,6 +93,15 @@ async def get_transactions(
         conditions.append(TransactionModel.amount > 0)
     elif amount_type == "expense":
         conditions.append(TransactionModel.amount < 0)
+    if tag_id is not None:
+        conditions.append(
+            select(TransactionTagModel.tag_id)
+            .where(
+                TransactionTagModel.transaction_id == TransactionModel.id,
+                TransactionTagModel.tag_id == tag_id,
+            )
+            .exists()
+        )
 
     query = query.where(and_(*conditions))
     
@@ -102,6 +119,20 @@ async def get_transactions(
     
     result = await db.execute(query)
     rows = result.all()
+
+    # Bulk-load tags for the whole page (one query instead of N)
+    tags_by_tx: dict[str, list[TransactionTag]] = {}
+    tx_ids = [tx.id for tx, _ in rows]
+    if tx_ids:
+        tag_rows = await db.execute(
+            select(TransactionTagModel.transaction_id, TagModel)
+            .join(TagModel, TagModel.id == TransactionTagModel.tag_id)
+            .where(TransactionTagModel.transaction_id.in_(tx_ids))
+        )
+        for tx_id, tag in tag_rows.all():
+            tags_by_tx.setdefault(tx_id, []).append(
+                TransactionTag(id=tag.id, name=tag.name, color=tag.color)
+            )
 
     # Pre-parse raw_json once per row so we can bulk-lookup missing names in contacts.
     parsed = []
@@ -176,8 +207,9 @@ async def get_transactions(
             creditor_iban=creditor_iban,
             debtor_iban=debtor_iban,
             counterparty_name_source=name_source,
+            tags=tags_by_tx.get(tx.id, []),
         ))
-    
+
     return PaginatedTransactions(
         items=items,
         total=total,
@@ -457,6 +489,54 @@ async def update_transaction_category(
         "new_category": data.category,
         "is_excluded": tx.is_excluded,
         "rule_created": data.learn and learnable
+    }
+
+
+class TagAssignment(BaseModel):
+    tag_ids: List[int]
+
+
+@router.put("/{transaction_id}/tags")
+async def set_transaction_tags(
+    transaction_id: str,
+    data: TagAssignment,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Replace the transaction's tag set with the given tag ids."""
+    from sqlalchemy import delete as sa_delete
+
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
+    )
+    if not tx_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    tags: list[TagModel] = []
+    if data.tag_ids:
+        tag_result = await db.execute(
+            select(TagModel).where(
+                TagModel.user_id == current_user.id,
+                TagModel.id.in_(data.tag_ids),
+            )
+        )
+        tags = list(tag_result.scalars())
+        if len(tags) != len(set(data.tag_ids)):
+            raise HTTPException(status_code=400, detail="Unknown tag id")
+
+    await db.execute(
+        sa_delete(TransactionTagModel).where(TransactionTagModel.transaction_id == transaction_id)
+    )
+    for tag in tags:
+        db.add(TransactionTagModel(transaction_id=transaction_id, tag_id=tag.id))
+    await db.commit()
+
+    return {
+        "id": transaction_id,
+        "tags": [TransactionTag(id=t.id, name=t.name, color=t.color) for t in tags],
     }
 
 
