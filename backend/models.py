@@ -141,6 +141,28 @@ class CategoryRuleModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class TagModel(Base):
+    """Volný štítek napříč kategoriemi ("dovolená 2026", "rekonstrukce").
+
+    Druhá osa třídění: kategorie říká CO to bylo, tag K ČEMU to patřilo.
+    Transakce může mít víc tagů (M:N přes transaction_tags)."""
+    __tablename__ = "tags"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String, nullable=False)  # unique per user (enforced in migration)
+    color = Column(String, default="#6366f1")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class TransactionTagModel(Base):
+    """M:N vazba transakce ↔ tag"""
+    __tablename__ = "transaction_tags"
+
+    transaction_id = Column(String, ForeignKey("transactions.id", ondelete="CASCADE"), primary_key=True)
+    tag_id = Column(Integer, ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
 class CategoryModel(Base):
     """User-defined transaction categories. Name is unique per user."""
     __tablename__ = "categories"

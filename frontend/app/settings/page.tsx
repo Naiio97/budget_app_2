@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
-import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule } from '@/lib/api';
+import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule, Tag, getTags, createTag, deleteTag } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
 import { getCategoryIcon, categoryIconKey, CATEGORY_ICON_OPTIONS } from '@/lib/category-icons';
 import { NAV_PAGES, NavPlacement, setNavPlacement, useNavPlacements } from '@/lib/nav-preferences';
@@ -519,6 +519,40 @@ export default function SettingsPage() {
 
     // Category rules
     const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
+
+    // Tagy — volné štítky napříč kategoriemi
+    const [tagsList, setTagsList] = useState<Tag[]>([]);
+    const [newTagText, setNewTagText] = useState('');
+    const [savingTag, setSavingTag] = useState(false);
+
+    const loadTags = useCallback(async () => {
+        try {
+            const d = await getTags();
+            setTagsList(d.tags);
+        } catch (err) { console.error(err); }
+    }, []);
+
+    const handleAddTag = async () => {
+        const name = newTagText.trim();
+        if (!name) return;
+        setSavingTag(true);
+        try {
+            await createTag(name, CATEGORY_PALETTE[tagsList.length % CATEGORY_PALETTE.length]);
+            setNewTagText('');
+            await loadTags();
+        } catch (err) {
+            console.error(err);
+            alert(err instanceof Error ? err.message : 'Tag se nepodařilo vytvořit');
+        } finally { setSavingTag(false); }
+    };
+
+    const handleDeleteTag = async (tag: Tag) => {
+        if ((tag.usage_count ?? 0) > 0 && !confirm(`Tag „${tag.name}" je na ${tag.usage_count} transakcích. Opravdu smazat?`)) return;
+        try {
+            await deleteTag(tag.id);
+            setTagsList(prev => prev.filter(t => t.id !== tag.id));
+        } catch (err) { console.error(err); }
+    };
     const [newPattern, setNewPattern] = useState('');
     const [newRuleCategory, setNewRuleCategory] = useState('Food');
     const [savingRule, setSavingRule] = useState(false);
@@ -583,7 +617,8 @@ export default function SettingsPage() {
             await refreshAccounts();
         })();
         loadCategoryRules();
-    }, [loadBanks, loadCategoryRules, refreshAccounts]);
+        loadTags();
+    }, [loadBanks, loadCategoryRules, loadTags, refreshAccounts]);
 
     // ── Account handlers
     const handleRename = async (id: string) => {
@@ -936,41 +971,84 @@ export default function SettingsPage() {
                             <CategoryManager onCategoriesChange={loadCategoryRules} showAdd={showAddCategory} setShowAdd={setShowAddCategory} />
                         </SurfaceCard>
 
-                        <SurfaceCard
-                            title="Pravidla"
-                            sub="Když popis transakce obsahuje text, automaticky se přiřadí kategorie."
-                            action={
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                    <span className="set-count-chip">{categoryRules.length} pravidel</span>
-                                    <button className="btn btn-sm" onClick={handleRecategorize} disabled={isSyncing} title="Překategorizovat všechny transakce">
-                                        {isSyncing ? '…' : `${Icons.action.sync} Sync`}
-                                    </button>
-                                    <button className="btn btn-primary btn-sm" onClick={() => setShowRuleForm(true)}>{Icons.action.add} Pravidlo</button>
+                        <div className="settings-rules-column" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                            <SurfaceCard
+                                title="Pravidla"
+                                sub="Když popis transakce obsahuje text, automaticky se přiřadí kategorie."
+                                action={
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                        <span className="set-count-chip">{categoryRules.length} pravidel</span>
+                                        <button className="btn btn-sm" onClick={handleRecategorize} disabled={isSyncing} title="Překategorizovat všechny transakce">
+                                            {isSyncing ? '…' : `${Icons.action.sync} Sync`}
+                                        </button>
+                                        <button className="btn btn-primary btn-sm" onClick={() => setShowRuleForm(true)}>{Icons.action.add} Pravidlo</button>
+                                    </div>
+                                }
+                                className="settings-rules-card"
+                            >
+                                {categoryRules.length === 0 ? (
+                                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                                        Zatím žádná pravidla. Přidej přes „+ Pravidlo“ nebo změň kategorii u transakce.
+                                    </div>
+                                ) : (
+                                    <div className="settings-scroll-list settings-rules-list">
+                                        {categoryRules.map(rule => {
+                                            const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
+                                            return (
+                                                <button key={rule.id} type="button" className="set-rule-row" onClick={() => setDetailRule(rule)}>
+                                                    <span className="set-rule-pattern">„{rule.pattern}“</span>
+                                                    <span className="set-rule-arrow">→</span>
+                                                    <span className="set-rule-dot" style={{ background: catColor }} />
+                                                    <span className="set-rule-cat">{rule.category}</span>
+                                                    <span className="set-rule-chevron">›</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </SurfaceCard>
+
+                            <SurfaceCard
+                                title="Tagy"
+                                sub="Volné štítky napříč kategoriemi — „dovolená 2026“, „rekonstrukce“…"
+                                action={<span className="set-count-chip">{tagsList.length} tagů</span>}
+                            >
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {tagsList.length > 0 && (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {tagsList.map(tag => (
+                                                <span key={tag.id} className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                                    <span className="set-rule-dot" style={{ background: tag.color ?? 'var(--text-3)' }} />
+                                                    #{tag.name}
+                                                    <span style={{ color: 'var(--text-3)', fontSize: 11 }}>{tag.usage_count ?? 0}×</span>
+                                                    <button
+                                                        onClick={() => handleDeleteTag(tag)}
+                                                        title="Smazat tag"
+                                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 0, fontSize: 12, lineHeight: 1 }}
+                                                    >✕</button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <input
+                                            className="input"
+                                            placeholder="Nový tag (např. dovolená 2026)"
+                                            value={newTagText}
+                                            onChange={e => setNewTagText(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleAddTag(); }}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <button className="btn btn-primary btn-sm" onClick={handleAddTag} disabled={savingTag || !newTagText.trim()}>
+                                            {savingTag ? '…' : 'Přidat'}
+                                        </button>
+                                    </div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                                        Tagy přiřadíš transakci v jejím detailu; součet za tag najdeš ve filtru transakcí.
+                                    </div>
                                 </div>
-                            }
-                            className="settings-rules-card"
-                        >
-                            {categoryRules.length === 0 ? (
-                                <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
-                                    Zatím žádná pravidla. Přidej přes „+ Pravidlo“ nebo změň kategorii u transakce.
-                                </div>
-                            ) : (
-                                <div className="settings-scroll-list settings-rules-list">
-                                    {categoryRules.map(rule => {
-                                        const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
-                                        return (
-                                            <button key={rule.id} type="button" className="set-rule-row" onClick={() => setDetailRule(rule)}>
-                                                <span className="set-rule-pattern">„{rule.pattern}“</span>
-                                                <span className="set-rule-arrow">→</span>
-                                                <span className="set-rule-dot" style={{ background: catColor }} />
-                                                <span className="set-rule-cat">{rule.category}</span>
-                                                <span className="set-rule-chevron">›</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </SurfaceCard>
+                            </SurfaceCard>
+                        </div>
                     </div>
                 )}
 

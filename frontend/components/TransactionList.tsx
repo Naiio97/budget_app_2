@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Transaction, TransactionDetail, TransactionShare, getTransactionDetail, saveContact, updateTransactionShare, createShareRule, apiFetch } from '@/lib/api';
+import { Transaction, TransactionDetail, TransactionShare, Tag, getTransactionDetail, saveContact, updateTransactionShare, createShareRule, getTags, createTag, setTransactionTags, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 import { getCategoryIcon } from '@/lib/category-icons';
 
@@ -35,6 +35,10 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [txDetail, setTxDetail] = useState<TransactionDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [modalPickingCategory, setModalPickingCategory] = useState(false);
+    const [modalPickingTags, setModalPickingTags] = useState(false);
+    const [allTags, setAllTags] = useState<Tag[] | null>(null);
+    const [newTagName, setNewTagName] = useState('');
+    const [savingTags, setSavingTags] = useState(false);
     const [namingIban, setNamingIban] = useState<string | null>(null);
     const [nameInput, setNameInput] = useState('');
     const [savingContact, setSavingContact] = useState(false);
@@ -77,7 +81,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     // Fetch rich detail when modal opens
     useEffect(() => {
-        if (!selectedTx) { setTxDetail(null); setModalPickingCategory(false); setNamingIban(null); setNameInput(''); setShareEditing(false); setShareInput(''); setShareNoteInput(''); setShareCounterpartyInput(''); setShareLearnRule(false); return; }
+        if (!selectedTx) { setTxDetail(null); setModalPickingCategory(false); setModalPickingTags(false); setNewTagName(''); setNamingIban(null); setNameInput(''); setShareEditing(false); setShareInput(''); setShareNoteInput(''); setShareCounterpartyInput(''); setShareLearnRule(false); return; }
         setDetailLoading(true);
         getTransactionDetail(selectedTx.id)
             .then(setTxDetail)
@@ -229,6 +233,50 @@ export default function TransactionList({ transactions: initialTransactions, sho
         }
     };
 
+    const openTagPicker = () => {
+        setModalPickingTags(p => !p);
+        if (allTags === null) {
+            getTags()
+                .then(d => setAllTags(d.tags))
+                .catch(err => console.error('Failed to load tags:', err));
+        }
+    };
+
+    const handleToggleTag = async (txId: string, tag: Tag) => {
+        const tx = transactions.find(t => t.id === txId);
+        const current = tx?.tags ?? [];
+        const next = current.some(t => t.id === tag.id)
+            ? current.filter(t => t.id !== tag.id)
+            : [...current, tag];
+        setSavingTags(true);
+        try {
+            const res = await setTransactionTags(txId, next.map(t => t.id));
+            setTransactions(prev => prev.map(t => t.id === txId ? { ...t, tags: res.tags } : t));
+        } catch (err) {
+            console.error('Failed to set tags:', err);
+        } finally {
+            setSavingTags(false);
+        }
+    };
+
+    const TAG_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'];
+
+    const handleCreateTag = async (txId: string) => {
+        const name = newTagName.trim();
+        if (!name) return;
+        setSavingTags(true);
+        try {
+            const created = await createTag(name, TAG_COLORS[(allTags?.length ?? 0) % TAG_COLORS.length]);
+            setAllTags(prev => [...(prev ?? []), created]);
+            setNewTagName('');
+            await handleToggleTag(txId, created);
+        } catch (err) {
+            console.error('Failed to create tag:', err);
+        } finally {
+            setSavingTags(false);
+        }
+    };
+
     const handleCategorySelect = async (txId: string, newCategory: string) => {
         setUpdatingId(txId);
         try {
@@ -337,6 +385,53 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                         {getCategoryIcon(cat.icon, 13)} {cat.name}
                                     </button>
                                 ))}
+                            </div>
+                        )}
+
+                        {/* Tagy — druhá osa třídění ("dovolená 2026", "rekonstrukce"…) */}
+                        <div className="label-row" onClick={openTagPicker} style={{ cursor: 'pointer' }}>
+                            <dt>Tagy</dt>
+                            <dd style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                {(modalTx.tags?.length ?? 0) === 0
+                                    ? <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Přidat tag</span>
+                                    : (modalTx.tags ?? []).map(tag => (
+                                        <span key={tag.id} className="chip" style={{ color: tag.color ?? undefined }}>
+                                            #{tag.name}
+                                        </span>
+                                    ))}
+                                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{Icons.action.edit}</span>
+                            </dd>
+                        </div>
+
+                        {/* Tag picker */}
+                        {modalPickingTags && (
+                            <div style={{ padding: '10px var(--spacing-lg)', borderBottom: '0.5px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 6, background: 'var(--surface-sunken)', alignItems: 'center', opacity: savingTags ? 0.6 : 1 }}>
+                                {allTags === null ? (
+                                    <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Načítám…</span>
+                                ) : (
+                                    <>
+                                        {allTags.map(tag => {
+                                            const active = (modalTx.tags ?? []).some(t => t.id === tag.id);
+                                            return (
+                                                <button key={tag.id}
+                                                    onClick={() => handleToggleTag(modalTx.id, tag)}
+                                                    disabled={savingTags}
+                                                    className={`chip ${active ? 'chip-accent' : ''}`}
+                                                    style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem', color: active ? undefined : (tag.color ?? undefined) }}>
+                                                    #{tag.name}
+                                                </button>
+                                            );
+                                        })}
+                                        <input
+                                            className="input"
+                                            placeholder="+ nový tag"
+                                            value={newTagName}
+                                            onChange={e => setNewTagName(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleCreateTag(modalTx.id); }}
+                                            style={{ width: 130, padding: '4px 10px', fontSize: '0.8rem' }}
+                                        />
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -672,6 +767,11 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             <span className="tx-category-label">
                                                 {tx.category || 'Other'}
                                             </span>
+                                            {(tx.tags ?? []).map(tag => (
+                                                <span key={tag.id} className="tx-tag-label" style={{ color: tag.color ?? 'var(--text-3)' }}>
+                                                    #{tag.name}
+                                                </span>
+                                            ))}
                                             {showAccount && tx.account_name && (
                                                 <span className="tx-account-label">• {tx.account_name}</span>
                                             )}
