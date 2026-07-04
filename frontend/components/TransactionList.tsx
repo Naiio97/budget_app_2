@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Transaction, TransactionDetail, TransactionShare, Tag, getTransactionDetail, saveContact, updateTransactionShare, createShareRule, getTags, createTag, setTransactionTags, apiFetch } from '@/lib/api';
+import { Transaction, TransactionDetail, TransactionShare, Tag, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getTags, createTag, setTransactionTags, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 import { getCategoryIcon } from '@/lib/category-icons';
+import { getLineIcon } from '@/lib/line-icons';
 
 interface TransactionListProps {
     transactions: Transaction[];
@@ -49,6 +50,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [shareCounterpartyInput, setShareCounterpartyInput] = useState('');
     const [shareLearnRule, setShareLearnRule] = useState(false);
     const [savingShare, setSavingShare] = useState(false);
+    const [savingExclude, setSavingExclude] = useState(false);
 
     // Build icon map from categories
     useEffect(() => {
@@ -233,6 +235,24 @@ export default function TransactionList({ transactions: initialTransactions, sho
         }
     };
 
+    const handleToggleExcluded = async (tx: Transaction, excluded: boolean) => {
+        setSavingExclude(true);
+        try {
+            await setTransactionExcluded(tx.id, excluded);
+            // Optimisticky (server počítá stejně): vyřazený → is_excluded true;
+            // zpět → jen skutečný převod zůstává vyřazený
+            const isExcluded = excluded || (!!tx.transaction_type && tx.transaction_type !== 'normal');
+            setTransactions(prev => prev.map(t => t.id === tx.id
+                ? { ...t, user_excluded: excluded, is_excluded: isExcluded }
+                : t));
+            setTxDetail(prev => prev && { ...prev, user_excluded: excluded, is_excluded: isExcluded });
+        } catch (err) {
+            console.error('Failed to toggle transaction exclusion:', err);
+        } finally {
+            setSavingExclude(false);
+        }
+    };
+
     const openTagPicker = () => {
         setModalPickingTags(p => !p);
         if (allTags === null) {
@@ -367,7 +387,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     ? <span style={{ color: 'var(--text-3)' }}>Ukládám…</span>
                                     : <span className="chip chip-accent">{getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 13)} {modalTx.category || 'Other'}</span>
                                 }
-                                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{Icons.action.edit}</span>
+                                <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
                             </dd>
                         </div>
 
@@ -399,7 +419,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             #{tag.name}
                                         </span>
                                     ))}
-                                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{Icons.action.edit}</span>
+                                <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
                             </dd>
                         </div>
 
@@ -483,8 +503,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                 </span>
                                                 {canEdit && namingIban !== iban && (
                                                     <button onClick={() => { setNamingIban(iban); setNameInput(name || ''); }}
-                                                        style={{ fontSize: '0.72rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', padding: '2px 6px', flexShrink: 0 }}>
-                                                        {name ? `${Icons.action.edit} Přejmenovat` : `${Icons.action.edit} Pojmenovat`}
+                                                        style={{ fontSize: '0.72rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', padding: '2px 6px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                        {getLineIcon('edit', 12)} {name ? 'Přejmenovat' : 'Pojmenovat'}
                                                     </button>
                                                 )}
                                             </div>
@@ -559,7 +579,9 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                     setShareCounterpartyInput(modalTx.share_counterparty || '');
                                                     setShareLearnRule(false);
                                                 }}>
-                                                {modalTx.my_share_amount != null ? `${Icons.action.edit} Upravit` : 'Rozdělit náklad'}
+                                                {modalTx.my_share_amount != null
+                                                    ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{getLineIcon('edit', 13)} Upravit</span>
+                                                    : 'Rozdělit náklad'}
                                             </button>
                                             {modalTx.my_share_amount != null && (
                                                 <button className="btn btn-sm" disabled={savingShare}
@@ -687,13 +709,40 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             </div>
                         )}
 
+                        {/* Ruční vyřazení z příjmů/výdajů — na splátkové konstrukce
+                            (Air/Twisto: plná platba + okamžitá vratka) apod. */}
+                        {modalTx.account_type === 'bank' && (
+                            <div className="label-row">
+                                <dt>Počítat do bilance</dt>
+                                <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 0 }}>
+                                    {modalTx.user_excluded ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                            <span className="chip">{getLineIcon('ban', 13)} Nepočítá se</span>
+                                            <button className="btn btn-sm" disabled={savingExclude}
+                                                onClick={() => handleToggleExcluded(modalTx, false)}>
+                                                {savingExclude ? '…' : 'Vrátit do bilance'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button className="btn btn-sm" disabled={savingExclude}
+                                            onClick={() => handleToggleExcluded(modalTx, true)}>
+                                            {savingExclude
+                                                ? '…'
+                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('ban', 14)} Nepočítat do příjmů/výdajů</span>}
+                                        </button>
+                                    )}
+                                </dd>
+                            </div>
+                        )}
+
                         {/* Footer — badges + ID */}
                         <div style={{ padding: '10px var(--spacing-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                 <span className="chip chip-success">✓ Zaúčtováno</span>
                                 {modalTx.transaction_type === 'internal_transfer' && <span className="chip">{getCategoryIcon(Icons.category.internalTransfer, 13)} Interní převod</span>}
                                 {modalTx.transaction_type === 'family_transfer' && <span className="chip">{getCategoryIcon(Icons.category.familyTransfer, 13)} Rodinný převod</span>}
-                                {modalTx.is_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
+                                {modalTx.user_excluded && <span className="chip">{getLineIcon('ban', 13)} Ručně vyřazeno</span>}
+                                {modalTx.is_excluded && !modalTx.user_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
                                 {modalTx.settlement_flag && <span className="chip">🤝 Vypořádání — mimo příjmy</span>}
                                 {modalTx.my_share_amount != null && modalTx.amount < 0 && <span className="chip">👫 Společný náklad</span>}
                             </div>

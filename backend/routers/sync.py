@@ -179,6 +179,8 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     # category rule keeps re-labelling new payments on insert.
     if excluded_identifiers:
         for tx in transactions:
+            if tx.user_excluded:
+                continue  # ruční vyřazení uživatele detekce nikdy nemění
             is_marked = tx.transaction_type in ("internal_transfer", "my_account_transfer")
             has_transfer_category = tx.category in ("Internal Transfer", "Family Transfer")
             if not is_marked and not has_transfer_category:
@@ -204,9 +206,11 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
             logger.info(f"Un-marked transfer to excluded account: {tx.date} {tx.description[:50]} ({tx.amount})")
 
     for tx in transactions:
+        if tx.user_excluded:
+            continue  # ruční vyřazení uživatele detekce nechává být
         if tx.is_excluded and tx.transaction_type != "normal":
             continue
-        
+
         desc_lower = str(tx.description or "").lower()
         
         # Check family pattern first

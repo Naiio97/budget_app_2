@@ -144,6 +144,7 @@ export interface Transaction {
     account_name?: string;
     transaction_type?: 'normal' | 'internal_transfer' | 'family_transfer';
     is_excluded?: boolean;
+    user_excluded?: boolean;
     my_share_amount?: number | null;
     settlement_flag?: boolean;
     settlement_note?: string | null;
@@ -560,6 +561,7 @@ export interface TransactionDetail {
     account_type: string;
     transaction_type: string;
     is_excluded: boolean;
+    user_excluded: boolean;
     my_share_amount: number | null;
     settlement_flag: boolean;
     settlement_note: string | null;
@@ -607,6 +609,18 @@ export async function updateTransactionShare(id: string, share: TransactionShare
     if (!response.ok) {
         const detail = await response.json().catch(() => null);
         throw new Error(detail?.detail || 'Failed to update transaction share');
+    }
+    return response.json();
+}
+
+export async function setTransactionExcluded(id: string, excluded: boolean): Promise<{ id: string; user_excluded: boolean; is_excluded: boolean }> {
+    const response = await apiMutate(`/transactions/${id}/exclude`, {
+        method: 'PATCH',
+        body: JSON.stringify({ excluded }),
+    });
+    if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || 'Failed to update transaction exclusion');
     }
     return response.json();
 }

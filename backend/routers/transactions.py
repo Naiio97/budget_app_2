@@ -31,6 +31,7 @@ class Transaction(BaseModel):
     account_name: Optional[str] = None
     transaction_type: str = "normal"  # "normal", "internal_transfer", "family_transfer"
     is_excluded: bool = False
+    user_excluded: bool = False  # ruční vyřazení z příjmů/výdajů
     my_share_amount: Optional[float] = None  # my part of a shared expense; aggregations use it instead of amount
     settlement_flag: bool = False  # incoming settlement transfer (repayment) — excluded from income
     settlement_note: Optional[str] = None
@@ -198,6 +199,7 @@ async def get_transactions(
             account_name=account_name,
             transaction_type=tx.transaction_type or "normal",
             is_excluded=tx.is_excluded or False,
+            user_excluded=tx.user_excluded or False,
             my_share_amount=tx.my_share_amount,
             settlement_flag=tx.settlement_flag or False,
             settlement_note=tx.settlement_note,
@@ -395,10 +397,10 @@ async def update_transaction_category(
     old_category = tx.category
     tx.category = data.category
     
-    # Set is_excluded flag based on category type
+    # Set is_excluded flag based on category type (ruční vyřazení má přednost)
     excluded_categories = ["Internal Transfer", "Family Transfer"]
-    tx.is_excluded = data.category in excluded_categories
-    
+    tx.is_excluded = (data.category in excluded_categories) or bool(tx.user_excluded)
+
     # Also update transaction_type if changing to transfer category
     if data.category == "Internal Transfer":
         tx.transaction_type = "internal_transfer"
@@ -473,7 +475,7 @@ async def update_transaction_category(
         )
         for matching_tx in retro_result.scalars():
             matching_tx.category = data.category
-            matching_tx.is_excluded = data.category in excluded_categories
+            matching_tx.is_excluded = (data.category in excluded_categories) or bool(matching_tx.user_excluded)
             if data.category == "Internal Transfer":
                 matching_tx.transaction_type = "internal_transfer"
             elif data.category == "Family Transfer":
@@ -616,6 +618,7 @@ async def get_transaction_detail(
         "account_type": tx.account_type,
         "transaction_type": tx.transaction_type,
         "is_excluded": tx.is_excluded,
+        "user_excluded": tx.user_excluded or False,
         "my_share_amount": tx.my_share_amount,
         "settlement_flag": tx.settlement_flag or False,
         "settlement_note": tx.settlement_note,
@@ -686,7 +689,7 @@ async def update_transaction_type(
     
     old_type = tx.transaction_type
     tx.transaction_type = data.transaction_type
-    tx.is_excluded = data.transaction_type != "normal"
+    tx.is_excluded = (data.transaction_type != "normal") or bool(tx.user_excluded)
     
     # Update category based on type
     if data.transaction_type == "internal_transfer":
@@ -701,6 +704,49 @@ async def update_transaction_type(
         "old_type": old_type,
         "new_type": data.transaction_type,
         "is_excluded": tx.is_excluded
+    }
+
+
+class ExcludeUpdate(BaseModel):
+    excluded: bool
+
+
+@router.patch("/{transaction_id}/exclude")
+async def update_transaction_excluded(
+    transaction_id: str,
+    data: ExcludeUpdate,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ruční vyřazení/zařazení platby do příjmů a výdajů.
+
+    Užitečné na splátkové konstrukce (Air/Twisto: plná platba + okamžitá vratka)
+    a jiné položky, co zkreslují bilanci. `user_excluded` drží volbu odděleně od
+    is_excluded (které přepočítává sync), takže synchronizace ji nepřepíše.
+    """
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.id == transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
+    )
+    tx = tx_result.scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    tx.user_excluded = data.excluded
+    if data.excluded:
+        tx.is_excluded = True
+    else:
+        # Zpět na odvozený stav — vyřazený zůstane jen skutečný převod
+        tx.is_excluded = (tx.transaction_type or "normal") != "normal"
+
+    await db.commit()
+
+    return {
+        "id": transaction_id,
+        "user_excluded": tx.user_excluded,
+        "is_excluded": tx.is_excluded,
     }
 
 
@@ -762,7 +808,7 @@ async def update_transaction_share(
     # settlement summary can count it as "received".
     if data.settlement_flag and tx.transaction_type != "normal":
         tx.transaction_type = "normal"
-        tx.is_excluded = False
+        tx.is_excluded = bool(tx.user_excluded)  # ruční vyřazení zůstává
         if tx.category in ("Internal Transfer", "Family Transfer"):
             tx.category = "Other"
 

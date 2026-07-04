@@ -63,7 +63,10 @@ class TransactionModel(Base):
     category = Column(String, nullable=True)
     account_type = Column(String, nullable=False)  # "bank" or "investment"
     transaction_type = Column(String, default="normal")  # "normal", "internal_transfer", "family_transfer"
-    is_excluded = Column(Boolean, default=False)  # True = excluded from income/expense calculations
+    is_excluded = Column(Boolean, default=False)  # True = excluded from income/expense calculations (derived: transfers, category)
+    # Ruční vyřazení uživatelem — nezávislé na is_excluded, aby ho sync/detekce
+    # transferů nepřepsala. Když je True, is_excluded se drží také True.
+    user_excluded = Column(Boolean, default=False, server_default="false", nullable=False)
     # Shared costs & settlement (VYLEPSENI.md 3.1, light variant):
     my_share_amount = Column(Float, nullable=True)  # my part of a shared expense (positive); aggregations count this instead of the full amount
     settlement_flag = Column(Boolean, default=False)  # True = incoming settlement transfer — excluded from income
