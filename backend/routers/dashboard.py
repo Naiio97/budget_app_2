@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel, TagModel, TransactionTagModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -484,6 +484,180 @@ async def get_net_worth_history(
     return {
         "history": history,
         "currency": "CZK"
+    }
+
+
+def build_wrapped(transactions, income_category_names: set[str], year: int) -> dict:
+    """Roční „Spending Wrapped" z načtených bankovních transakcí.
+
+    Stejné konvence jako monthly-report: přeskočit is_excluded, výdaje počítat
+    přes _my_expense_amount, vypořádání není příjem, příjmové kategorie nejsou
+    v žebříčku výdajových kategorií. Čistá funkce kvůli testovatelnosti.
+    """
+    monthly = {f"{year}-{m:02d}": {"income": 0.0, "expenses": 0.0} for m in range(1, 13)}
+    merchants: dict[str, dict] = {}
+    categories: dict[str, dict] = {}
+    spending_days: set[str] = set()
+    biggest = None
+    income_total = expenses_total = 0.0
+    expense_count = 0
+
+    for tx in transactions:
+        if not tx.date or tx.is_excluded:
+            continue
+        month = tx.date[:7]
+        if month not in monthly:
+            continue
+
+        if tx.amount >= 0:
+            if not tx.settlement_flag:
+                monthly[month]["income"] += tx.amount
+                income_total += tx.amount
+            continue
+
+        spent = _my_expense_amount(tx)
+        monthly[month]["expenses"] += spent
+        expenses_total += spent
+        expense_count += 1
+        spending_days.add(tx.date)
+
+        if biggest is None or spent > biggest["amount"]:
+            biggest = {
+                "description": tx.description,
+                "amount": spent,
+                "date": tx.date,
+                "category": tx.category or "Other",
+            }
+
+        # Obchodník = protistrana z banky, fallback popis transakce
+        name = tx.description
+        if tx.raw_json:
+            try:
+                raw = json.loads(tx.raw_json)
+                if isinstance(raw, dict) and raw.get("creditorName"):
+                    name = raw["creditorName"]
+            except Exception:
+                pass
+        key = (name or "?").strip()
+        m = merchants.setdefault(key, {"name": key, "total": 0.0, "count": 0})
+        m["total"] += spent
+        m["count"] += 1
+
+        cat = tx.category or "Other"
+        if cat not in income_category_names:
+            c = categories.setdefault(cat, {"category": cat, "total": 0.0, "count": 0})
+            c["total"] += spent
+            c["count"] += 1
+
+    monthly_list = [
+        {"month": month, "income": round(v["income"], 2), "expenses": round(v["expenses"], 2)}
+        for month, v in sorted(monthly.items())
+    ]
+    top_month = max(monthly_list, key=lambda m: m["expenses"]) if expenses_total > 0 else None
+
+    # Dny bez utrácení jen za už proběhlou část roku
+    now = datetime.utcnow()
+    year_start = datetime(year, 1, 1)
+    year_end = min(datetime(year, 12, 31), now) if year == now.year else datetime(year, 12, 31)
+    days_elapsed = max(0, (year_end - year_start).days + 1)
+
+    return {
+        "totals": {
+            "income": round(income_total, 2),
+            "expenses": round(expenses_total, 2),
+            "saved": round(income_total - expenses_total, 2),
+            "expense_count": expense_count,
+            "no_spend_days": max(0, days_elapsed - len(spending_days)),
+            "days_elapsed": days_elapsed,
+        },
+        "monthly": monthly_list,
+        "top_month": top_month,
+        "top_merchants": sorted(merchants.values(), key=lambda m: m["total"], reverse=True)[:5],
+        "top_categories": sorted(categories.values(), key=lambda c: c["total"], reverse=True)[:5],
+        "biggest_expense": biggest,
+    }
+
+
+@router.get("/wrapped")
+async def get_spending_wrapped(
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Roční přehled („Spending Wrapped"): top obchodníci, nejdražší měsíc,
+    žebříček kategorií, největší výdaj a součty za tagy/projekty."""
+    visible_accounts = select(AccountModel.id).where(
+        AccountModel.user_id == current_user.id,
+        AccountModel.is_visible == True,
+    )
+
+    years_result = await db.execute(
+        select(func.distinct(func.substr(TransactionModel.date, 1, 4)))
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "bank",
+            TransactionModel.date != "",
+            TransactionModel.account_id.in_(visible_accounts),
+        )
+    )
+    available_years = sorted(
+        (int(y) for (y,) in years_result.all() if y and y.isdigit()), reverse=True
+    )
+    if year is None:
+        year = available_years[0] if available_years else datetime.utcnow().year
+
+    income_cat_result = await db.execute(
+        select(CategoryModel.name).where(
+            CategoryModel.user_id == current_user.id,
+            CategoryModel.is_income == True,
+        )
+    )
+    income_category_names = {row[0] for row in income_cat_result.all()}
+
+    start, end = f"{year}-01-01", f"{year + 1}-01-01"
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "bank",
+            TransactionModel.date >= start,
+            TransactionModel.date < end,
+            TransactionModel.account_id.in_(visible_accounts),
+        )
+    )
+    transactions = tx_result.scalars().all()
+
+    wrapped = build_wrapped(transactions, income_category_names, year)
+
+    # Součty za tagy/projekty — stejná sémantika jako tag summary (moje část,
+    # bez převodů a vypořádání)
+    tag_rows = await db.execute(
+        select(TagModel.id, TagModel.name, TagModel.color, TransactionModel)
+        .join(TransactionTagModel, TransactionTagModel.tag_id == TagModel.id)
+        .join(TransactionModel, TransactionModel.id == TransactionTagModel.transaction_id)
+        .where(
+            TagModel.user_id == current_user.id,
+            TransactionModel.date >= start,
+            TransactionModel.date < end,
+        )
+    )
+    tags: dict[int, dict] = {}
+    for tag_id, tag_name, tag_color, tx in tag_rows.all():
+        if tx.is_excluded or (tx.transaction_type or "normal") != "normal" or tx.settlement_flag:
+            continue
+        if tx.amount >= 0:
+            continue
+        t = tags.setdefault(tag_id, {"name": tag_name, "color": tag_color, "total": 0.0, "count": 0})
+        t["total"] += _my_expense_amount(tx)
+        t["count"] += 1
+    for t in tags.values():
+        t["total"] = round(t["total"], 2)
+
+    return {
+        "year": year,
+        "available_years": available_years,
+        "currency": "CZK",
+        **wrapped,
+        "tags": sorted(tags.values(), key=lambda t: t["total"], reverse=True),
     }
 
 
