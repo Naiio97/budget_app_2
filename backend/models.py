@@ -105,12 +105,14 @@ class SettingsModel(Base):
 
 
 class BudgetModel(Base):
-    """Monthly budget per category"""
+    """Monthly budget for one category or a named group of categories."""
     __tablename__ = "budgets"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    category = Column(String, nullable=False)  # "Food", "Transport", etc.
+    category = Column(String, nullable=False)  # primární kategorie (u skupiny první z categories) — zpětná kompatibilita
+    name = Column(String, nullable=True)  # zobrazovaný název (např. "Běžný život"); NULL = použij category
+    categories = Column(Text, nullable=True)  # JSON seznam kategorií u skupinového rozpočtu; NULL = jednokategoriový
     amount = Column(Float, nullable=False)  # Monthly limit in CZK
     currency = Column(String, default="CZK")
     is_active = Column(Boolean, default=True)

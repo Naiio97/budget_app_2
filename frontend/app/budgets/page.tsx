@@ -3,29 +3,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
-import CustomSelect from '@/components/CustomSelect';
 import BudgetBurndown, { BudgetPaceLabel } from '@/components/BudgetBurndown';
 import {
-    Budget, SavingsGoal,
-    getBudgets, createBudget, deleteBudget,
+    Budget, SavingsGoal, BudgetCategoryOption,
+    getBudgets, createBudget, deleteBudget, getBudgetCategoryOptions,
     getGoals, createGoal, updateGoal, deleteGoal
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
-import { getCategoryIcon as lineCategoryIcon } from '@/lib/category-icons';
-
-const CATEGORIES = [
-    { value: 'Food', label: 'Jídlo', icon: 'utensils' },
-    { value: 'Transport', label: 'Doprava', icon: 'car' },
-    { value: 'Utilities', label: 'Energie & Služby', icon: 'bulb' },
-    { value: 'Entertainment', label: 'Zábava', icon: 'film' },
-    { value: 'Shopping', label: 'Nákupy', icon: 'cart' },
-    { value: 'Other', label: 'Ostatní', icon: 'box' },
-];
-
-function getCategoryIcon(category: string, size = 15) {
-    return lineCategoryIcon(CATEGORIES.find(c => c.value === category)?.icon || 'box', size);
-}
+import { getCategoryIcon as rawCategoryIcon } from '@/lib/category-icons';
 
 function progressColor(pct: number): string {
     if (pct >= 100) return 'var(--neg)';
@@ -36,18 +22,37 @@ function progressColor(pct: number): string {
 const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
+type Tab = 'budgets' | 'goals';
+
 export default function BudgetsPage() {
     const queryClient = useQueryClient();
 
+    const [tab, setTab] = useState<Tab>('budgets');
     const [showBudgetForm, setShowBudgetForm] = useState(false);
     const [showGoalForm, setShowGoalForm] = useState(false);
-    const [newBudget, setNewBudget] = useState({ category: '', amount: '' });
+    const [newBudget, setNewBudget] = useState<{ name: string; categories: string[]; amount: string }>({ name: '', categories: [], amount: '' });
     const [newGoal, setNewGoal] = useState({ name: '', target_amount: '', deadline: '' });
     const [addAmountGoalId, setAddAmountGoalId] = useState<number | null>(null);
     const [addAmount, setAddAmount] = useState('');
 
     const { data: budgets = [] } = useQuery<Budget[]>({ queryKey: queryKeys.budgets, queryFn: getBudgets });
     const { data: goals = [] } = useQuery<SavingsGoal[]>({ queryKey: queryKeys.goals, queryFn: getGoals });
+    const { data: categoryOptions = [] } = useQuery<BudgetCategoryOption[]>({
+        queryKey: ['budget-category-options'],
+        queryFn: getBudgetCategoryOptions,
+        staleTime: 5 * 60_000,
+    });
+
+    // Ikona kategorie podle reálného záznamu z DB (fallback box)
+    const iconFor = (categoryName: string, size = 15) =>
+        rawCategoryIcon(categoryOptions.find(c => c.name === categoryName)?.icon, size);
+
+    const toggleNewCategory = (name: string) => setNewBudget(prev => ({
+        ...prev,
+        categories: prev.categories.includes(name)
+            ? prev.categories.filter(c => c !== name)
+            : [...prev.categories, name],
+    }));
 
     const invalidateBudgets = () => {
         queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
@@ -56,8 +61,8 @@ export default function BudgetsPage() {
     };
 
     const createBudgetMutation = useMutation({
-        mutationFn: (data: { category: string; amount: number }) => createBudget(data),
-        onSuccess: () => { invalidateBudgets(); setNewBudget({ category: '', amount: '' }); setShowBudgetForm(false); },
+        mutationFn: (data: { name?: string; categories: string[]; amount: number }) => createBudget(data),
+        onSuccess: () => { invalidateBudgets(); setNewBudget({ name: '', categories: [], amount: '' }); setShowBudgetForm(false); },
     });
     const deleteBudgetMutation = useMutation({ mutationFn: (id: number) => deleteBudget(id), onSuccess: invalidateBudgets });
     const createGoalMutation = useMutation({
@@ -93,6 +98,16 @@ export default function BudgetsPage() {
                     </div>
                 </div>
 
+                {/* Tabs — rozpočty podle kategorií vs. spořící cíle na samostatných záložkách */}
+                <div className="seg" style={{ alignSelf: 'flex-start' }}>
+                    {([['budgets', 'Rozpočty'], ['goals', 'Spořící cíle']] as [Tab, string][]).map(([val, label]) => (
+                        <div key={val} className={`seg-item ${tab === val ? 'active' : ''}`} onClick={() => setTab(val)}>
+                            {label}
+                        </div>
+                    ))}
+                </div>
+
+                {tab === 'budgets' && (<>
                 {/* Total overview KPI */}
                 <div className="surface kpi">
                     <div className="kpi-label">Celkem utraceno tento měsíc</div>
@@ -119,34 +134,58 @@ export default function BudgetsPage() {
                 {/* Budget categories */}
                 <div className="surface">
                     <div className="card-head">
-                        <h3>{Icons.nav.budgets} Rozpočty podle kategorií</h3>
+                        <h3>{Icons.nav.budgets} Rozpočty</h3>
                         <button className="btn btn-primary btn-sm" onClick={() => setShowBudgetForm(!showBudgetForm)}>
                             + Přidat
                         </button>
                     </div>
                     <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
                         {showBudgetForm && (
-                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
-                                <div style={{ flex: '1 1 200px' }}>
-                                    <CustomSelect
-                                        value={newBudget.category}
-                                        onChange={(val) => setNewBudget({ ...newBudget, category: val })}
-                                        options={CATEGORIES.filter(c => !budgets.find(b => b.category === c.value)).map(cat => ({ value: cat.value, label: cat.label, icon: lineCategoryIcon(cat.icon, 15) }))}
-                                        placeholder="Vyberte kategorii..."
-                                    />
-                                </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
                                 <input
-                                    type="number"
+                                    type="text"
                                     className="input"
-                                    placeholder="Limit (Kč)"
-                                    value={newBudget.amount}
-                                    onChange={(e) => setNewBudget({ ...newBudget, amount: e.target.value })}
-                                    style={{ width: 150 }}
+                                    placeholder="Název (nepovinné, např. Běžný život)"
+                                    value={newBudget.name}
+                                    onChange={(e) => setNewBudget({ ...newBudget, name: e.target.value })}
                                 />
-                                <button className="btn btn-primary" onClick={() => createBudgetMutation.mutate({ category: newBudget.category, amount: parseFloat(newBudget.amount) })} disabled={createBudgetMutation.isPending}>
-                                    Uložit
-                                </button>
-                                <button className="btn" onClick={() => setShowBudgetForm(false)}>Zrušit</button>
+                                <div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 6 }}>
+                                        Kategorie {newBudget.categories.length > 1 && `(${newBudget.categories.length} — sloučí se do jednoho limitu)`}
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                        {categoryOptions.map(cat => {
+                                            const active = newBudget.categories.includes(cat.name);
+                                            return (
+                                                <button key={cat.name} type="button"
+                                                    onClick={() => toggleNewCategory(cat.name)}
+                                                    className={`chip ${active ? 'chip-accent' : ''}`}
+                                                    style={{ cursor: 'pointer', border: active ? 'none' : '0.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                                    {iconFor(cat.name, 13)} {cat.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        placeholder="Limit (Kč)"
+                                        value={newBudget.amount}
+                                        onChange={(e) => setNewBudget({ ...newBudget, amount: e.target.value })}
+                                        style={{ width: 150 }}
+                                    />
+                                    <button className="btn btn-primary"
+                                        onClick={() => createBudgetMutation.mutate({ name: newBudget.name.trim() || undefined, categories: newBudget.categories, amount: parseFloat(newBudget.amount) })}
+                                        disabled={createBudgetMutation.isPending || newBudget.categories.length === 0 || !newBudget.amount}>
+                                        Uložit
+                                    </button>
+                                    <button className="btn" onClick={() => setShowBudgetForm(false)}>Zrušit</button>
+                                </div>
+                                {createBudgetMutation.isError && (
+                                    <span style={{ fontSize: 12, color: 'var(--neg)' }}>{(createBudgetMutation.error as Error).message}</span>
+                                )}
                             </div>
                         )}
 
@@ -155,8 +194,8 @@ export default function BudgetsPage() {
                         ) : (
                             budgets.map(budget => (
                                 <div key={budget.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{ fontWeight: 600, fontSize: 14 }}>{getCategoryIcon(budget.category)} {budget.category}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontWeight: 600, fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{iconFor(budget.categories[0] ?? budget.category)} {budget.name}</span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--text-2)' }}>
                                                 {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
@@ -164,6 +203,15 @@ export default function BudgetsPage() {
                                             <button className="btn btn-icon btn-ghost btn-sm" onClick={() => deleteBudgetMutation.mutate(budget.id)}>{Icons.action.delete}</button>
                                         </div>
                                     </div>
+                                    {budget.categories.length > 1 && (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                            {budget.categories.map(cat => (
+                                                <span key={cat} className="chip" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    {iconFor(cat, 11)} {cat}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                     <div className="progress">
                                         <span style={{ width: `${Math.min(budget.percentage, 100)}%`, background: progressColor(budget.percentage) }} />
                                     </div>
@@ -181,8 +229,10 @@ export default function BudgetsPage() {
                         )}
                     </div>
                 </div>
+                </>)}
 
                 {/* Savings goals */}
+                {tab === 'goals' && (
                 <div className="surface">
                     <div className="card-head">
                         <h3>{Icons.section.savingsGoals} Spořící cíle</h3>
@@ -257,6 +307,7 @@ export default function BudgetsPage() {
                         )}
                     </div>
                 </div>
+                )}
 
             </div>
         </MainLayout>

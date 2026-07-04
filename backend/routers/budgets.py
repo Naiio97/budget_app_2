@@ -4,6 +4,7 @@ from sqlalchemy import select, func
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+import json
 
 from auth import get_current_user
 from database import get_db
@@ -12,15 +13,35 @@ from models import BudgetModel, SavingsGoalModel, TransactionModel, UserModel, A
 router = APIRouter()
 
 
+def budget_category_list(budget: BudgetModel) -> list[str]:
+    """Kategorie, které rozpočet pokrývá — u skupiny víc, jinak jedna."""
+    if budget.categories:
+        try:
+            cats = json.loads(budget.categories)
+            if isinstance(cats, list) and cats:
+                return [str(c) for c in cats]
+        except Exception:
+            pass
+    return [budget.category] if budget.category else []
+
+
+def budget_display_name(budget: BudgetModel) -> str:
+    return budget.name or budget.category or "Rozpočet"
+
+
 # === Pydantic Models ===
 
 class BudgetCreate(BaseModel):
-    category: str
     amount: float
     currency: str = "CZK"
+    name: Optional[str] = None            # název skupiny ("Běžný život"); NULL = použije se kategorie
+    categories: List[str] = []            # jedna nebo víc kategorií
+    category: Optional[str] = None        # legacy: jedna kategorie (když se neposílá categories)
 
 
 class BudgetUpdate(BaseModel):
+    name: Optional[str] = None
+    categories: Optional[List[str]] = None
     category: Optional[str] = None
     amount: Optional[float] = None
     is_active: Optional[bool] = None
@@ -33,7 +54,9 @@ class DailySpendingPoint(BaseModel):
 
 class BudgetResponse(BaseModel):
     id: int
-    category: str
+    category: str                      # primární kategorie (zpětná kompatibilita)
+    name: str                          # zobrazovaný název
+    categories: List[str] = []         # všechny pokryté kategorie
     amount: float
     currency: str
     is_active: bool
@@ -86,14 +109,18 @@ def get_current_month_range():
     return start, end
 
 
-async def get_category_spending(db: AsyncSession, user_id: int, category: str) -> float:
-    """Get total spending for a category in current month (user-scoped)"""
+async def get_category_spending(db: AsyncSession, user_id: int, categories) -> float:
+    """Total spending for a category (or list of categories) this month.
+    Přijímá string i list — u skupinového rozpočtu sečte všechny kategorie."""
+    cats = [categories] if isinstance(categories, str) else list(categories)
+    if not cats:
+        return 0.0
     start, end = get_current_month_range()
 
     result = await db.execute(
         select(func.sum(TransactionModel.amount))
         .where(TransactionModel.user_id == user_id)
-        .where(TransactionModel.category == category)
+        .where(TransactionModel.category.in_(cats))
         .where(TransactionModel.date >= start)
         .where(TransactionModel.date < end)
         .where(TransactionModel.amount < 0)
@@ -192,8 +219,11 @@ async def get_budgets(
     )
     budgets = result.scalars().all()
 
+    all_categories = set()
+    for b in budgets:
+        all_categories.update(budget_category_list(b))
     daily_by_category = await get_daily_spending_by_category(
-        db, current_user.id, [b.category for b in budgets]
+        db, current_user.id, list(all_categories)
     )
     now = datetime.utcnow()
     days_elapsed = now.day
@@ -201,15 +231,23 @@ async def get_budgets(
 
     response = []
     for budget in budgets:
+        cats = budget_category_list(budget)
+        # Sečti denní útratu přes všechny kategorie skupiny do jedné řady
+        combined_daily: dict[int, float] = {}
+        for c in cats:
+            for day, amt in daily_by_category.get(c, {}).items():
+                combined_daily[day] = combined_daily.get(day, 0.0) + amt
+
         spent, projected, cumulative = build_trend(
-            daily_by_category.get(budget.category, {}),
-            budget.amount, days_elapsed, days_in_month,
+            combined_daily, budget.amount, days_elapsed, days_in_month,
         )
         percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
 
         response.append(BudgetResponse(
             id=budget.id,
             category=budget.category,
+            name=budget_display_name(budget),
+            categories=cats,
             amount=budget.amount,
             currency=budget.currency,
             is_active=budget.is_active,
@@ -230,37 +268,53 @@ async def create_budget(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new budget"""
-    existing = await db.execute(
-        select(BudgetModel).where(
-            BudgetModel.user_id == current_user.id,
-            BudgetModel.category == budget.category,
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail=f"Budget for category '{budget.category}' already exists")
+    """Create a new budget — jednu kategorii, nebo pojmenovanou skupinu kategorií."""
+    # Normalizuj kategorie (nová `categories`, fallback legacy `category`)
+    cats = [c.strip() for c in (budget.categories or ([budget.category] if budget.category else [])) if c and c.strip()]
+    # zachovej pořadí, zahoď duplicity
+    cats = list(dict.fromkeys(cats))
+    if not cats:
+        raise HTTPException(status_code=400, detail="At least one category is required")
+    if budget.amount is None or budget.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
+    name = (budget.name or "").strip() or None
+    is_group = len(cats) > 1 or name is not None
+    display_name = name or cats[0]
+
+    # Duplicitní název (u skupiny) / kategorie (u jednokategoriového)
+    existing_budgets = (await db.execute(
+        select(BudgetModel).where(BudgetModel.user_id == current_user.id)
+    )).scalars().all()
+    for b in existing_budgets:
+        if budget_display_name(b).lower() == display_name.lower():
+            raise HTTPException(status_code=400, detail=f"Budget '{display_name}' already exists")
 
     new_budget = BudgetModel(
         user_id=current_user.id,
-        category=budget.category,
+        category=cats[0],
+        name=name,
+        categories=json.dumps(cats) if is_group else None,
         amount=budget.amount,
-        currency=budget.currency
+        currency=budget.currency,
     )
     db.add(new_budget)
     await db.commit()
     await db.refresh(new_budget)
 
-    spent = await get_category_spending(db, current_user.id, new_budget.category)
+    spent = await get_category_spending(db, current_user.id, cats)
     percentage = (spent / new_budget.amount * 100) if new_budget.amount > 0 else 0
 
     return BudgetResponse(
         id=new_budget.id,
         category=new_budget.category,
+        name=display_name,
+        categories=cats,
         amount=new_budget.amount,
         currency=new_budget.currency,
         is_active=new_budget.is_active,
         spent=spent,
-        percentage=round(percentage, 1)
+        percentage=round(percentage, 1),
     )
 
 
@@ -287,8 +341,19 @@ async def update_budget(
     """Update a budget"""
     db_budget = await _get_user_budget(db, budget_id, current_user.id)
 
-    if budget.category is not None:
-        db_budget.category = budget.category
+    if budget.categories is not None or budget.category is not None:
+        cats = [c.strip() for c in (budget.categories or ([budget.category] if budget.category else [])) if c and c.strip()]
+        cats = list(dict.fromkeys(cats))
+        if not cats:
+            raise HTTPException(status_code=400, detail="At least one category is required")
+        db_budget.category = cats[0]
+        db_budget.categories = json.dumps(cats) if (len(cats) > 1 or db_budget.name) else None
+    if budget.name is not None:
+        name = budget.name.strip() or None
+        db_budget.name = name
+        # název dělá z rozpočtu skupinu → ulož i categories
+        if name and not db_budget.categories:
+            db_budget.categories = json.dumps(budget_category_list(db_budget))
     if budget.amount is not None:
         db_budget.amount = budget.amount
     if budget.is_active is not None:
@@ -297,17 +362,20 @@ async def update_budget(
     await db.commit()
     await db.refresh(db_budget)
 
-    spent = await get_category_spending(db, current_user.id, db_budget.category)
+    cats = budget_category_list(db_budget)
+    spent = await get_category_spending(db, current_user.id, cats)
     percentage = (spent / db_budget.amount * 100) if db_budget.amount > 0 else 0
 
     return BudgetResponse(
         id=db_budget.id,
         category=db_budget.category,
+        name=budget_display_name(db_budget),
+        categories=cats,
         amount=db_budget.amount,
         currency=db_budget.currency,
         is_active=db_budget.is_active,
         spent=spent,
-        percentage=round(percentage, 1)
+        percentage=round(percentage, 1),
     )
 
 
@@ -343,14 +411,15 @@ async def get_budget_overview(
     categories = []
 
     for budget in budgets:
-        spent = await get_category_spending(db, current_user.id, budget.category)
+        cats = budget_category_list(budget)
+        spent = await get_category_spending(db, current_user.id, cats)
         percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
 
         total_budget += budget.amount
         total_spent += spent
 
         categories.append({
-            "category": budget.category,
+            "category": budget_display_name(budget),
             "amount": budget.amount,
             "spent": spent,
             "percentage": round(percentage, 1)

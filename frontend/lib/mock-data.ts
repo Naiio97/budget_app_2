@@ -212,9 +212,9 @@ function mockBudgetTrend(spent: number) {
 }
 
 export const MOCK_BUDGETS: Budget[] = [
-    { id: 1, category: 'Bydlení', amount: 18000, currency: 'CZK', is_active: true, spent: 18000, percentage: 100, ...mockBudgetTrend(18000) },
-    { id: 2, category: 'Jídlo', amount: 10000, currency: 'CZK', is_active: true, spent: 9500, percentage: 95, ...mockBudgetTrend(9500) },
-    { id: 3, category: 'Doprava', amount: 5000, currency: 'CZK', is_active: true, spent: 4500, percentage: 90, ...mockBudgetTrend(4500) },
+    { id: 1, category: 'Food', name: 'Běžný život', categories: ['Food', 'Shopping', 'Entertainment'], amount: 18000, currency: 'CZK', is_active: true, spent: 15200, percentage: 84, ...mockBudgetTrend(15200) },
+    { id: 2, category: 'Utilities', name: 'Bydlení & energie', categories: ['Utilities'], amount: 10000, currency: 'CZK', is_active: true, spent: 9500, percentage: 95, ...mockBudgetTrend(9500) },
+    { id: 3, category: 'Transport', name: 'Doprava', categories: ['Transport'], amount: 5000, currency: 'CZK', is_active: true, spent: 4500, percentage: 90, ...mockBudgetTrend(4500) },
 ];
 
 export const MOCK_GOALS: SavingsGoal[] = [
