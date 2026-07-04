@@ -764,7 +764,9 @@ export interface DailySpendingPoint {
 
 export interface Budget {
     id: number;
-    category: string;
+    category: string;          // primární kategorie (zpětná kompatibilita)
+    name: string;              // zobrazovaný název (např. "Běžný život")
+    categories: string[];      // všechny pokryté kategorie
     amount: number;
     currency: string;
     is_active: boolean;
@@ -811,13 +813,28 @@ export async function getBudgetOverview(): Promise<BudgetOverview> {
     return fetchApi<BudgetOverview>('/budgets/overview');
 }
 
-export async function createBudget(data: { category: string; amount: number }): Promise<Budget> {
+export async function createBudget(data: { name?: string; categories: string[]; amount: number }): Promise<Budget> {
     const response = await apiMutate(`/budgets/`, {
         method: 'POST',
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to create budget');
+    if (!response.ok) {
+        const detail = await response.json().catch(() => null);
+        throw new Error(detail?.detail || 'Failed to create budget');
+    }
     return response.json();
+}
+
+export interface BudgetCategoryOption {
+    name: string;
+    icon: string;
+    color?: string;
+    is_income?: boolean;
+}
+
+export async function getBudgetCategoryOptions(): Promise<BudgetCategoryOption[]> {
+    const raw = await fetchApi<BudgetCategoryOption[]>('/categories/');
+    return (Array.isArray(raw) ? raw : []).filter(c => !c.is_income);
 }
 
 export async function updateBudget(id: number, data: { category?: string; amount?: number; is_active?: boolean }): Promise<Budget> {
