@@ -72,10 +72,29 @@
    Trénovací data = ruční opravy kategorií (po 4.8 čistě v DB).
 2. **Automatický sync na pozadí** — Nicolas si implementuje **sám** (Azure Container
    Apps Jobs / cron). Notifikace po syncu už na to čekají (`notify_after_sync`).
-3. K zvážení (zatím nerozhodnuto): automatické zálohy DB do Blob Storage,
-   bezpečnostní review (VYLEPSENI 4.9), trend utrácení v budgetech (4.4),
-   globální hledání Cmd+K, roční přehled „Spending Wrapped".
-4. Odloženo/nechceme: export dat (4.2), kalendář cashflow (4.5).
+   Doporučené rozložení kvóty 4×/den: ráno / poledne / večer / noc.
+3. Odloženo/nechceme: export dat (4.2), kalendář cashflow (4.5).
+
+## Návrhy Clauda k zvážení (2026-07-03, zatím nerozhodnuto)
+
+Nad rámec VYLEPSENI.md, vzešlé z toho, co při práci na appce reálně skřípalo:
+
+- **Automatické zálohy DB** 🟢 — denní `pg_dump` z Azure Postgres do Blob Storage
+  + retence. Roky finanční historie dnes existují jen v živé DB. Malá práce,
+  velký klid; devops téma (může navazovat na auto-sync job).
+- **Bezpečnostní review** 🟡 — VYLEPSENI 4.9 zmiňuje „critical security issues
+  found April 2026" a není jasné, co je vyřešené. Projít auth, CORS, rate limity,
+  izolaci per-user (jde spustit `/security-review`).
+- **Trend utrácení v budgetech (4.4)** 🟡 — budgety ukazují „utraceno X z Y",
+  ale ne tempo. Burn-down v měsíci + predikce „tímhle tempem překročíš o 1 200 Kč".
+  Malá změna, velký efekt na chování.
+- **Globální hledání (Cmd+K)** 🟢 — paleta příkazů: napíšeš „lidl" → transakce,
+  „úvěry" → stránka. Rychlá výhra pro každodenní používání.
+- **Roční přehled („Spending Wrapped")** 🟢–🟡 — jednou ročně: top obchodníci,
+  nejdražší měsíc, vývoj majetku, součty za tagy/projekty. Data už existují.
+
+(Původně navržené „zdraví syncu + notifikace" a „automatický sync" už jsou
+vyřešené/rozdělené — viz výše.)
 
 ## Poznámky pro nový chat
 
