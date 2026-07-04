@@ -6,7 +6,8 @@ import {
     Pie, InvestmentPortfolioDetail, PortfolioHistory,
     ManualInvestmentAccount,
     Loan, LoanPayment, LoansSummary,
-    Subscription, SubscriptionsSummary, DetectedSubscription
+    Subscription, SubscriptionsSummary, DetectedSubscription,
+    SpendingWrapped
 } from './api';
 
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
@@ -497,6 +498,48 @@ export const MOCK_CONTACTS: Contact[] = [
     { iban: 'CZ1234567890123456789012', name: 'Maminka', source: 'manual', note: 'Měsíční převod' },
 ];
 
+const WRAPPED_YEAR = new Date().getFullYear();
+
+export const MOCK_WRAPPED: SpendingWrapped = {
+    year: WRAPPED_YEAR,
+    available_years: [WRAPPED_YEAR, WRAPPED_YEAR - 1],
+    currency: 'CZK',
+    totals: {
+        income: 780000,
+        expenses: 493200,
+        saved: 286800,
+        expense_count: 611,
+        no_spend_days: 74,
+        days_elapsed: 365,
+    },
+    monthly: Array.from({ length: 12 }, (_, i) => ({
+        month: `${WRAPPED_YEAR}-${String(i + 1).padStart(2, '0')}`,
+        income: 65000,
+        // deterministická variace: léto dražší, prosinec nejdražší (dárky)
+        expenses: Math.round(34000 + 8000 * Math.sin(i / 1.8) + (i === 11 ? 14000 : 0)),
+    })),
+    top_month: { month: `${WRAPPED_YEAR}-12`, income: 65000, expenses: 52400 },
+    top_merchants: [
+        { name: 'Lidl', total: 68400, count: 96 },
+        { name: 'Alza.cz', total: 42100, count: 11 },
+        { name: 'Shell', total: 31800, count: 42 },
+        { name: 'Wolt', total: 24300, count: 58 },
+        { name: 'IKEA', total: 19750, count: 6 },
+    ],
+    top_categories: [
+        { category: 'Food', total: 142300, count: 210 },
+        { category: 'Utilities', total: 96000, count: 48 },
+        { category: 'Shopping', total: 78400, count: 64 },
+        { category: 'Transport', total: 45100, count: 88 },
+        { category: 'Entertainment', total: 31200, count: 51 },
+    ],
+    biggest_expense: { description: 'Letenky Tokio', amount: 38400, date: `${WRAPPED_YEAR}-06-14`, category: 'Entertainment' },
+    tags: [
+        { name: `dovolená ${WRAPPED_YEAR}`, color: '#f97316', total: 86200, count: 24 },
+        { name: 'rekonstrukce', color: '#6366f1', total: 54100, count: 9 },
+    ],
+};
+
 export const MOCK_MONTHLY_REPORT = {
     monthly_totals: Array.from({ length: 6 }).map((_, i) => {
         const d = new Date();
@@ -588,6 +631,30 @@ export const MOCK_MANUAL_INVESTMENTS: ManualInvestmentAccount[] = [
 // Returns undefined for unknown paths; caller responds with {} so the page
 // doesn't crash on JSON.parse.
 export function dispatchDemoGet(path: string): unknown | undefined {
+    if (path.startsWith('/dashboard/wrapped')) {
+        // Respektuj ?year=, ať přepínač roku v demu skutečně přepíná
+        const requested = Number(new URLSearchParams(path.split('?')[1] ?? '').get('year'));
+        if (requested && requested !== MOCK_WRAPPED.year) {
+            const scale = 0.82; // starší rok = o něco menší čísla
+            return {
+                ...MOCK_WRAPPED,
+                year: requested,
+                totals: Object.fromEntries(
+                    Object.entries(MOCK_WRAPPED.totals).map(([k, v]) =>
+                        [k, k === 'days_elapsed' ? 365 : Math.round(v * scale)])
+                ),
+                monthly: MOCK_WRAPPED.monthly.map(m => ({
+                    month: `${requested}-${m.month.slice(5)}`,
+                    income: m.income,
+                    expenses: Math.round(m.expenses * scale),
+                })),
+                top_month: MOCK_WRAPPED.top_month
+                    ? { ...MOCK_WRAPPED.top_month, month: `${requested}-${MOCK_WRAPPED.top_month.month.slice(5)}`, expenses: Math.round(MOCK_WRAPPED.top_month.expenses * scale) }
+                    : null,
+            };
+        }
+        return MOCK_WRAPPED;
+    }
     if (path.startsWith('/dashboard/balance-history')) return MOCK_BALANCE_HISTORY;
     if (path.startsWith('/dashboard/net-worth-history')) return MOCK_NET_WORTH;
     if (path.startsWith('/dashboard/portfolio')) return MOCK_PORTFOLIO;

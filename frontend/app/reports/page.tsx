@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
@@ -200,6 +201,9 @@ export default function ReportsPage() {
                                 </div>
                             ))}
                         </div>
+                        <Link href="/wrapped" className="btn btn-sm" style={{ textDecoration: 'none' }}>
+                            ✦ Roční přehled
+                        </Link>
                     </div>
                 </div>
 
