@@ -15,6 +15,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { exitDemo, isDemoMode } from '@/lib/demo-mode';
 import IdleLogout from '@/components/IdleLogout';
+import CommandPalette, { openCommandPalette } from '@/components/CommandPalette';
 
 // Crisp line icons for the floating appbar (the global Icons map is emoji,
 // which looks off in the monochrome pill). Keyed by route.
@@ -23,7 +24,7 @@ const Svg = ({ children }: { children: ReactNode }) => (
         strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden
         style={{ display: 'block' }}>{children}</svg>
 );
-const APPBAR_ICONS: Record<string, ReactNode> = {
+export const APPBAR_ICONS: Record<string, ReactNode> = {
     '/': <Svg><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 22V12h6v10" /></Svg>,
     '/transactions': <Svg><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></Svg>,
     '/rozpocet': <Svg><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></Svg>,
@@ -36,6 +37,7 @@ const APPBAR_ICONS: Record<string, ReactNode> = {
     '/settings': <Svg><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></Svg>,
 };
 const MenuIcon = <Svg><path d="M3 12h18M3 6h18M3 18h18" /></Svg>;
+const SearchIcon = <Svg><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></Svg>;
 const SyncIcon = <Svg><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" /></Svg>;
 const CloseIcon = <Svg><path d="M18 6 6 18M6 6l12 12" /></Svg>;
 const MoonIcon = <Svg><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z" /></Svg>;
@@ -226,6 +228,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     return (
         <div className="app-root">
             <IdleLogout />
+            <CommandPalette />
             {/* Appbar — desktop only */}
             <header className="appbar">
                 <Link href="/" className="appbar-logo">
@@ -245,6 +248,14 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     ))}
                 </nav>
                 <span className="appbar-divider" aria-hidden />
+                <button
+                    onClick={openCommandPalette}
+                    className="appbar-theme"
+                    aria-label="Hledat (Cmd+K)"
+                    title="Hledat (⌘K)"
+                >
+                    {SearchIcon}
+                </button>
                 <button
                     onClick={toggleTheme}
                     className="appbar-theme"
@@ -413,6 +424,14 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                 <div>
                                     <div className="mobile-tools-title-row">
                                         <strong>Menu</strong>
+                                        <button
+                                            type="button"
+                                            className="mobile-theme-mini"
+                                            onClick={() => { setIsMobileToolsOpen(false); openCommandPalette(); }}
+                                            aria-label="Hledat"
+                                        >
+                                            {SearchIcon}
+                                        </button>
                                         <button
                                             type="button"
                                             className="mobile-theme-mini"

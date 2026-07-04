@@ -617,9 +617,25 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/transactions/')) {
         // Detail endpoint hits /transactions/{id}; the list is /transactions/
         // or /transactions/?... — anything after the trailing slash is the id.
-        const pathOnly = path.split('?')[0];
+        const [pathOnly, queryString] = path.split('?');
         const rest = pathOnly.slice('/transactions/'.length);
-        if (!rest) return MOCK_TRANSACTIONS;
+        if (!rest) {
+            // Respektuj search + limit, ať demo režim předvede i globální
+            // hledání (Cmd+K) místo vracení všeho
+            const params = new URLSearchParams(queryString ?? '');
+            const search = (params.get('search') ?? '').toLowerCase();
+            const limit = Number(params.get('limit')) || MOCK_TRANSACTIONS.items.length;
+            const filtered = search
+                ? MOCK_TRANSACTIONS.items.filter(t => t.description.toLowerCase().includes(search))
+                : MOCK_TRANSACTIONS.items;
+            return {
+                ...MOCK_TRANSACTIONS,
+                items: filtered.slice(0, limit),
+                total: filtered.length,
+                size: limit,
+                pages: Math.max(1, Math.ceil(filtered.length / limit)),
+            };
+        }
         return buildMockTransactionDetail(rest.split('/')[0]);
     }
     if (path.startsWith('/investments/portfolio-detail')) return MOCK_PORTFOLIO_DETAIL;
