@@ -21,6 +21,8 @@ export function openCommandPalette() {
 
 const PALETTE_PAGES = [
     ...NAV_PAGES,
+    // Stránky mimo hlavní navigaci — dostupné aspoň přes paletu
+    { href: '/wrapped', label: 'Roční přehled' },
     { href: '/settings', label: 'Nastavení' },
 ];
 

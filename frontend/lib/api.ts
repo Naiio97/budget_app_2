@@ -721,6 +721,42 @@ export async function deleteContact(iban: string): Promise<{ deleted: string }> 
 
 // === Budgets & Goals ===
 
+export interface WrappedMonth {
+    month: string;      // YYYY-MM
+    income: number;
+    expenses: number;
+}
+
+export interface WrappedMerchant {
+    name: string;
+    total: number;
+    count: number;
+}
+
+export interface SpendingWrapped {
+    year: number;
+    available_years: number[];
+    currency: string;
+    totals: {
+        income: number;
+        expenses: number;
+        saved: number;
+        expense_count: number;
+        no_spend_days: number;
+        days_elapsed: number;
+    };
+    monthly: WrappedMonth[];
+    top_month: WrappedMonth | null;
+    top_merchants: WrappedMerchant[];
+    top_categories: { category: string; total: number; count: number }[];
+    biggest_expense: { description: string; amount: number; date: string; category: string } | null;
+    tags: { name: string; color: string; total: number; count: number }[];
+}
+
+export async function getWrapped(year?: number): Promise<SpendingWrapped> {
+    return fetchApi<SpendingWrapped>(`/dashboard/wrapped${year ? `?year=${year}` : ''}`);
+}
+
 export interface DailySpendingPoint {
     day: number;
     spent: number;

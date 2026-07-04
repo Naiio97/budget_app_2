@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -484,6 +484,310 @@ async def get_net_worth_history(
     return {
         "history": history,
         "currency": "CZK"
+    }
+
+
+def _name_tokens(value: str | None) -> frozenset[str]:
+    """Slova ve jméně bez diakritiky, lowercase — pro porovnání jmen nezávisle
+    na pořadí („Bureš Nicolas" == „Nicolas Bureš")."""
+    import re, unicodedata
+    if not value:
+        return frozenset()
+    stripped = "".join(
+        c for c in unicodedata.normalize("NFKD", value) if not unicodedata.combining(c)
+    )
+    return frozenset(t for t in re.split(r"[^a-z0-9]+", stripped.lower()) if t)
+
+
+def _counterparty_name(tx) -> Optional[str]:
+    """Jméno protistrany z banky: creditor u odchozích, debtor u příchozích."""
+    if not tx.raw_json:
+        return None
+    try:
+        raw = json.loads(tx.raw_json)
+    except Exception:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    return raw.get("creditorName") if tx.amount < 0 else raw.get("debtorName")
+
+
+def _account_identifiers(value: str) -> set[str]:
+    """Normalizované tvary čísla účtu (IBAN/BBAN/číslo). Zrcadlí
+    extract_account_number ze services/sync.py, aby se čísla shodovala napříč
+    zápisy (CZ IBAN ↔ prefix/kód banky)."""
+    result: set[str] = set()
+    if not value:
+        return result
+    value = value.upper().strip()
+    result.add(value)
+    if value.startswith("CZ") and len(value) == 24:
+        bank_code = value[4:8]
+        account_num = value[8:].lstrip("0")
+        result.add(account_num)
+        result.add(f"{account_num}/{bank_code}")
+    if "/" in value:
+        parts = value.split("/")
+        account_num = parts[0].lstrip("0")
+        result.add(account_num)
+        result.add(parts[0])
+    result.discard("")
+    return result
+
+
+def _counterparty_account_ids(tx) -> set[str]:
+    """Identifikátory protistranového účtu (creditor u odchozích, debtor u příchozích)."""
+    if not tx.raw_json:
+        return set()
+    try:
+        raw = json.loads(tx.raw_json)
+    except Exception:
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    acc = raw.get("creditorAccount" if tx.amount < 0 else "debtorAccount") or {}
+    ids = _account_identifiers(acc.get("iban", "") or "")
+    ids |= _account_identifiers(acc.get("bban", "") or "")
+    return ids
+
+
+def build_wrapped(
+    transactions,
+    income_category_names: set[str],
+    year: int,
+    own_name_tokens: "frozenset[frozenset[str]]" = frozenset(),
+    keep_account_ids: "frozenset[str]" = frozenset(),
+) -> dict:
+    """Roční „Spending Wrapped" z načtených bankovních transakcí.
+
+    Stejné konvence jako monthly-report: přeskočit is_excluded, výdaje počítat
+    přes _my_expense_amount, vypořádání není příjem, příjmové kategorie nejsou
+    v žebříčku výdajových kategorií. Navíc se přeskakují převody na vlastní účty
+    (protistrana = majitel některého tvého účtu) — jsou to převody, ne útrata,
+    i když je detekce transferů nechytila (cílový účet není v appce připojený).
+
+    `keep_account_ids` (z nastavení transfer_excluded_accounts) je výjimka —
+    typicky kreditka: převod na tenhle účet je reálný výdaj (splátka), takže se
+    nevyřazuje, i když jméno protistrany odpovídá majiteli. Čistá funkce.
+    """
+    def is_self_transfer(tx, name: str | None) -> bool:
+        # Kreditka (transfer_excluded_accounts) je výjimka → reálný výdaj
+        if keep_account_ids and (_counterparty_account_ids(tx) & keep_account_ids):
+            return False
+        toks = _name_tokens(name)
+        if not toks:
+            return False
+        return any(own and own <= toks for own in own_name_tokens)
+
+    monthly = {f"{year}-{m:02d}": {"income": 0.0, "expenses": 0.0} for m in range(1, 13)}
+    merchants: dict[str, dict] = {}
+    categories: dict[str, dict] = {}
+    spending_days: set[str] = set()
+    biggest = None
+    income_total = expenses_total = 0.0
+    expense_count = 0
+
+    for tx in transactions:
+        if not tx.date or tx.is_excluded:
+            continue
+        month = tx.date[:7]
+        if month not in monthly:
+            continue
+
+        # Protistrana = jméno z banky, fallback popis transakce. Stejný název
+        # slouží pro detekci vlastního převodu i pro žebříček obchodníků, aby
+        # se chytily i převody, kde je jméno jen v popisu (creditorName chybí).
+        party_name = _counterparty_name(tx) or tx.description
+        if is_self_transfer(tx, party_name):
+            continue
+
+        if tx.amount >= 0:
+            if not tx.settlement_flag:
+                monthly[month]["income"] += tx.amount
+                income_total += tx.amount
+            continue
+
+        spent = _my_expense_amount(tx)
+        monthly[month]["expenses"] += spent
+        expenses_total += spent
+        expense_count += 1
+        spending_days.add(tx.date)
+
+        if biggest is None or spent > biggest["amount"]:
+            biggest = {
+                "description": tx.description,
+                "amount": spent,
+                "date": tx.date,
+                "category": tx.category or "Other",
+            }
+
+        key = (party_name or "?").strip()
+        m = merchants.setdefault(key, {"name": key, "total": 0.0, "count": 0})
+        m["total"] += spent
+        m["count"] += 1
+
+        cat = tx.category or "Other"
+        if cat not in income_category_names:
+            c = categories.setdefault(cat, {"category": cat, "total": 0.0, "count": 0})
+            c["total"] += spent
+            c["count"] += 1
+
+    monthly_list = [
+        {"month": month, "income": round(v["income"], 2), "expenses": round(v["expenses"], 2)}
+        for month, v in sorted(monthly.items())
+    ]
+    top_month = max(monthly_list, key=lambda m: m["expenses"]) if expenses_total > 0 else None
+
+    # Dny bez utrácení jen za už proběhlou část roku
+    now = datetime.utcnow()
+    year_start = datetime(year, 1, 1)
+    year_end = min(datetime(year, 12, 31), now) if year == now.year else datetime(year, 12, 31)
+    days_elapsed = max(0, (year_end - year_start).days + 1)
+
+    return {
+        "totals": {
+            "income": round(income_total, 2),
+            "expenses": round(expenses_total, 2),
+            "saved": round(income_total - expenses_total, 2),
+            "expense_count": expense_count,
+            "no_spend_days": max(0, days_elapsed - len(spending_days)),
+            "days_elapsed": days_elapsed,
+        },
+        "monthly": monthly_list,
+        "top_month": top_month,
+        "top_merchants": sorted(merchants.values(), key=lambda m: m["total"], reverse=True)[:5],
+        "top_categories": sorted(categories.values(), key=lambda c: c["total"], reverse=True)[:5],
+        "biggest_expense": biggest,
+    }
+
+
+@router.get("/wrapped")
+async def get_spending_wrapped(
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Roční přehled („Spending Wrapped"): top obchodníci, nejdražší měsíc,
+    žebříček kategorií, největší výdaj a součty za tagy/projekty."""
+    visible_accounts = select(AccountModel.id).where(
+        AccountModel.user_id == current_user.id,
+        AccountModel.is_visible == True,
+    )
+
+    years_result = await db.execute(
+        select(func.distinct(func.substr(TransactionModel.date, 1, 4)))
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "bank",
+            TransactionModel.date != "",
+            TransactionModel.account_id.in_(visible_accounts),
+        )
+    )
+    available_years = sorted(
+        (int(y) for (y,) in years_result.all() if y and y.isdigit()), reverse=True
+    )
+    if year is None:
+        year = available_years[0] if available_years else datetime.utcnow().year
+
+    income_cat_result = await db.execute(
+        select(CategoryModel.name).where(
+            CategoryModel.user_id == current_user.id,
+            CategoryModel.is_income == True,
+        )
+    )
+    income_category_names = {row[0] for row in income_cat_result.all()}
+
+    # Jména majitelů vlastních účtů (z detailu banky) → protistrana s tímhle
+    # jménem je převod na vlastní účet, ne útrata. Jen víceslovná jména, ať
+    # jedno křestní neshodí legitimního obchodníka.
+    accounts = (await db.execute(
+        select(AccountModel).where(
+            AccountModel.user_id == current_user.id,
+            AccountModel.type == "bank",
+        )
+    )).scalars().all()
+    own_name_tokens: set[frozenset[str]] = set()
+    if current_user.name:
+        toks = _name_tokens(current_user.name)
+        if len(toks) >= 2:
+            own_name_tokens.add(toks)
+    for acc in accounts:
+        if not acc.details_json:
+            continue
+        try:
+            detail = json.loads(acc.details_json)
+        except Exception:
+            continue
+        acc_info = detail.get("account", {}) if isinstance(detail, dict) else {}
+        for key in ("ownerName", "name"):
+            toks = _name_tokens(acc_info.get(key))
+            if len(toks) >= 2:
+                own_name_tokens.add(toks)
+
+    # Kreditka jako výjimka — převod na účet z transfer_excluded_accounts je
+    # reálný výdaj (splátka), ne převod mezi vlastními účty. Stejné nastavení
+    # jako používá detekce transferů (services/sync.py).
+    excluded_setting = (await db.execute(
+        select(SettingsModel.value).where(
+            SettingsModel.user_id == current_user.id,
+            SettingsModel.key == "transfer_excluded_accounts",
+        )
+    )).scalar_one_or_none()
+    keep_account_ids: set[str] = set()
+    if excluded_setting:
+        try:
+            for acc_no in json.loads(excluded_setting):
+                keep_account_ids |= _account_identifiers(acc_no)
+        except Exception:
+            pass
+
+    start, end = f"{year}-01-01", f"{year + 1}-01-01"
+    tx_result = await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.account_type == "bank",
+            TransactionModel.date >= start,
+            TransactionModel.date < end,
+            TransactionModel.account_id.in_(visible_accounts),
+        )
+    )
+    transactions = tx_result.scalars().all()
+
+    wrapped = build_wrapped(
+        transactions, income_category_names, year,
+        frozenset(own_name_tokens), frozenset(keep_account_ids),
+    )
+
+    # Součty za tagy/projekty — stejná sémantika jako tag summary (moje část,
+    # bez převodů a vypořádání)
+    tag_rows = await db.execute(
+        select(TagModel.id, TagModel.name, TagModel.color, TransactionModel)
+        .join(TransactionTagModel, TransactionTagModel.tag_id == TagModel.id)
+        .join(TransactionModel, TransactionModel.id == TransactionTagModel.transaction_id)
+        .where(
+            TagModel.user_id == current_user.id,
+            TransactionModel.date >= start,
+            TransactionModel.date < end,
+        )
+    )
+    tags: dict[int, dict] = {}
+    for tag_id, tag_name, tag_color, tx in tag_rows.all():
+        if tx.is_excluded or (tx.transaction_type or "normal") != "normal" or tx.settlement_flag:
+            continue
+        if tx.amount >= 0:
+            continue
+        t = tags.setdefault(tag_id, {"name": tag_name, "color": tag_color, "total": 0.0, "count": 0})
+        t["total"] += _my_expense_amount(tx)
+        t["count"] += 1
+    for t in tags.values():
+        t["total"] = round(t["total"], 2)
+
+    return {
+        "year": year,
+        "available_years": available_years,
+        "currency": "CZK",
+        **wrapped,
+        "tags": sorted(tags.values(), key=lambda t: t["total"], reverse=True),
     }
 
 
