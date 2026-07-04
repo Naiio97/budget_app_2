@@ -6,7 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel, TagModel, TransactionTagModel
+from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from routers.contacts import normalize_iban
@@ -512,11 +512,51 @@ def _counterparty_name(tx) -> Optional[str]:
     return raw.get("creditorName") if tx.amount < 0 else raw.get("debtorName")
 
 
+def _account_identifiers(value: str) -> set[str]:
+    """Normalizované tvary čísla účtu (IBAN/BBAN/číslo). Zrcadlí
+    extract_account_number ze services/sync.py, aby se čísla shodovala napříč
+    zápisy (CZ IBAN ↔ prefix/kód banky)."""
+    result: set[str] = set()
+    if not value:
+        return result
+    value = value.upper().strip()
+    result.add(value)
+    if value.startswith("CZ") and len(value) == 24:
+        bank_code = value[4:8]
+        account_num = value[8:].lstrip("0")
+        result.add(account_num)
+        result.add(f"{account_num}/{bank_code}")
+    if "/" in value:
+        parts = value.split("/")
+        account_num = parts[0].lstrip("0")
+        result.add(account_num)
+        result.add(parts[0])
+    result.discard("")
+    return result
+
+
+def _counterparty_account_ids(tx) -> set[str]:
+    """Identifikátory protistranového účtu (creditor u odchozích, debtor u příchozích)."""
+    if not tx.raw_json:
+        return set()
+    try:
+        raw = json.loads(tx.raw_json)
+    except Exception:
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    acc = raw.get("creditorAccount" if tx.amount < 0 else "debtorAccount") or {}
+    ids = _account_identifiers(acc.get("iban", "") or "")
+    ids |= _account_identifiers(acc.get("bban", "") or "")
+    return ids
+
+
 def build_wrapped(
     transactions,
     income_category_names: set[str],
     year: int,
     own_name_tokens: "frozenset[frozenset[str]]" = frozenset(),
+    keep_account_ids: "frozenset[str]" = frozenset(),
 ) -> dict:
     """Roční „Spending Wrapped" z načtených bankovních transakcí.
 
@@ -525,9 +565,15 @@ def build_wrapped(
     v žebříčku výdajových kategorií. Navíc se přeskakují převody na vlastní účty
     (protistrana = majitel některého tvého účtu) — jsou to převody, ne útrata,
     i když je detekce transferů nechytila (cílový účet není v appce připojený).
-    Čistá funkce kvůli testovatelnosti.
+
+    `keep_account_ids` (z nastavení transfer_excluded_accounts) je výjimka —
+    typicky kreditka: převod na tenhle účet je reálný výdaj (splátka), takže se
+    nevyřazuje, i když jméno protistrany odpovídá majiteli. Čistá funkce.
     """
-    def is_self_transfer(name: str | None) -> bool:
+    def is_self_transfer(tx, name: str | None) -> bool:
+        # Kreditka (transfer_excluded_accounts) je výjimka → reálný výdaj
+        if keep_account_ids and (_counterparty_account_ids(tx) & keep_account_ids):
+            return False
         toks = _name_tokens(name)
         if not toks:
             return False
@@ -552,7 +598,7 @@ def build_wrapped(
         # slouží pro detekci vlastního převodu i pro žebříček obchodníků, aby
         # se chytily i převody, kde je jméno jen v popisu (creditorName chybí).
         party_name = _counterparty_name(tx) or tx.description
-        if is_self_transfer(party_name):
+        if is_self_transfer(tx, party_name):
             continue
 
         if tx.amount >= 0:
@@ -678,6 +724,23 @@ async def get_spending_wrapped(
             if len(toks) >= 2:
                 own_name_tokens.add(toks)
 
+    # Kreditka jako výjimka — převod na účet z transfer_excluded_accounts je
+    # reálný výdaj (splátka), ne převod mezi vlastními účty. Stejné nastavení
+    # jako používá detekce transferů (services/sync.py).
+    excluded_setting = (await db.execute(
+        select(SettingsModel.value).where(
+            SettingsModel.user_id == current_user.id,
+            SettingsModel.key == "transfer_excluded_accounts",
+        )
+    )).scalar_one_or_none()
+    keep_account_ids: set[str] = set()
+    if excluded_setting:
+        try:
+            for acc_no in json.loads(excluded_setting):
+                keep_account_ids |= _account_identifiers(acc_no)
+        except Exception:
+            pass
+
     start, end = f"{year}-01-01", f"{year + 1}-01-01"
     tx_result = await db.execute(
         select(TransactionModel).where(
@@ -690,7 +753,10 @@ async def get_spending_wrapped(
     )
     transactions = tx_result.scalars().all()
 
-    wrapped = build_wrapped(transactions, income_category_names, year, frozenset(own_name_tokens))
+    wrapped = build_wrapped(
+        transactions, income_category_names, year,
+        frozenset(own_name_tokens), frozenset(keep_account_ids),
+    )
 
     # Součty za tagy/projekty — stejná sémantika jako tag summary (moje část,
     # bez převodů a vypořádání)

@@ -11,12 +11,17 @@ from routers.dashboard import build_wrapped
 
 
 def tx(date, amount, description="Tx", category="Food", *, excluded=False,
-       settlement=False, my_share=None, creditor=None, debtor=None):
+       settlement=False, my_share=None, creditor=None, debtor=None,
+       creditor_iban=None, debtor_iban=None):
     payload = {}
     if creditor:
         payload["creditorName"] = creditor
     if debtor:
         payload["debtorName"] = debtor
+    if creditor_iban:
+        payload["creditorAccount"] = {"iban": creditor_iban}
+    if debtor_iban:
+        payload["debtorAccount"] = {"iban": debtor_iban}
     raw = json.dumps(payload) if payload else None
     return SimpleNamespace(
         date=date, amount=amount, description=description, category=category,
@@ -120,6 +125,23 @@ def test_self_transfers_excluded_by_owner_name():
     assert result["totals"]["expenses"] == 800.0
     assert result["totals"]["income"] == 0.0
     assert [m["name"] for m in result["top_merchants"]] == ["Lidl"]
+
+
+def test_credit_card_repayment_counts_as_expense():
+    # převod na kreditku (v transfer_excluded_accounts) je reálný výdaj, i když
+    # se jméno protistrany shoduje s majitelem; jiný převod na sebe vypadne
+    own = frozenset({frozenset({"nicolas", "bures"})})
+    keep = frozenset({"CZ7501000001237970420227"})
+    result = build_wrapped([
+        tx("2025-01-05", -20000, description="Splátka", creditor="Nicolas Bureš",
+           creditor_iban="CZ7501000001237970420227"),   # kreditka → výdaj
+        tx("2025-02-05", -30000, description="Převod", creditor="Nicolas Bureš",
+           creditor_iban="CZ3008000000001028717374"),    # spořicí → vyřadit
+    ], income_category_names=set(), year=2025,
+       own_name_tokens=own, keep_account_ids=keep)
+
+    assert result["totals"]["expenses"] == 20000.0
+    assert [m["name"] for m in result["top_merchants"]] == ["Nicolas Bureš"]
 
 
 def test_self_transfer_needs_all_name_tokens():
