@@ -26,6 +26,11 @@ class BudgetUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class DailySpendingPoint(BaseModel):
+    day: int          # den v měsíci (1..31)
+    spent: float      # kumulativně utraceno do konce tohoto dne
+
+
 class BudgetResponse(BaseModel):
     id: int
     category: str
@@ -34,6 +39,12 @@ class BudgetResponse(BaseModel):
     is_active: bool
     spent: float = 0.0
     percentage: float = 0.0
+    # Tempo utrácení (jen v GET /budgets/ — create/update vrací defaulty,
+    # frontend si po mutaci stejně refetchuje celý seznam)
+    projected: float = 0.0        # lineární odhad útraty na konci měsíce
+    days_elapsed: int = 0
+    days_in_month: int = 0
+    daily_cumulative: List[DailySpendingPoint] = []
 
 
 class GoalCreate(BaseModel):
@@ -98,6 +109,73 @@ async def get_category_spending(db: AsyncSession, user_id: int, category: str) -
     return abs(total)
 
 
+async def get_daily_spending_by_category(
+    db: AsyncSession, user_id: int, categories: list[str]
+) -> dict[str, dict[int, float]]:
+    """Per-day spending for the given categories in the current month,
+    one grouped query for all of them: {category: {day: spent_that_day}}."""
+    if not categories:
+        return {}
+    start, end = get_current_month_range()
+
+    result = await db.execute(
+        select(
+            TransactionModel.category,
+            TransactionModel.date,
+            func.sum(TransactionModel.amount),
+        )
+        .where(TransactionModel.user_id == user_id)
+        .where(TransactionModel.category.in_(categories))
+        .where(TransactionModel.date >= start)
+        .where(TransactionModel.date < end)
+        .where(TransactionModel.amount < 0)
+        .where(TransactionModel.account_id.in_(
+            select(AccountModel.id).where(
+                AccountModel.user_id == user_id,
+                AccountModel.is_visible == True,
+            )
+        ))
+        .group_by(TransactionModel.category, TransactionModel.date)
+    )
+
+    daily: dict[str, dict[int, float]] = {}
+    for category, date_str, total in result.all():
+        try:
+            day = int(date_str[8:10])  # 'YYYY-MM-DD' → DD
+        except (TypeError, ValueError):
+            continue
+        daily.setdefault(category, {})[day] = abs(total or 0)
+    return daily
+
+
+def days_in_current_month() -> int:
+    import calendar
+    now = datetime.utcnow()
+    return calendar.monthrange(now.year, now.month)[1]
+
+
+def build_trend(
+    daily: dict[int, float], amount: float, days_elapsed: int, days_in_month: int
+) -> tuple[float, float, list[DailySpendingPoint]]:
+    """From per-day spending build (spent, projected, cumulative series).
+
+    `spent` covers the whole month (incl. forward-booked transactions — same
+    semantics as get_category_spending); the burn-down series and the pace
+    projection only look at days up to today.
+    """
+    cumulative = []
+    running = 0.0
+    for day in range(1, days_elapsed + 1):
+        running += daily.get(day, 0.0)
+        cumulative.append(DailySpendingPoint(day=day, spent=round(running, 2)))
+    spent_to_date = running
+    spent = round(sum(daily.values()), 2)
+    projected = (
+        spent_to_date / days_elapsed * days_in_month
+    ) if days_elapsed > 0 else spent_to_date
+    return spent, round(projected, 2), cumulative
+
+
 # === Budget Endpoints ===
 
 @router.get("/", response_model=List[BudgetResponse])
@@ -105,7 +183,7 @@ async def get_budgets(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all budgets with current spending"""
+    """Get all budgets with current spending + pace trend (burn-down data)"""
     result = await db.execute(
         select(BudgetModel).where(
             BudgetModel.user_id == current_user.id,
@@ -114,9 +192,19 @@ async def get_budgets(
     )
     budgets = result.scalars().all()
 
+    daily_by_category = await get_daily_spending_by_category(
+        db, current_user.id, [b.category for b in budgets]
+    )
+    now = datetime.utcnow()
+    days_elapsed = now.day
+    days_in_month = days_in_current_month()
+
     response = []
     for budget in budgets:
-        spent = await get_category_spending(db, current_user.id, budget.category)
+        spent, projected, cumulative = build_trend(
+            daily_by_category.get(budget.category, {}),
+            budget.amount, days_elapsed, days_in_month,
+        )
         percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
 
         response.append(BudgetResponse(
@@ -126,7 +214,11 @@ async def get_budgets(
             currency=budget.currency,
             is_active=budget.is_active,
             spent=spent,
-            percentage=round(percentage, 1)
+            percentage=round(percentage, 1),
+            projected=projected,
+            days_elapsed=days_elapsed,
+            days_in_month=days_in_month,
+            daily_cumulative=cumulative,
         ))
 
     return response
