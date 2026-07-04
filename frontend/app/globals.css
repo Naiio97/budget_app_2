@@ -796,6 +796,64 @@ select.input {
 .label-row dt { font-size: 13px; color: var(--text-3); flex-shrink: 0; padding-top: 1px; }
 .label-row dd { font-size: 13px; color: var(--text); font-weight: 500; text-align: right; min-width: 0; word-break: break-word; }
 
+/* ══ COMMAND PALETTE (Cmd+K) ═════════════════════════════════ */
+.cmdk-backdrop {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: min(16vh, 140px) var(--spacing-lg) var(--spacing-lg);
+}
+.cmdk-panel {
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 560px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.cmdk-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px var(--spacing-lg);
+  border-bottom: 0.5px solid var(--border);
+}
+.cmdk-input-icon { color: var(--text-3); display: flex; flex-shrink: 0; }
+.cmdk-input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  color: var(--text); font-size: 15px; font-family: inherit;
+}
+.cmdk-input::placeholder { color: var(--text-3); }
+/* Globální :focus-visible ring je v paletě redundantní — input je jediné
+   fokusovatelné pole a panel sám je výrazný */
+.cmdk-input:focus-visible { outline: none; }
+.cmdk-kbd {
+  flex-shrink: 0; font-size: 10.5px; color: var(--text-3);
+  border: 0.5px solid var(--border-strong); border-radius: 5px;
+  padding: 2px 6px; font-family: inherit;
+}
+.cmdk-list { max-height: min(50vh, 420px); overflow-y: auto; padding: 6px; }
+.cmdk-section {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text-3); padding: 10px 10px 4px;
+}
+.cmdk-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px; border: none; background: transparent; cursor: pointer;
+  border-radius: var(--radius-md); color: var(--text); font-size: 14px;
+  font-family: inherit; text-align: left;
+}
+.cmdk-item.active { background: var(--surface-sunken); }
+.cmdk-item-icon { color: var(--text-3); display: flex; flex-shrink: 0; }
+.cmdk-item.active .cmdk-item-icon { color: var(--accent); }
+.cmdk-item-label { flex: 1; min-width: 0; }
+.cmdk-item-sub { font-size: 11.5px; color: var(--text-3); }
+.cmdk-item-meta {
+  flex-shrink: 0; font-size: 13px; color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.cmdk-item-meta.pos { color: var(--pos); font-weight: 600; }
+.cmdk-empty { padding: 14px 10px; font-size: 13.5px; color: var(--text-3); }
+
 /* ══ BOTTOM NAVIGATION — Apple tab bar ══════════════════════ */
 /* Floating glass pill — matches the desktop appbar. */
 .bottom-nav {

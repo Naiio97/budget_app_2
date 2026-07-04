@@ -48,9 +48,11 @@ function transactionAccumulatorReducer(
 function TransactionsPageContent() {
     const searchParams = useSearchParams();
     const initialAccount = searchParams.get('account_id') ?? '';
+    // Deep-link z globálního hledání (Cmd+K): /transactions?search=lidl
+    const initialSearch = searchParams.get('search') ?? '';
 
-    const [searchTerm, setSearchTerm] = useState('');
-    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [searchTerm, setSearchTerm] = useState(initialSearch);
+    const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [selectedAccount, setSelectedAccount] = useState<string>(initialAccount);
     const [selectedMonth, setSelectedMonth] = useState<string>('');
@@ -69,6 +71,15 @@ function TransactionsPageContent() {
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
     }, []);
+
+    // Nové hledání z palety, i když už na /transactions jsme — initial state
+    // se podruhé nepřepočítá, URL ano
+    useEffect(() => {
+        const s = searchParams.get('search');
+        if (s === null) return;
+        const t = setTimeout(() => setSearchTerm(s), 0);
+        return () => clearTimeout(t);
+    }, [searchParams]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
