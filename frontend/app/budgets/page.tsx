@@ -36,9 +36,12 @@ function progressColor(pct: number): string {
 const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
+type Tab = 'budgets' | 'goals';
+
 export default function BudgetsPage() {
     const queryClient = useQueryClient();
 
+    const [tab, setTab] = useState<Tab>('budgets');
     const [showBudgetForm, setShowBudgetForm] = useState(false);
     const [showGoalForm, setShowGoalForm] = useState(false);
     const [newBudget, setNewBudget] = useState({ category: '', amount: '' });
@@ -93,6 +96,16 @@ export default function BudgetsPage() {
                     </div>
                 </div>
 
+                {/* Tabs — rozpočty podle kategorií vs. spořící cíle na samostatných záložkách */}
+                <div className="seg" style={{ alignSelf: 'flex-start' }}>
+                    {([['budgets', 'Rozpočty'], ['goals', 'Spořící cíle']] as [Tab, string][]).map(([val, label]) => (
+                        <div key={val} className={`seg-item ${tab === val ? 'active' : ''}`} onClick={() => setTab(val)}>
+                            {label}
+                        </div>
+                    ))}
+                </div>
+
+                {tab === 'budgets' && (<>
                 {/* Total overview KPI */}
                 <div className="surface kpi">
                     <div className="kpi-label">Celkem utraceno tento měsíc</div>
@@ -181,8 +194,10 @@ export default function BudgetsPage() {
                         )}
                     </div>
                 </div>
+                </>)}
 
                 {/* Savings goals */}
+                {tab === 'goals' && (
                 <div className="surface">
                     <div className="card-head">
                         <h3>{Icons.section.savingsGoals} Spořící cíle</h3>
@@ -257,6 +272,7 @@ export default function BudgetsPage() {
                         )}
                     </div>
                 </div>
+                )}
 
             </div>
         </MainLayout>
