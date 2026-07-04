@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
+import BudgetBurndown, { BudgetPaceLabel } from '@/components/BudgetBurndown';
 import {
     Budget, SavingsGoal,
     getBudgets, createBudget, deleteBudget,
@@ -75,6 +76,8 @@ export default function BudgetsPage() {
     const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
     const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
     const totalPct = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+    const totalProjected = budgets.reduce((sum, b) => sum + b.projected, 0);
+    const totalProjectedPct = totalBudget > 0 ? (totalProjected / totalBudget) * 100 : 0;
 
     const now = new Date();
     const monthName = now.toLocaleDateString('cs-CZ', { month: 'long', year: 'numeric' });
@@ -101,7 +104,15 @@ export default function BudgetsPage() {
                         <div className="progress">
                             <span style={{ width: `${Math.min(totalPct, 100)}%`, background: progressColor(totalPct) }} />
                         </div>
-                        <span>{totalPct.toFixed(0)}% vyčerpáno</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                            <span>{totalPct.toFixed(0)}% vyčerpáno</span>
+                            {totalProjected > 0 && (
+                                <span style={{ color: progressColor(totalProjectedPct) }}>
+                                    Tímhle tempem: ~{formatCurrency(totalProjected)}
+                                    {totalProjected > totalBudget && ` (překročení o ${formatCurrency(totalProjected - totalBudget)})`}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -156,11 +167,15 @@ export default function BudgetsPage() {
                                     <div className="progress">
                                         <span style={{ width: `${Math.min(budget.percentage, 100)}%`, background: progressColor(budget.percentage) }} />
                                     </div>
-                                    <div style={{ fontSize: 12, color: progressColor(budget.percentage), textAlign: 'right' }}>
-                                        {budget.percentage.toFixed(0)}%
-                                        {budget.percentage >= 100 && ` ${Icons.status.overBudget} Překročeno`}
-                                        {budget.percentage >= 80 && budget.percentage < 100 && ` ${Icons.status.nearLimit} Blízko limitu`}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                                        <BudgetPaceLabel budget={budget} />
+                                        <div style={{ fontSize: 12, color: progressColor(budget.percentage), textAlign: 'right', marginLeft: 'auto' }}>
+                                            {budget.percentage.toFixed(0)}%
+                                            {budget.percentage >= 100 && ` ${Icons.status.overBudget} Překročeno`}
+                                            {budget.percentage >= 80 && budget.percentage < 100 && ` ${Icons.status.nearLimit} Blízko limitu`}
+                                        </div>
                                     </div>
+                                    <BudgetBurndown budget={budget} />
                                 </div>
                             ))
                         )}
