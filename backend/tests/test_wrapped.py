@@ -11,8 +11,13 @@ from routers.dashboard import build_wrapped
 
 
 def tx(date, amount, description="Tx", category="Food", *, excluded=False,
-       settlement=False, my_share=None, creditor=None):
-    raw = json.dumps({"creditorName": creditor}) if creditor else None
+       settlement=False, my_share=None, creditor=None, debtor=None):
+    payload = {}
+    if creditor:
+        payload["creditorName"] = creditor
+    if debtor:
+        payload["debtorName"] = debtor
+    raw = json.dumps(payload) if payload else None
     return SimpleNamespace(
         date=date, amount=amount, description=description, category=category,
         is_excluded=excluded, settlement_flag=settlement,
@@ -99,3 +104,30 @@ def test_empty_year():
     assert result["top_month"] is None
     assert result["biggest_expense"] is None
     assert result["top_merchants"] == []
+
+
+def test_self_transfers_excluded_by_owner_name():
+    # majitel účtu "Nicolas Bureš"; převody na sebe (i s prohozeným pořadím)
+    # vypadnou z útrat, obchodníků i příjmů, reálný nákup zůstane
+    own = frozenset({frozenset({"nicolas", "bures"})})
+    result = build_wrapped([
+        tx("2025-01-05", -50000, description="Převod", creditor="Bureš Nicolas"),
+        tx("2025-02-05", -30000, description="Převod", creditor="Nicolas Bureš"),
+        tx("2025-03-05", 20000, description="Převod zpět", debtor="Nicolas Bureš"),
+        tx("2025-01-10", -800, description="Nákup", creditor="Lidl"),
+    ], income_category_names=set(), year=2025, own_name_tokens=own)
+
+    assert result["totals"]["expenses"] == 800.0
+    assert result["totals"]["income"] == 0.0
+    assert [m["name"] for m in result["top_merchants"]] == ["Lidl"]
+
+
+def test_self_transfer_needs_all_name_tokens():
+    # zpráva "Bureš skříň" nesmí splynout se jménem majitele (chybí "nicolas")
+    own = frozenset({frozenset({"nicolas", "bures"})})
+    result = build_wrapped([
+        tx("2025-01-10", -5000, description="Nábytek", creditor="Bureš skříň"),
+    ], income_category_names=set(), year=2025, own_name_tokens=own)
+
+    assert result["totals"]["expenses"] == 5000.0
+    assert result["top_merchants"][0]["name"] == "Bureš skříň"

@@ -487,13 +487,52 @@ async def get_net_worth_history(
     }
 
 
-def build_wrapped(transactions, income_category_names: set[str], year: int) -> dict:
+def _name_tokens(value: str | None) -> frozenset[str]:
+    """Slova ve jméně bez diakritiky, lowercase — pro porovnání jmen nezávisle
+    na pořadí („Bureš Nicolas" == „Nicolas Bureš")."""
+    import re, unicodedata
+    if not value:
+        return frozenset()
+    stripped = "".join(
+        c for c in unicodedata.normalize("NFKD", value) if not unicodedata.combining(c)
+    )
+    return frozenset(t for t in re.split(r"[^a-z0-9]+", stripped.lower()) if t)
+
+
+def _counterparty_name(tx) -> Optional[str]:
+    """Jméno protistrany z banky: creditor u odchozích, debtor u příchozích."""
+    if not tx.raw_json:
+        return None
+    try:
+        raw = json.loads(tx.raw_json)
+    except Exception:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    return raw.get("creditorName") if tx.amount < 0 else raw.get("debtorName")
+
+
+def build_wrapped(
+    transactions,
+    income_category_names: set[str],
+    year: int,
+    own_name_tokens: "frozenset[frozenset[str]]" = frozenset(),
+) -> dict:
     """Roční „Spending Wrapped" z načtených bankovních transakcí.
 
     Stejné konvence jako monthly-report: přeskočit is_excluded, výdaje počítat
     přes _my_expense_amount, vypořádání není příjem, příjmové kategorie nejsou
-    v žebříčku výdajových kategorií. Čistá funkce kvůli testovatelnosti.
+    v žebříčku výdajových kategorií. Navíc se přeskakují převody na vlastní účty
+    (protistrana = majitel některého tvého účtu) — jsou to převody, ne útrata,
+    i když je detekce transferů nechytila (cílový účet není v appce připojený).
+    Čistá funkce kvůli testovatelnosti.
     """
+    def is_self_transfer(name: str | None) -> bool:
+        toks = _name_tokens(name)
+        if not toks:
+            return False
+        return any(own and own <= toks for own in own_name_tokens)
+
     monthly = {f"{year}-{m:02d}": {"income": 0.0, "expenses": 0.0} for m in range(1, 13)}
     merchants: dict[str, dict] = {}
     categories: dict[str, dict] = {}
@@ -507,6 +546,13 @@ def build_wrapped(transactions, income_category_names: set[str], year: int) -> d
             continue
         month = tx.date[:7]
         if month not in monthly:
+            continue
+
+        # Protistrana = jméno z banky, fallback popis transakce. Stejný název
+        # slouží pro detekci vlastního převodu i pro žebříček obchodníků, aby
+        # se chytily i převody, kde je jméno jen v popisu (creditorName chybí).
+        party_name = _counterparty_name(tx) or tx.description
+        if is_self_transfer(party_name):
             continue
 
         if tx.amount >= 0:
@@ -529,16 +575,7 @@ def build_wrapped(transactions, income_category_names: set[str], year: int) -> d
                 "category": tx.category or "Other",
             }
 
-        # Obchodník = protistrana z banky, fallback popis transakce
-        name = tx.description
-        if tx.raw_json:
-            try:
-                raw = json.loads(tx.raw_json)
-                if isinstance(raw, dict) and raw.get("creditorName"):
-                    name = raw["creditorName"]
-            except Exception:
-                pass
-        key = (name or "?").strip()
+        key = (party_name or "?").strip()
         m = merchants.setdefault(key, {"name": key, "total": 0.0, "count": 0})
         m["total"] += spent
         m["count"] += 1
@@ -614,6 +651,33 @@ async def get_spending_wrapped(
     )
     income_category_names = {row[0] for row in income_cat_result.all()}
 
+    # Jména majitelů vlastních účtů (z detailu banky) → protistrana s tímhle
+    # jménem je převod na vlastní účet, ne útrata. Jen víceslovná jména, ať
+    # jedno křestní neshodí legitimního obchodníka.
+    accounts = (await db.execute(
+        select(AccountModel).where(
+            AccountModel.user_id == current_user.id,
+            AccountModel.type == "bank",
+        )
+    )).scalars().all()
+    own_name_tokens: set[frozenset[str]] = set()
+    if current_user.name:
+        toks = _name_tokens(current_user.name)
+        if len(toks) >= 2:
+            own_name_tokens.add(toks)
+    for acc in accounts:
+        if not acc.details_json:
+            continue
+        try:
+            detail = json.loads(acc.details_json)
+        except Exception:
+            continue
+        acc_info = detail.get("account", {}) if isinstance(detail, dict) else {}
+        for key in ("ownerName", "name"):
+            toks = _name_tokens(acc_info.get(key))
+            if len(toks) >= 2:
+                own_name_tokens.add(toks)
+
     start, end = f"{year}-01-01", f"{year + 1}-01-01"
     tx_result = await db.execute(
         select(TransactionModel).where(
@@ -626,7 +690,7 @@ async def get_spending_wrapped(
     )
     transactions = tx_result.scalars().all()
 
-    wrapped = build_wrapped(transactions, income_category_names, year)
+    wrapped = build_wrapped(transactions, income_category_names, year, frozenset(own_name_tokens))
 
     # Součty za tagy/projekty — stejná sémantika jako tag summary (moje část,
     # bez převodů a vypořádání)
