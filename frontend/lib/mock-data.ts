@@ -184,10 +184,36 @@ export const MOCK_BUDGET_OVERVIEW: BudgetOverview = {
     categories_count: 3
 };
 
+// Kumulativní denní útrata pro burn-down: zvlněné denní přírůstky (≥ 0),
+// aby řada rostla monotónně a končila přesně na `spent`
+function mockDailyCumulative(spent: number, daysElapsed: number) {
+    const increments = Array.from({ length: daysElapsed }, (_, i) =>
+        Math.max(0, 1 + 0.9 * Math.sin((i + 1) * 2.1)) // deterministické zvlnění
+    );
+    const total = increments.reduce((a, b) => a + b, 0);
+    let running = 0;
+    return increments.map((inc, i) => {
+        running += (inc / total) * spent;
+        return { day: i + 1, spent: Math.round(running) };
+    });
+}
+
+const MOCK_DAYS_ELAPSED = 18;
+const MOCK_DAYS_IN_MONTH = 30;
+
+function mockBudgetTrend(spent: number) {
+    return {
+        projected: Math.round((spent / MOCK_DAYS_ELAPSED) * MOCK_DAYS_IN_MONTH),
+        days_elapsed: MOCK_DAYS_ELAPSED,
+        days_in_month: MOCK_DAYS_IN_MONTH,
+        daily_cumulative: mockDailyCumulative(spent, MOCK_DAYS_ELAPSED),
+    };
+}
+
 export const MOCK_BUDGETS: Budget[] = [
-    { id: 1, category: 'Bydlení', amount: 18000, currency: 'CZK', is_active: true, spent: 18000, percentage: 100 },
-    { id: 2, category: 'Jídlo', amount: 10000, currency: 'CZK', is_active: true, spent: 9500, percentage: 95 },
-    { id: 3, category: 'Doprava', amount: 5000, currency: 'CZK', is_active: true, spent: 4500, percentage: 90 },
+    { id: 1, category: 'Bydlení', amount: 18000, currency: 'CZK', is_active: true, spent: 18000, percentage: 100, ...mockBudgetTrend(18000) },
+    { id: 2, category: 'Jídlo', amount: 10000, currency: 'CZK', is_active: true, spent: 9500, percentage: 95, ...mockBudgetTrend(9500) },
+    { id: 3, category: 'Doprava', amount: 5000, currency: 'CZK', is_active: true, spent: 4500, percentage: 90, ...mockBudgetTrend(4500) },
 ];
 
 export const MOCK_GOALS: SavingsGoal[] = [

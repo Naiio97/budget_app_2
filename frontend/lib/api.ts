@@ -707,6 +707,11 @@ export async function deleteContact(iban: string): Promise<{ deleted: string }> 
 
 // === Budgets & Goals ===
 
+export interface DailySpendingPoint {
+    day: number;
+    spent: number;
+}
+
 export interface Budget {
     id: number;
     category: string;
@@ -715,6 +720,11 @@ export interface Budget {
     is_active: boolean;
     spent: number;
     percentage: number;
+    // Tempo utrácení — jen v GET /budgets/ (create/update vrací defaulty)
+    projected: number;
+    days_elapsed: number;
+    days_in_month: number;
+    daily_cumulative: DailySpendingPoint[];
 }
 
 export interface BudgetOverview {
