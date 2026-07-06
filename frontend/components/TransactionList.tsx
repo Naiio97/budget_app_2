@@ -337,7 +337,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     const modalEl = modalTx ? (
         <div onClick={() => setSelectedTx(null)} className="modal-backdrop tx-modal-overlay">
-            <div onClick={e => e.stopPropagation()} className="modal tx-modal-card" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+            <div onClick={e => e.stopPropagation()} className="modal tx-modal-card">
+                <div className="tx-modal-scroll">
 
                 {/* ── Hero header ── */}
                 <div style={{
@@ -564,14 +565,14 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     {!shareEditing ? (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                             {modalTx.my_share_amount != null ? (
-                                                <span className="chip chip-accent">
-                                                    👫 Moje část {formatCurrency(modalTx.my_share_amount, modalTx.currency)}
+                                                <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    {getLineIcon('users', 12)} Moje část {formatCurrency(modalTx.my_share_amount, modalTx.currency)}
                                                     {modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
                                                 </span>
                                             ) : (
                                                 <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Celý výdaj je můj</span>
                                             )}
-                                            <button className="btn btn-sm"
+                                            <button className="tx-act"
                                                 onClick={() => {
                                                     setShareEditing(true);
                                                     setShareInput(String(modalTx.my_share_amount ?? Math.round(Math.abs(modalTx.amount) / 2 * 100) / 100));
@@ -584,7 +585,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                     : 'Rozdělit náklad'}
                                             </button>
                                             {modalTx.my_share_amount != null && (
-                                                <button className="btn btn-sm" disabled={savingShare}
+                                                <button className="tx-act" disabled={savingShare}
                                                     onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
                                                     Zrušit rozdělení
                                                 </button>
@@ -649,8 +650,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     {modalTx.settlement_flag ? (
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                                <span className="chip chip-accent">
-                                                    🤝 Vypořádání{modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
+                                                <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    {getLineIcon('handshake', 12)} Vypořádání{modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
                                                 </span>
                                                 <button className="btn btn-sm" disabled={savingShare}
                                                     onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
@@ -696,12 +697,12 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                     Vypadá jako vratka — označ ji a započítá se do salda vypořádání.
                                                 </span>
                                             )}
-                                            <button className="btn btn-sm" onClick={() => {
+                                            <button className="tx-act" onClick={() => {
                                                 setShareEditing(true);
                                                 setShareNoteInput('');
                                                 setShareCounterpartyInput(modalTx.transaction_type === 'family_transfer' ? 'Žena' : '');
                                             }}>
-                                                🤝 Označit jako vypořádání
+                                                {getLineIcon('handshake', 14)} Označit jako vypořádání
                                             </button>
                                         </div>
                                     )}
@@ -718,17 +719,17 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     {modalTx.user_excluded ? (
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                             <span className="chip">{getLineIcon('ban', 13)} Nepočítá se</span>
-                                            <button className="btn btn-sm" disabled={savingExclude}
+                                            <button className="tx-act" disabled={savingExclude}
                                                 onClick={() => handleToggleExcluded(modalTx, false)}>
                                                 {savingExclude ? '…' : 'Vrátit do bilance'}
                                             </button>
                                         </div>
                                     ) : (
-                                        <button className="btn btn-sm" disabled={savingExclude}
+                                        <button className="tx-act" disabled={savingExclude}
                                             onClick={() => handleToggleExcluded(modalTx, true)}>
                                             {savingExclude
                                                 ? '…'
-                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('ban', 14)} Nepočítat do příjmů/výdajů</span>}
+                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('ban', 14)} New</span>}
                                         </button>
                                     )}
                                 </dd>
@@ -743,13 +744,14 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 {modalTx.transaction_type === 'family_transfer' && <span className="chip">{getCategoryIcon(Icons.category.familyTransfer, 13)} Rodinný převod</span>}
                                 {modalTx.user_excluded && <span className="chip">{getLineIcon('ban', 13)} Ručně vyřazeno</span>}
                                 {modalTx.is_excluded && !modalTx.user_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
-                                {modalTx.settlement_flag && <span className="chip">🤝 Vypořádání — mimo příjmy</span>}
-                                {modalTx.my_share_amount != null && modalTx.amount < 0 && <span className="chip">👫 Společný náklad</span>}
+                                {modalTx.settlement_flag && <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{getLineIcon('handshake', 12)} Vypořádání — mimo příjmy</span>}
+                                {modalTx.my_share_amount != null && modalTx.amount < 0 && <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{getLineIcon('users', 12)} Společný náklad</span>}
                             </div>
                             <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{modalTx.id}</span>
                         </div>
                     </dl>
                 )}
+                </div>
             </div>
         </div>
     ) : null;
@@ -825,10 +827,10 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                 <span className="tx-account-label">• {tx.account_name}</span>
                                             )}
                                             {tx.my_share_amount != null && tx.amount < 0 && (
-                                                <span className="tx-account-label">• 👫 moje {formatCurrency(tx.my_share_amount, tx.currency)}</span>
+                                                <span className="tx-account-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>• {getLineIcon('users', 11)} moje {formatCurrency(tx.my_share_amount, tx.currency)}</span>
                                             )}
                                             {tx.settlement_flag && (
-                                                <span className="tx-account-label">• 🤝 vypořádání</span>
+                                                <span className="tx-account-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>• {getLineIcon('handshake', 11)} vypořádání</span>
                                             )}
                                         </div>
                                     </div>

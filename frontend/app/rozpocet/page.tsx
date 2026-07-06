@@ -7,6 +7,7 @@ import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { getLineIcon } from '@/lib/line-icons';
 import { apiFetch } from '@/lib/api';
 
 interface MonthlyExpense {
@@ -526,7 +527,7 @@ export default function RozpocetPage() {
                                                                 </button>
                                                             </div>
                                                             <button onClick={() => deleteMonthlyExpense(expense.id)} className="bd-delete">
-                                                                {Icons.action.delete} Smazat
+                                                                {getLineIcon('delete', 14)} Smazat
                                                             </button>
                                                         </div>
                                                     </>
@@ -576,8 +577,8 @@ export default function RozpocetPage() {
     const renderIncome = () => (
         <section className="budget-plan-section">
             <div className="budget-plan-section-head">
-                <h3>{Icons.section.income} Příjmy</h3>
-                <button className="btn btn-sm" onClick={syncIncome}>{Icons.action.sync} Načíst</button>
+                <h3>{getLineIcon('income', 16)} Příjmy</h3>
+                <button className="btn btn-sm" onClick={syncIncome}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('refresh', 14)} Načíst</span></button>
             </div>
             <div className="budget-plan-section-body">
                 {(budget?.income_items || []).map(item => (
@@ -595,7 +596,7 @@ export default function RozpocetPage() {
                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                             style={{ width: 120, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
                         />
-                        <button onClick={() => deleteIncomeItem(item.id)} className="btn btn-icon btn-ghost btn-sm">{Icons.action.delete}</button>
+                        <button onClick={() => deleteIncomeItem(item.id)} className="btn btn-icon btn-ghost btn-sm" style={{ color: 'var(--text)' }} aria-label="Smazat příjem">{getLineIcon('delete', 15)}</button>
                     </div>
                 ))}
                 <button className="btn btn-sm" onClick={addIncomeItem} style={{ alignSelf: 'flex-start' }}>+ Přidat příjem</button>
@@ -614,7 +615,7 @@ export default function RozpocetPage() {
 
     const renderSurplus = () => (
         <section className="budget-plan-section">
-            <div className="budget-plan-section-head"><h3>{Icons.section.surplus} Přebytek & Spoření</h3></div>
+            <div className="budget-plan-section-head"><h3>{getLineIcon('savings', 16)} Přebytek & Spoření</h3></div>
             <div className="budget-plan-section-body budget-surplus-body">
                 <div className="budget-surplus-row">
                     <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Investice</span>
@@ -683,13 +684,13 @@ export default function RozpocetPage() {
                             {editingAccountId === account.id ? (
                                 <div style={{ display: 'flex', gap: 4 }}>
                                     <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: 100, padding: '4px 8px' }} />
-                                    <button className="btn btn-primary btn-sm" onClick={() => updateManualAccountBalance(account.id)}>{Icons.action.confirm}</button>
+                                    <button className="btn btn-primary btn-sm" onClick={() => updateManualAccountBalance(account.id)} aria-label="Uložit">{getLineIcon('check', 15)}</button>
                                     <button className="btn btn-sm" onClick={() => setEditingAccountId(null)}>×</button>
                                 </div>
                             ) : (
                                 <span onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }}
                                     style={{ cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
-                                    {formatCurrency(account.balance)} {Icons.action.edit}
+                                    {formatCurrency(account.balance)} <span style={{ color: 'var(--text)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
                                 </span>
                             )}
                         </div>
@@ -703,7 +704,7 @@ export default function RozpocetPage() {
                                             <span style={{ color: env.is_mine ? 'var(--pos)' : 'var(--warn)', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
                                                 {env.is_mine ? '' : '−'}{formatCurrency(env.amount)}
                                             </span>
-                                            <button onClick={() => deleteAccountItem(account.id, env.id)} className="btn btn-icon btn-ghost btn-sm" style={{ opacity: 0.4 }}>{Icons.action.delete}</button>
+                                            <button onClick={() => deleteAccountItem(account.id, env.id)} className="btn btn-icon btn-ghost btn-sm" style={{ opacity: 0.55, color: 'var(--text)' }} aria-label="Smazat obálku">{getLineIcon('delete', 14)}</button>
                                         </div>
                                     </div>
                                 ))}
@@ -714,7 +715,7 @@ export default function RozpocetPage() {
                                 <div style={{ display: 'flex', gap: 4 }}>
                                     <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
                                     <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: 80, padding: '4px 8px' }} />
-                                    <button className="btn btn-primary btn-sm" onClick={() => addAccountItem(account.id)}>{Icons.action.confirm}</button>
+                                    <button className="btn btn-primary btn-sm" onClick={() => addAccountItem(account.id)} aria-label="Přidat">{getLineIcon('check', 15)}</button>
                                     <button className="btn btn-sm" onClick={() => setShowAddItem(null)}>×</button>
                                 </div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
@@ -822,7 +823,7 @@ export default function RozpocetPage() {
                 {activeMonths.length > 0 && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 'var(--spacing-md)' }}>
                         {best && <div className="surface" style={{ padding: 'var(--spacing-md)', background: 'color-mix(in srgb, var(--pos) 6%, var(--surface))' }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>🥇 Nejlepší měsíc</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{Icons.section.bestWorst} Nejlepší měsíc</div>
                             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--pos)' }}>{MONTH_NAMES[best.month - 1]}</div>
                             <div style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{formatCurrency(best.net)}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>úspor. {best.sr.toFixed(0)}%</div>
@@ -887,7 +888,7 @@ export default function RozpocetPage() {
                             </>
                         )}
                         <button onClick={() => setViewMode(v => v === 'month' ? 'year' : 'month')} className={`btn btn-sm ${viewMode === 'year' ? 'btn-primary' : ''}`}>
-                            {viewMode === 'year' ? '← Měsíc' : `${Icons.nav.reports} Roční`}
+                            {viewMode === 'year' ? '← Měsíc' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('chart', 15)} Roční</span>}
                         </button>
                         {viewMode === 'month' && !isCurrentMonth && (
                             <button className="btn btn-sm" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }}>Dnes</button>
@@ -898,8 +899,8 @@ export default function RozpocetPage() {
                             </button>
                         )}
                         {viewMode === 'month' && (
-                            <button className="btn btn-sm btn-icon" onClick={deleteBudgetMonth} style={{ color: 'var(--neg)' }}>
-                                {Icons.action.delete}
+                            <button className="btn btn-sm btn-icon" onClick={deleteBudgetMonth} style={{ color: 'var(--text)' }} aria-label="Smazat měsíc">
+                                {getLineIcon('delete', 16)}
                             </button>
                         )}
                     </div>
@@ -962,7 +963,7 @@ export default function RozpocetPage() {
                 {/* ── Tab bar + content ── */}
                 {viewMode === 'month' && (
                     <>
-                        <div className="seg" style={{ alignSelf: 'flex-start' }}>
+                        <div className="seg budget-tabs">
                             {TABS.map(tab => (
                                 <div key={tab.key} className={`seg-item ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
                                     {tab.label}

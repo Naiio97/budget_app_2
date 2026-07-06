@@ -219,8 +219,8 @@ export default function BudgetsPage() {
                                         <BudgetPaceLabel budget={budget} />
                                         <div style={{ fontSize: 12, color: progressColor(budget.percentage), textAlign: 'right', marginLeft: 'auto' }}>
                                             {budget.percentage.toFixed(0)}%
-                                            {budget.percentage >= 100 && ` ${Icons.status.overBudget} Překročeno`}
-                                            {budget.percentage >= 80 && budget.percentage < 100 && ` ${Icons.status.nearLimit} Blízko limitu`}
+                                            {budget.percentage >= 100 && <> {Icons.status.overBudget} Překročeno</>}
+                                            {budget.percentage >= 80 && budget.percentage < 100 && <> {Icons.status.nearLimit} Blízko limitu</>}
                                         </div>
                                     </div>
                                     <BudgetBurndown budget={budget} />
@@ -300,7 +300,7 @@ export default function BudgetsPage() {
                                     </div>
                                     <div style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'right' }}>
                                         {goal.percentage.toFixed(0)}%
-                                        {goal.is_completed && ` ${Icons.status.done} Splněno!`}
+                                        {goal.is_completed && <> {Icons.status.done} Splněno!</>}
                                     </div>
                                 </div>
                             ))

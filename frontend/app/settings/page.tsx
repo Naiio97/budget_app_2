@@ -1017,7 +1017,7 @@ export default function SettingsPage() {
                                 <input type="number" className="input" placeholder="0" value={newManualBalance} onChange={e => setNewManualBalance(e.target.value)} style={{ width: '100%' }} />
                             </div>
                             <button className="btn btn-primary" disabled={savingManual || !newManualName.trim()} onClick={handleCreateManualAccount}>
-                                {savingManual ? 'Vytvářím...' : `${Icons.action.add} Vytvořit účet`}
+                                {savingManual ? 'Vytvářím...' : <>{Icons.action.add} Vytvořit účet</>}
                             </button>
                         </div>
                     </div>
@@ -1049,7 +1049,7 @@ export default function SettingsPage() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                                         <span className="set-count-chip">{categoryRules.length} pravidel</span>
                                         <button className="btn btn-sm" onClick={handleRecategorize} disabled={isSyncing} title="Překategorizovat všechny transakce">
-                                            {isSyncing ? '…' : `${Icons.action.sync} Sync`}
+                                            {isSyncing ? '…' : <>{Icons.action.sync} Sync</>}
                                         </button>
                                         <button className="btn btn-primary btn-sm" onClick={() => setShowRuleForm(true)}>{Icons.action.add} Pravidlo</button>
                                     </div>
@@ -1149,7 +1149,7 @@ export default function SettingsPage() {
                                 />
                             </div>
                             <button className="btn btn-primary" onClick={handleAddRule} disabled={savingRule || !newPattern.trim()}>
-                                {savingRule ? 'Ukládám...' : `${Icons.action.add} Přidat pravidlo`}
+                                {savingRule ? 'Ukládám...' : <>{Icons.action.add} Přidat pravidlo</>}
                             </button>
                         </div>
                     </div>
@@ -1194,7 +1194,7 @@ export default function SettingsPage() {
                             <SurfaceCard title="Synchronizace" sub={`Poslední: ${formatLastSync(syncStatus?.last_sync || null)}`}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                                     <button className="btn btn-primary" onClick={handleSync} disabled={isSyncing} style={{ padding: 12 }}>
-                                        {isSyncing ? `${Icons.status.loading} Synchronizuji...` : `${Icons.action.sync} Synchronizovat data`}
+                                        {isSyncing ? <>{Icons.status.loading} Synchronizuji...</> : <>{Icons.action.sync} Synchronizovat data</>}
                                     </button>
                                     {syncStatus?.status === 'completed' && (
                                         <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -1243,7 +1243,7 @@ export default function SettingsPage() {
                                     </div>
 
                                     <button className="btn btn-primary" onClick={handleSaveKeys} disabled={savingKeys}>
-                                        {savingKeys ? 'Ukládám...' : keysSaved ? '✓ Uloženo' : `${Icons.action.save} Uložit klíče`}
+                                        {savingKeys ? 'Ukládám...' : keysSaved ? '✓ Uloženo' : <>{Icons.action.save} Uložit klíče</>}
                                     </button>
                                 </div>
                             </SurfaceCard>
@@ -1262,15 +1262,15 @@ export default function SettingsPage() {
                                         <MyAccountPatterns />
                                     </div>
                                     <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>💳 Účty vyloučené z interních převodů (kreditka…)</div>
+                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{Icons.nav.transactions} Účty vyloučené z interních převodů (kreditka…)</div>
                                         <TransferExcludedAccounts />
                                     </div>
                                     <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>👫 Pravidla dělení společných nákladů</div>
+                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{Icons.envelope.shared} Pravidla dělení společných nákladů</div>
                                         <ShareRulesSettings />
                                     </div>
                                     <button className="btn" onClick={handleDetectTransfers} disabled={detecting}>
-                                        {detecting ? 'Detekuji...' : `${Icons.action.search} Detekovat převody nyní`}
+                                        {detecting ? 'Detekuji...' : <>{Icons.action.search} Detekovat převody nyní</>}
                                     </button>
                                 </div>
                             </SurfaceCard>
