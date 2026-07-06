@@ -10,6 +10,7 @@ import {
     LineChart, Line
 } from 'recharts';
 import { queryKeys } from '@/lib/queryKeys';
+import { getLineIcon } from '@/lib/line-icons';
 import { apiFetch } from '@/lib/api';
 
 interface MonthlyTotal {
@@ -178,7 +179,7 @@ export default function ReportsPage() {
                         <h1>Přehledy</h1>
                         <div className="sub">Trendy a srovnání měsíců</div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="page-head-controls" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                         <div className="seg" title="Moje podíly: rozdělené výdaje jen mojí částí, vypořádání mimo příjmy. Plné částky: co reálně odešlo/přišlo na účtu.">
                             {([[false, 'Moje podíly'], [true, 'Plné částky']] as [boolean, string][]).map(([val, label]) => (
                                 <div
@@ -201,8 +202,8 @@ export default function ReportsPage() {
                                 </div>
                             ))}
                         </div>
-                        <Link href="/wrapped" className="btn btn-sm" style={{ textDecoration: 'none' }}>
-                            ✦ Roční přehled
+                        <Link href="/wrapped" className="btn btn-sm roc-pill" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            {getLineIcon('star', 14)} Roční přehled
                         </Link>
                     </div>
                 </div>
@@ -379,15 +380,16 @@ export default function ReportsPage() {
                     <div className="card-head">
                         <h3>Detail po měsících</h3>
                     </div>
-                    <div style={{ overflowX: 'auto' }}>
+                    {/* Desktop: table (Měsíc zarovnané s nadpisem, žádné boční odsazení) */}
+                    <div className="reports-month-table">
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
-                                    <th style={{ textAlign: 'left', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Měsíc</th>
+                                    <th style={{ textAlign: 'left', padding: '10px var(--spacing-lg) 10px 0', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Měsíc</th>
                                     <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Příjmy</th>
                                     <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Výdaje</th>
                                     <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Bilance</th>
-                                    <th style={{ textAlign: 'right', padding: '10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Úspora %</th>
+                                    <th style={{ textAlign: 'right', padding: '10px 0 10px var(--spacing-lg)', fontSize: 12, fontWeight: 590, color: 'var(--text-3)', letterSpacing: '0.03em' }}>Úspora %</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -395,13 +397,13 @@ export default function ReportsPage() {
                                     const rate = m.income > 0 ? Math.round((m.balance / m.income) * 100) : 0;
                                     return (
                                         <tr key={m.month} style={{ borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                                            <td style={{ padding: '11px var(--spacing-lg)', fontWeight: 510, fontSize: 14 }}>{formatMonth(m.month)}</td>
+                                            <td style={{ padding: '11px var(--spacing-lg) 11px 0', fontWeight: 510, fontSize: 14 }}>{formatMonth(m.month)}</td>
                                             <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--pos)', fontSize: 14 }}>+{formatMoney(m.income)}</td>
                                             <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', color: 'var(--text-2)', fontSize: 14 }}>{formatMoney(m.expenses)}</td>
                                             <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', fontWeight: 600, fontSize: 14, color: m.balance >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
                                                 {m.balance >= 0 ? '+' : ''}{formatMoney(m.balance)}
                                             </td>
-                                            <td className="num" style={{ padding: '11px var(--spacing-lg)', textAlign: 'right', fontSize: 14, color: rate >= 0 ? 'var(--text)' : 'var(--neg)' }}>
+                                            <td className="num" style={{ padding: '11px 0 11px var(--spacing-lg)', textAlign: 'right', fontSize: 14, color: rate >= 0 ? 'var(--text)' : 'var(--neg)' }}>
                                                 {rate}%
                                             </td>
                                         </tr>
@@ -409,6 +411,36 @@ export default function ReportsPage() {
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                    {/* Mobile: stacked cards — vejde se bez horizontálního scrollu */}
+                    <div className="reports-month-cards">
+                        {totals.slice().reverse().map((m) => {
+                            const rate = m.income > 0 ? Math.round((m.balance / m.income) * 100) : 0;
+                            return (
+                                <div key={m.month} className="reports-month-card">
+                                    <div className="reports-month-card-head">
+                                        <span className="reports-month-name">{formatMonth(m.month)}</span>
+                                        <span className="num" style={{ fontWeight: 700, fontSize: 15, color: m.balance >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
+                                            {m.balance >= 0 ? '+' : ''}{formatMoney(m.balance)}
+                                        </span>
+                                    </div>
+                                    <div className="reports-month-card-grid">
+                                        <div>
+                                            <span className="reports-mc-label">Příjmy</span>
+                                            <span className="num" style={{ color: 'var(--pos)' }}>+{formatMoney(m.income)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="reports-mc-label">Výdaje</span>
+                                            <span className="num" style={{ color: 'var(--text-2)' }}>{formatMoney(m.expenses)}</span>
+                                        </div>
+                                        <div>
+                                            <span className="reports-mc-label">Úspora</span>
+                                            <span className="num" style={{ color: rate >= 0 ? 'var(--text)' : 'var(--neg)' }}>{rate}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </section>
 

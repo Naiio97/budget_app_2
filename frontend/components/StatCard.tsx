@@ -1,3 +1,5 @@
+import { ReactNode } from 'react';
+
 interface StatCardProps {
     label: string;
     value: string | number;
@@ -5,7 +7,7 @@ interface StatCardProps {
         value: number;
         label?: string;
     };
-    icon?: string;
+    icon?: ReactNode;
     currency?: string;
 }
 

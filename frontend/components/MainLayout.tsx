@@ -68,7 +68,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         refetchInterval: 60_000,
     });
 
-    const NAV_EMOJI: Record<string, string> = {
+    const NAV_EMOJI: Record<string, ReactNode> = {
         '/': Icons.nav.dashboard,
         '/transactions': Icons.nav.transactions,
         '/rozpocet': Icons.nav.monthlyBudget,
@@ -453,7 +453,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     <strong className="num">{formatCurrency(totalBalance)}</strong>
                                 </div>
                                 <button className="btn btn-primary mobile-sync-btn" onClick={handleSync} disabled={isSyncing}>
-                                    {isSyncing ? 'Synchronizuji...' : `${Icons.action.sync} Synchronizovat`}
+                                    {isSyncing ? 'Synchronizuji...' : <>{Icons.action.sync} Synchronizovat</>}
                                 </button>
                                 {syncStatus?.last_sync && (
                                     <div className="mobile-tools-sync-meta">

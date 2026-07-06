@@ -27,7 +27,7 @@ export default function CustomSelect({
     onChange,
     placeholder = 'Vyberte...',
     searchable = false,
-    searchPlaceholder = '🔍 Hledat...',
+    searchPlaceholder = 'Hledat...',
     disabled = false,
     style,
     compact = false,

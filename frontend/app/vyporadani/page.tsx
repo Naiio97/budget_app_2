@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import StatCard from '@/components/StatCard';
+import { getLineIcon } from '@/lib/line-icons';
 import { getSettlementSummary, SettlementTxSnippet } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 
@@ -87,9 +88,9 @@ export default function SettlementPage() {
 
                 {/* Souhrn */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-md)' }}>
-                    <StatCard label="Zbývá vyrovnat" value={data.balance} icon="🤝" />
-                    <StatCard label="Podíly ostatních na výdajích" value={data.total_owed} icon="👫" />
-                    <StatCard label="Už poslali (vypořádání)" value={data.total_received} icon="💸" />
+                    <StatCard label="Zbývá vyrovnat" value={data.balance} icon={getLineIcon('handshake', 20)} />
+                    <StatCard label="Podíly ostatních na výdajích" value={data.total_owed} icon={getLineIcon('users', 20)} />
+                    <StatCard label="Už poslali (vypořádání)" value={data.total_received} icon={getLineIcon('coins', 20)} />
                 </div>
 
                 {/* Per protistrana */}
