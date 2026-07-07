@@ -17,6 +17,7 @@ interface MonthlyExpense {
     is_paid: boolean; is_auto_paid: boolean;
     matched_transaction_id: string | null; recurring_expense_id: number | null;
     is_loan?: boolean; loan_id?: number | null; loan_payment_id?: number | null;
+    due_day?: number | null;
 }
 interface IncomeItem { id: number; name: string; amount: number; order_index: number; is_salary: boolean; }
 interface MonthlyBudget {
@@ -26,7 +27,7 @@ interface MonthlyBudget {
     total_income: number; total_expenses: number; remaining: number;
     expenses: MonthlyExpense[];
 }
-interface RecurringExpense { id: number; name: string; default_amount: number; is_auto_paid: boolean; match_pattern: string | null; category: string | null; order_index: number; is_active: boolean; }
+interface RecurringExpense { id: number; name: string; default_amount: number; is_auto_paid: boolean; match_pattern: string | null; category: string | null; order_index: number; is_active: boolean; due_day: number | null; }
 interface Envelope { id: number; name: string; amount: number; is_mine: boolean; note: string | null; }
 interface ManualAccount { id: number; name: string; balance: number; currency: string; my_balance: number; envelopes: Envelope[]; }
 interface AnnualData {
@@ -74,7 +75,7 @@ export default function RozpocetPage() {
     const [activeTab, setActiveTab] = useState<Tab>('overview');
 
     const [showAddExpense, setShowAddExpense] = useState(false);
-    const [newExpense, setNewExpense] = useState({ name: '', amount: '', is_auto_paid: false, match_pattern: '' });
+    const [newExpense, setNewExpense] = useState({ name: '', amount: '', is_auto_paid: false, match_pattern: '', due_day: '' });
     const [showAddAccount, setShowAddAccount] = useState(false);
     const [newAccount, setNewAccount] = useState({ name: '', balance: '' });
     const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
@@ -88,6 +89,7 @@ export default function RozpocetPage() {
     const [editingIncomeAmounts, setEditingIncomeAmounts] = useState<Record<number, string>>({});
     const [editingIncomeNames, setEditingIncomeNames] = useState<Record<number, string>>({});
     const [editingExpenseNames, setEditingExpenseNames] = useState<Record<number, string>>({});
+    const [editingDueDays, setEditingDueDays] = useState<Record<number, string>>({});
     const [expandedExpenseId, setExpandedExpenseId] = useState<number | null>(null);
 
     const autoSyncedMonths = useRef<Set<string>>(new Set());
@@ -212,6 +214,18 @@ export default function RozpocetPage() {
         await apiFetch(`/monthly-expenses/${expense.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
         refreshBudget();
     };
+    // Splatnost žije na šabloně pravidelné platby (recurring_expenses.due_day),
+    // ne na měsíčním řádku — uloží se tam a promítne do všech měsíců.
+    const saveDueDay = async (expense: MonthlyExpense) => {
+        const raw = editingDueDays[expense.id];
+        setEditingDueDays(p => { const n = { ...p }; delete n[expense.id]; return n; });
+        if (raw === undefined || !expense.recurring_expense_id) return;
+        const v = raw === '' ? 0 : parseInt(raw, 10); // 0 = smazat splatnost
+        if (Number.isNaN(v) || v === (expense.due_day ?? 0)) return;
+        await apiFetch(`/recurring-expenses/${expense.recurring_expense_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ due_day: v }) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses });
+        refreshBudget();
+    };
     const saveMyAmount = async (expense: MonthlyExpense) => {
         const raw = editingMyAmounts[expense.id];
         if (raw === undefined) return;
@@ -230,9 +244,10 @@ export default function RozpocetPage() {
     };
     const createRecurringExpense = async () => {
         if (!newExpense.name || !newExpense.amount) return;
-        await apiFetch(`/recurring-expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid, match_pattern: newExpense.match_pattern || null }) });
+        const dueDay = parseInt(newExpense.due_day, 10);
+        await apiFetch(`/recurring-expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid, match_pattern: newExpense.match_pattern || null, due_day: Number.isNaN(dueDay) ? null : dueDay }) });
         await apiFetch(`/monthly-budget/${yearMonth}/expenses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newExpense.name, default_amount: parseFloat(newExpense.amount), is_auto_paid: newExpense.is_auto_paid }) });
-        setNewExpense({ name: '', amount: '', is_auto_paid: false, match_pattern: '' });
+        setNewExpense({ name: '', amount: '', is_auto_paid: false, match_pattern: '', due_day: '' });
         setShowAddExpense(false);
         queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses });
         refreshBudget();
@@ -299,15 +314,17 @@ export default function RozpocetPage() {
     const budgetSpentPct = budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0;
     const dailyPace = daysRemaining > 0 ? Math.round(Math.max(remaining, 0) / daysRemaining) : Math.max(remaining, 0);
     const monthSubLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} · ${isCurrentMonth ? `zbývá ${daysRemaining} dní do konce měsíce` : 'historický měsíc'}`;
+    // Řazení podle skutečné splatnosti (recurring_expenses.due_day / splátkový
+    // kalendář úvěru); bez data až na konec, tam podle výše částky.
+    const byDueDay = (a: MonthlyExpense, b: MonthlyExpense) =>
+        (a.due_day ?? 99) - (b.due_day ?? 99) || b.my_amount - a.my_amount;
     const upcomingExpenses = [...(budget?.expenses || [])]
         .filter(expense => !expense.is_paid)
-        .sort((a, b) => b.my_amount - a.my_amount)
+        .sort(byDueDay)
         .slice(0, 4);
-    const expenseDueLabel = (index: number) => {
-        const dueDays = [12, 15, 19, 14, 25, 28, 28, 30];
-        const day = dueDays[index % dueDays.length];
-        return `${day}. ${selectedMonth}.`;
-    };
+    const sortedExpenses = [...(budget?.expenses || [])].sort(byDueDay);
+    const dueLabel = (expense: MonthlyExpense) =>
+        expense.due_day ? `${expense.due_day}. ${selectedMonth}.` : '';
 
     const prevMonthIncome = selectedMonth === 1
         ? prevYearData?.months?.find(m => m.month === 12)?.income ?? 0
@@ -336,13 +353,16 @@ export default function RozpocetPage() {
                         <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-md)' }}>
                             Všechny platby jsou označené jako zaplacené.
                         </div>
-                    ) : upcomingExpenses.map((expense, index) => (
+                    ) : upcomingExpenses.map(expense => (
                         <div key={expense.id} className="budget-payment-row">
                             <div className="budget-payment-dot" />
                             <div style={{ minWidth: 0, flex: 1 }}>
                                 <div className="budget-payment-name">{expense.name}</div>
                                 <div className="budget-payment-meta">
-                                    {expense.is_auto_paid ? 'Automatická platba' : `Priorita ${index + 1}`} · čeká na úhradu
+                                    {[
+                                        expense.due_day ? `Splatnost ${expense.due_day}. ${selectedMonth}.` : null,
+                                        expense.is_auto_paid ? 'automatická platba' : null,
+                                    ].filter(Boolean).join(' · ') || 'Čeká na úhradu'}
                                 </div>
                             </div>
                             <div className="num budget-payment-amount">{formatCurrency(expense.my_amount)}</div>
@@ -382,6 +402,7 @@ export default function RozpocetPage() {
                             <input className="input" placeholder="Název výdaje" value={newExpense.name} onChange={(e) => setNewExpense({ ...newExpense, name: e.target.value })} />
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <input type="number" className="input" placeholder="Částka" value={newExpense.amount} onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })} style={{ flex: 1 }} />
+                                <input type="number" min={1} max={31} className="input" placeholder="Den splatnosti" value={newExpense.due_day} onChange={(e) => setNewExpense({ ...newExpense, due_day: e.target.value })} style={{ width: 130 }} />
                                 <input className="input" placeholder="Match pattern" value={newExpense.match_pattern} onChange={(e) => setNewExpense({ ...newExpense, match_pattern: e.target.value })} style={{ flex: 1 }} />
                             </div>
                             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)', cursor: 'pointer' }}>
@@ -396,7 +417,7 @@ export default function RozpocetPage() {
                     )}
 
                     <div className="recurring-payments-list">
-                        {budget?.expenses.map((expense, index) => {
+                        {sortedExpenses.map(expense => {
                             const isExpanded = expandedExpenseId === expense.id;
                             const isLoan = !!expense.is_loan;
                             const amountLabel = expense.my_amount_override !== null || expense.my_percentage < 100
@@ -410,7 +431,7 @@ export default function RozpocetPage() {
                                             {expense.name}
                                             {isLoan && <span className="bd-loan-tag">ÚVĚR</span>}
                                         </span>
-                                        <span className="recurring-date">{expenseDueLabel(index)}</span>
+                                        <span className="recurring-date">{dueLabel(expense)}</span>
                                         <span className="num recurring-amount">{amountLabel}</span>
                                         <span className={`recurring-status ${expense.is_paid ? 'paid' : 'pending'}`}>
                                             {expense.is_paid ? 'Zaplaceno' : 'Čekající'}
@@ -463,7 +484,7 @@ export default function RozpocetPage() {
                                                                 className="input bd-input"
                                                             />
                                                         </div>
-                                                        <div className="bd-cols bd-cols-3">
+                                                        <div className="bd-cols bd-cols-4">
                                                             <div className="bd-field">
                                                                 <span className="bd-label">Podíl</span>
                                                                 <CustomSelect
@@ -499,6 +520,20 @@ export default function RozpocetPage() {
                                                                     />
                                                                 ) : (
                                                                     <div className="bd-readonly bd-readonly-accent num">{formatCurrency(expense.my_amount)}</div>
+                                                                )}
+                                                            </div>
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Splatnost (den)</span>
+                                                                {expense.recurring_expense_id ? (
+                                                                    <input type="number" min={1} max={31} placeholder="—"
+                                                                        className="input bd-input bd-input-num"
+                                                                        value={editingDueDays[expense.id] ?? (expense.due_day ?? '')}
+                                                                        onChange={(e) => setEditingDueDays(p => ({ ...p, [expense.id]: e.target.value }))}
+                                                                        onBlur={() => saveDueDay(expense)}
+                                                                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                                    />
+                                                                ) : (
+                                                                    <div className="bd-readonly num">—</div>
                                                                 )}
                                                             </div>
                                                         </div>

@@ -342,7 +342,7 @@ export default function AccountDetailPage() {
                                 border: themeColor ? 'none' : '1px solid var(--border)',
                                 display: 'inline-block',
                             }} />
-                            Vzhled
+                            <span className="account-appearance-label">Vzhled</span>
                         </button>
                         <button onClick={() => router.back()} className="btn account-back-btn">← Zpět</button>
                     </div>
@@ -357,7 +357,7 @@ export default function AccountDetailPage() {
                                 {formatMoney(account.balance, account.currency)}
                             </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 18, flex: '1 1 360px', maxWidth: 540 }}>
+                        <div className="account-hero-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 18, flex: '1 1 360px', maxWidth: 540 }}>
                             <div>
                                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Příjmy · tento měsíc</div>
                                 <div className="num" style={{ fontSize: 18, fontWeight: 620, color: 'var(--pos)' }}>+{formatMoney(monthIncome, account.currency)}</div>
@@ -394,10 +394,10 @@ export default function AccountDetailPage() {
 
                 {/* ── Last 5 transactions ── */}
                 <div className="surface">
-                    <div className="card-head" style={{ padding: '18px var(--spacing-lg) 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ margin: 0 }}>Posledních 5 transakcí <span className="muted">({totalItems} celkem)</span></h3>
-                        <Link href={`/transactions?account_id=${accountId}`} className="btn">
-                            Zobrazit všechny →
+                    <div className="card-head tx-preview-head" style={{ padding: '18px var(--spacing-lg) 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ margin: 0, minWidth: 0 }}>Poslední transakce <span className="muted tx-count-label">({totalItems} celkem)</span></h3>
+                        <Link href={`/transactions?account_id=${accountId}`} className="btn" style={{ flexShrink: 0 }}>
+                            Všechny →
                         </Link>
                     </div>
                     <div className="card-body-nopad">

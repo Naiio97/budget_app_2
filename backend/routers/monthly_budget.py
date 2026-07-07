@@ -69,6 +69,9 @@ class MonthlyExpenseResponse(BaseModel):
     is_loan: bool = False
     loan_id: Optional[int] = None
     loan_payment_id: Optional[int] = None
+    # Den v měsíci splatnosti (1-31) — u běžných řádků z recurring_expenses,
+    # u úvěrových řádků odvozený z loan_payments.due_date. NULL = neznámý.
+    due_day: Optional[int] = None
 
 
 class MonthlyBudgetResponse(BaseModel):
@@ -91,6 +94,7 @@ class RecurringExpenseCreate(BaseModel):
     is_auto_paid: bool = False
     match_pattern: Optional[str] = None
     category: Optional[str] = None
+    due_day: Optional[int] = None  # 1-31; mimo rozsah se ignoruje
 
 
 class RecurringExpenseUpdate(BaseModel):
@@ -102,6 +106,7 @@ class RecurringExpenseUpdate(BaseModel):
     category: Optional[str] = None
     order_index: Optional[int] = None
     is_active: Optional[bool] = None
+    due_day: Optional[int] = None  # 1-31; 0 smaže (None = beze změny)
 
 
 class RecurringExpenseResponse(BaseModel):
@@ -114,6 +119,11 @@ class RecurringExpenseResponse(BaseModel):
     category: Optional[str]
     order_index: int
     is_active: bool
+    due_day: Optional[int] = None
+
+
+def _valid_due_day(day: Optional[int]) -> Optional[int]:
+    return day if day is not None and 1 <= day <= 31 else None
 
 
 class MonthlyExpenseUpdate(BaseModel):
@@ -213,6 +223,11 @@ async def _loan_expense_rows(db: AsyncSession, user_id: int, year_month: str) ->
     )
     rows: List[MonthlyExpenseResponse] = []
     for loan, payment in result.all():
+        # due_date je YYYY-MM-DD string → den splátky
+        try:
+            payment_due_day = int(payment.due_date[8:10])
+        except (TypeError, ValueError, IndexError):
+            payment_due_day = None
         rows.append(MonthlyExpenseResponse(
             id=-payment.id,  # negative → never collides with real monthly_expenses ids
             name=loan.name,
@@ -227,6 +242,7 @@ async def _loan_expense_rows(db: AsyncSession, user_id: int, year_month: str) ->
             is_loan=True,
             loan_id=loan.id,
             loan_payment_id=payment.id,
+            due_day=payment_due_day,
         ))
     return rows
 
@@ -264,6 +280,17 @@ async def get_monthly_budget(
             return e.my_amount_override
         return e.amount * (e.my_percentage or 100) / 100
 
+    # Splatnost žije na šabloně (recurring_expenses.due_day) — jednorázový
+    # lookup místo N+1 dotazů per řádek.
+    recurring_ids = [e.recurring_expense_id for e in expenses if e.recurring_expense_id]
+    due_days: dict = {}
+    if recurring_ids:
+        rec_result = await db.execute(
+            select(RecurringExpenseModel.id, RecurringExpenseModel.due_day)
+            .where(RecurringExpenseModel.id.in_(recurring_ids))
+        )
+        due_days = {rid: dd for rid, dd in rec_result.all()}
+
     expense_rows = [MonthlyExpenseResponse(
         id=e.id,
         name=e.name,
@@ -274,7 +301,8 @@ async def get_monthly_budget(
         is_paid=e.is_paid,
         is_auto_paid=e.is_auto_paid,
         matched_transaction_id=e.matched_transaction_id,
-        recurring_expense_id=e.recurring_expense_id
+        recurring_expense_id=e.recurring_expense_id,
+        due_day=due_days.get(e.recurring_expense_id)
     ) for e in expenses]
 
     # Append live-linked loan installments due this month (read-only rows).
@@ -732,7 +760,8 @@ async def get_recurring_expenses(
         match_pattern=e.match_pattern,
         category=e.category,
         order_index=e.order_index,
-        is_active=e.is_active
+        is_active=e.is_active,
+        due_day=e.due_day
     ) for e in expenses]
 
 
@@ -757,6 +786,7 @@ async def create_recurring_expense(
         is_auto_paid=data.is_auto_paid,
         match_pattern=data.match_pattern,
         category=data.category,
+        due_day=_valid_due_day(data.due_day),
         order_index=max_index + 1
     )
     db.add(expense)
@@ -772,7 +802,8 @@ async def create_recurring_expense(
         match_pattern=expense.match_pattern,
         category=expense.category,
         order_index=expense.order_index,
-        is_active=expense.is_active
+        is_active=expense.is_active,
+        due_day=expense.due_day
     )
 
 
@@ -817,6 +848,9 @@ async def update_recurring_expense(
         expense.order_index = data.order_index
     if data.is_active is not None:
         expense.is_active = data.is_active
+    if data.due_day is not None:
+        # 0 (nebo jiná hodnota mimo 1-31) splatnost smaže
+        expense.due_day = _valid_due_day(data.due_day)
 
     await db.commit()
     return {"status": "updated"}

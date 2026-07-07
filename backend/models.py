@@ -264,6 +264,7 @@ class RecurringExpenseModel(Base):
     is_auto_paid = Column(Boolean, default=False)  # Zelené = automtatická platba z účtu
     match_pattern = Column(String, nullable=True)  # Pattern pro auto-match s transakcemi
     category = Column(String, nullable=True)  # Pro seskupení
+    due_day = Column(Integer, nullable=True)  # Den v měsíci splatnosti (1-31), NULL = neznámý
     order_index = Column(Integer, default=0)  # Pořadí v seznamu
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)

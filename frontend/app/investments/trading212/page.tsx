@@ -295,7 +295,7 @@ export default function Trading212DetailPage() {
                                 {formatCurrency(total)}
                             </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 18, flex: '1 1 360px', maxWidth: 540 }}>
+                        <div className="account-hero-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 18, flex: '1 1 360px', maxWidth: 540 }}>
                             <div>
                                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Investováno</div>
                                 <div className="num" style={{ fontSize: 18, fontWeight: 620 }}>{formatCurrency(invested)}</div>
@@ -304,7 +304,7 @@ export default function Trading212DetailPage() {
                                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 4 }}>Výsledek</div>
                                 <div className="num" style={{ fontSize: 18, fontWeight: 620, color: result >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
                                     {result >= 0 ? '+' : ''}{formatCurrency(result)}
-                                    <span style={{ fontSize: 12, fontWeight: 500, marginLeft: 4, opacity: 0.8 }}>
+                                    <span className="account-kpi-pct" style={{ fontSize: 12, fontWeight: 500, marginLeft: 4, opacity: 0.8, whiteSpace: 'nowrap' }}>
                                         ({resultPct >= 0 ? '+' : ''}{formatPct(resultPct)})
                                     </span>
                                 </div>

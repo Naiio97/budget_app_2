@@ -1769,6 +1769,7 @@ select.input {
 }
 .bd-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .bd-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bd-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .bd-input,
 .bd-readonly {
   width: 100%;
@@ -1895,10 +1896,11 @@ select.input {
   .bd-head .recurring-date,
   .bd-head .recurring-status { display: none; }
   .bd-head .recurring-chevron { justify-self: end; }
-  /* Podíl přes celou šířku, Částka + K platbě vedle sebe — kratší karta
-     a související čísla na jednom řádku. */
+  /* Pole detailu na telefonu do mřížky 2×2 (Podíl+Splatnost / Částka+K platbě)
+     místo dlouhého sloupce. */
   .bd-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bd-cols-3 > .bd-field:first-child { grid-column: 1 / -1; }
+  .bd-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bd-actions-right { gap: 10px; }
   /* Užší segmenty, ať se stavový přepínač vejde na řádek vedle Smazat */
   .bd-seg { padding: 7px 13px; }
@@ -3562,8 +3564,10 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .budget-expenses-split { grid-template-columns: minmax(0, 1fr); }
   .budget-category-panel { position: static; }
   .account-detail-head h1 { font-size: 1.75rem; }
-  .account-detail-head { flex-direction: column-reverse; gap: var(--spacing-sm); }
-  .account-back-btn { align-self: flex-start; }
+  /* Akce (Vzhled/Zpět) zůstávají vedle názvu i na telefonu — dřívější
+     column-reverse dával tlačítka nad nadpis, což působilo rozbitě.
+     Základní layout je řádek (space-between), stačí zmenšit mezeru. */
+  .account-detail-head { gap: var(--spacing-sm) var(--spacing-md); }
   .account-insight-grid { grid-template-columns: 1fr !important; }
   .reports-insight-grid { grid-template-columns: 1fr !important; }
   .account-chart-wrap,
@@ -4023,4 +4027,41 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 @keyframes tx-sheet-up {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+/* ══ ACCOUNT DETAIL — hero KPI na telefonu ═══════════════════════ */
+/* KPI trojice v heru (Příjmy/Výdaje/Netto, resp. Investováno/Výsledek/
+   Volná hotovost) má inline minmax(120px,1fr) — na telefonu přetékala
+   doprava a poslední sloupec byl uříznutý. !important přebíjí inline styl. */
+@media (max-width: 680px) {
+  .account-hero-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+    max-width: none !important;
+  }
+  .account-hero-kpi-grid .num { font-size: 15px !important; }
+  /* Procentní změna (+35 %) pod hodnotu, ať se nezalamuje uprostřed závorky */
+  .account-kpi-pct {
+    display: block;
+    margin-left: 0 !important;
+    margin-top: 2px;
+  }
+  /* Na telefonu je Vzhled jen barevné kolečko, ať se akce vejdou vedle
+     názvu účtu i u delších jmen. */
+  .account-appearance-label { display: none; }
+  /* Zpět na telefonu nemá smysl — systémové gesto zpět + spodní navigace
+     ho plně nahrazují a v hlavičce jen zabírá místo. Na desktopu zůstává. */
+  .account-back-btn { display: none; }
+  /* Počet transakcí „(318 celkem)" se na telefonu nevejde vedle titulku
+     a lámal se do sloupce — nízká hodnota, skrýt. */
+  .tx-count-label { display: none; }
+  /* Hlavička náhledu transakcí lícuje s denními nadpisy seznamu (4px inset)
+     místo hlubokého 24px insetu; nižší tlačítko, ať pruh není nafouklý. */
+  .tx-preview-head { padding: 4px 4px 10px !important; }
+  .tx-preview-head .btn {
+    min-height: 34px;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+  }
 }

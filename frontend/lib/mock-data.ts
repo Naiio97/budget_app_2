@@ -414,20 +414,20 @@ export const MOCK_MONTHLY_BUDGET = {
     total_expenses: 42000,
     remaining: 21000,
     expenses: [
-        { id: 1, name: 'Nájem + Služby', amount: 18000, my_percentage: 50, my_amount: 9000, my_amount_override: null, is_paid: true, is_auto_paid: true, matched_transaction_id: 'txn-1', recurring_expense_id: 1 },
-        { id: 2, name: 'Internet', amount: 599, my_percentage: 100, my_amount: 599, my_amount_override: null, is_paid: true, is_auto_paid: true, matched_transaction_id: 'txn-2', recurring_expense_id: 2 },
-        { id: 3, name: 'Netflix', amount: 349, my_percentage: 100, my_amount: 349, my_amount_override: null, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: 3 },
-        { id: 4, name: 'Telefon', amount: 649, my_percentage: 100, my_amount: 349, my_amount_override: 349, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: 4 },
-        { id: 5, name: 'Peníze na život', amount: 10000, my_percentage: 100, my_amount: 10000, my_amount_override: null, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: null },
-        { id: 6, name: 'Palivo', amount: 1500, my_percentage: 100, my_amount: 1500, my_amount_override: null, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: null },
+        { id: 1, name: 'Nájem + Služby', amount: 18000, my_percentage: 50, my_amount: 9000, my_amount_override: null, is_paid: true, is_auto_paid: true, matched_transaction_id: 'txn-1', recurring_expense_id: 1, due_day: 15 },
+        { id: 2, name: 'Internet', amount: 599, my_percentage: 100, my_amount: 599, my_amount_override: null, is_paid: true, is_auto_paid: true, matched_transaction_id: 'txn-2', recurring_expense_id: 2, due_day: 5 },
+        { id: 3, name: 'Netflix', amount: 349, my_percentage: 100, my_amount: 349, my_amount_override: null, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: 3, due_day: 21 },
+        { id: 4, name: 'Telefon', amount: 649, my_percentage: 100, my_amount: 349, my_amount_override: 349, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: 4, due_day: 8 },
+        { id: 5, name: 'Peníze na život', amount: 10000, my_percentage: 100, my_amount: 10000, my_amount_override: null, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: null, due_day: null },
+        { id: 6, name: 'Palivo', amount: 1500, my_percentage: 100, my_amount: 1500, my_amount_override: null, is_paid: false, is_auto_paid: false, matched_transaction_id: null, recurring_expense_id: null, due_day: null },
     ],
 };
 
 export const MOCK_RECURRING_EXPENSES = [
-    { id: 1, name: 'Nájem + Služby', default_amount: 18000, my_percentage: 50, is_auto_paid: true, match_pattern: 'nájem', category: 'Bydlení', order_index: 0, is_active: true },
-    { id: 2, name: 'Internet', default_amount: 599, my_percentage: 100, is_auto_paid: true, match_pattern: 'internet', category: 'Utilities', order_index: 1, is_active: true },
-    { id: 3, name: 'Netflix', default_amount: 349, my_percentage: 100, is_auto_paid: false, match_pattern: 'netflix', category: 'Entertainment', order_index: 2, is_active: true },
-    { id: 4, name: 'Telefon', default_amount: 649, my_percentage: 100, is_auto_paid: false, match_pattern: 'o2', category: 'Utilities', order_index: 3, is_active: true },
+    { id: 1, name: 'Nájem + Služby', default_amount: 18000, my_percentage: 50, is_auto_paid: true, match_pattern: 'nájem', category: 'Bydlení', order_index: 0, is_active: true, due_day: 15 },
+    { id: 2, name: 'Internet', default_amount: 599, my_percentage: 100, is_auto_paid: true, match_pattern: 'internet', category: 'Utilities', order_index: 1, is_active: true, due_day: 5 },
+    { id: 3, name: 'Netflix', default_amount: 349, my_percentage: 100, is_auto_paid: false, match_pattern: 'netflix', category: 'Entertainment', order_index: 2, is_active: true, due_day: 21 },
+    { id: 4, name: 'Telefon', default_amount: 649, my_percentage: 100, is_auto_paid: false, match_pattern: 'o2', category: 'Utilities', order_index: 3, is_active: true, due_day: 8 },
 ];
 
 const buildMonthsForYear = (year: number) => {
