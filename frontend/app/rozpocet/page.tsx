@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
+import PeriodNavigator from '@/components/PeriodNavigator';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { getLineIcon } from '@/lib/line-icons';
@@ -125,15 +126,6 @@ export default function RozpocetPage() {
         [queryClient, yearMonth]
     );
     const refreshManualAccounts = () => queryClient.invalidateQueries({ queryKey: queryKeys.manualAccounts });
-
-    const goToPrevMonth = () => {
-        if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); }
-        else setSelectedMonth(m => m - 1);
-    };
-    const goToNextMonth = () => {
-        if (selectedMonth === 12) { setSelectedMonth(1); setSelectedYear(y => y + 1); }
-        else setSelectedMonth(m => m + 1);
-    };
 
     useEffect(() => {
         if (!budget || viewMode !== 'month') return;
@@ -476,6 +468,7 @@ export default function RozpocetPage() {
                                                                 <span className="bd-label">Podíl</span>
                                                                 <CustomSelect
                                                                     compact
+                                                                    triggerStyle={{ height: 44, minHeight: 44, borderRadius: 'var(--radius-full)', padding: '0 16px', fontSize: 14 }}
                                                                     value={expense.my_amount_override !== null ? 'custom' : (expense.my_percentage === 100 ? '100' : expense.my_percentage === 50 ? '50' : 'custom')}
                                                                     onChange={(val) => {
                                                                         if (val === '100') updateExpensePercentage(expense.id, 100);
@@ -580,32 +573,32 @@ export default function RozpocetPage() {
                 <h3>{getLineIcon('income', 16)} Příjmy</h3>
                 <button className="btn btn-sm" onClick={syncIncome}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('refresh', 14)} Načíst</span></button>
             </div>
-            <div className="budget-plan-section-body">
+            <div className="plan-rows">
                 {(budget?.income_items || []).map(item => (
-                    <div key={item.id} className="budget-income-row">
-                        <input className="input" value={editingIncomeNames[item.id] ?? item.name}
+                    <div key={item.id} className="plan-row">
+                        <input className="plan-input" value={editingIncomeNames[item.id] ?? item.name}
                             onChange={(e) => setEditingIncomeNames(p => ({ ...p, [item.id]: e.target.value }))}
                             onBlur={() => commitIncomeName(item)}
                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            style={{ flex: 1, padding: '6px 10px', fontSize: '0.875rem' }}
                         />
-                        <input type="number" className="input" placeholder="0"
+                        <button onClick={() => deleteIncomeItem(item.id)} className="plan-row-delete" aria-label="Smazat příjem">{getLineIcon('delete', 14)}</button>
+                        <input type="number" className="plan-input plan-amount" placeholder="0"
                             value={editingIncomeAmounts[item.id] ?? (item.amount === 0 ? '' : String(item.amount))}
                             onChange={(e) => setEditingIncomeAmounts(p => ({ ...p, [item.id]: e.target.value }))}
                             onBlur={() => commitIncomeAmount(item)}
                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                            style={{ width: 120, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
                         />
-                        <button onClick={() => deleteIncomeItem(item.id)} className="btn btn-icon btn-ghost btn-sm" style={{ color: 'var(--text)' }} aria-label="Smazat příjem">{getLineIcon('delete', 15)}</button>
                     </div>
                 ))}
-                <button className="btn btn-sm" onClick={addIncomeItem} style={{ alignSelf: 'flex-start' }}>+ Přidat příjem</button>
-                <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 10, marginTop: 4, display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 14 }}>
+                <button className="plan-add-btn" onClick={addIncomeItem}>{getLineIcon('add', 13)} Přidat příjem</button>
+            </div>
+            <div>
+                <div className="plan-total-row">
                     <span>Celkem</span>
-                    <span style={{ color: 'var(--pos)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totalIncome)}</span>
+                    <span className="plan-total-amount">{formatCurrency(totalIncome)}</span>
                 </div>
                 {prevMonthIncome > 0 && totalIncome > 0 && (
-                    <div style={{ fontSize: 12, color: incomeDelta >= 0 ? 'var(--pos)' : 'var(--neg)', textAlign: 'right' }}>
+                    <div className="plan-delta" style={{ color: incomeDelta >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
                         {incomeDelta >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(incomeDelta))} oproti minulému měsíci
                     </div>
                 )}
@@ -616,25 +609,29 @@ export default function RozpocetPage() {
     const renderSurplus = () => (
         <section className="budget-plan-section">
             <div className="budget-plan-section-head"><h3>{getLineIcon('savings', 16)} Přebytek & Spoření</h3></div>
-            <div className="budget-plan-section-body budget-surplus-body">
-                <div className="budget-surplus-row">
-                    <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Investice</span>
-                    <input type="number" className="input" placeholder="0"
+            <div className="plan-rows">
+                <div className="plan-row">
+                    <span className="plan-label">Investice</span>
+                    <span className="plan-row-spacer" />
+                    <input type="number" className="plan-input plan-amount" placeholder="0"
                         value={editingBudgetFields['investment_amount'] ?? ((budget?.investment_amount || 0) === 0 ? '' : String(budget?.investment_amount))}
                         onChange={(e) => setEditingBudgetFields(p => ({ ...p, investment_amount: e.target.value }))}
                         onBlur={() => commitBudgetField('investment_amount', budget?.investment_amount || 0)}
-                        style={{ width: 110, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     />
                 </div>
-                <div className="budget-surplus-row">
-                    <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Spořící účet</span>
-                    <input type="number" className="input" placeholder="0"
+                <div className="plan-row">
+                    <span className="plan-label">Spořící účet</span>
+                    <span className="plan-row-spacer" />
+                    <input type="number" className="plan-input plan-amount" placeholder="0"
                         value={editingBudgetFields['surplus_to_savings'] ?? ((budget?.surplus_to_savings || 0) === 0 ? '' : String(budget?.surplus_to_savings))}
                         onChange={(e) => setEditingBudgetFields(p => ({ ...p, surplus_to_savings: e.target.value }))}
                         onBlur={() => commitBudgetField('surplus_to_savings', budget?.surplus_to_savings || 0)}
-                        style={{ width: 110, textAlign: 'right', padding: '6px 10px', fontSize: '0.875rem' }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     />
                 </div>
+            </div>
+            <div className="plan-rows" style={{ gap: 12 }}>
                 {totalIncome > 0 && (
                     <div className="budget-savings-rate-card" style={{ padding: '12px 14px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
@@ -873,35 +870,28 @@ export default function RozpocetPage() {
                     <div>
                         <h1>Rozpočet</h1>
                         <div className="sub">
-                            {isAutoSyncing ? 'Synchronizuji...' : monthSubLabel}
+                            {viewMode === 'year' ? `Roční přehled ${selectedYear}` : (isAutoSyncing ? 'Synchronizuji...' : monthSubLabel)}
                         </div>
                     </div>
                     <div className="rozpocet-controls budget-period-controls">
+                        <div className="seg" role="group" aria-label="Režim zobrazení">
+                            <button type="button" className={`seg-item ${viewMode === 'month' ? 'active' : ''}`} onClick={() => setViewMode('month')}>Měsíc</button>
+                            <button type="button" className={`seg-item ${viewMode === 'year' ? 'active' : ''}`} onClick={() => setViewMode('year')}>Rok</button>
+                        </div>
+                        <PeriodNavigator
+                            year={selectedYear} month={selectedMonth} mode={viewMode}
+                            onChange={(y, m) => { setSelectedYear(y); setSelectedMonth(m); }}
+                            onPickMonth={(y, m) => { setSelectedYear(y); setSelectedMonth(m); setViewMode('month'); }}
+                        />
                         {viewMode === 'month' && (
                             <>
-                                <button className="budget-arrow-btn" onClick={goToPrevMonth} aria-label="Předchozí měsíc">←</button>
-                                <CustomSelect value={selectedMonth.toString()} onChange={v => setSelectedMonth(Number(v))} style={{ width: 142 }}
-                                    options={MONTH_NAMES.map((n, i) => ({ value: (i + 1).toString(), label: n }))} />
-                                <CustomSelect value={selectedYear.toString()} onChange={v => setSelectedYear(Number(v))} style={{ width: 98 }}
-                                    options={Array.from({ length: 11 }, (_, i) => selectedYear - 5 + i).sort((a, b) => b - a).map(y => ({ value: y.toString(), label: y.toString() }))} />
-                                <button className="budget-arrow-btn" onClick={goToNextMonth} aria-label="Další měsíc">→</button>
+                                <button className="btn btn-sm btn-primary" onClick={matchTransactions}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('bolt', 14)} Auto-plán</span>
+                                </button>
+                                <button className="btn btn-sm btn-icon" onClick={deleteBudgetMonth} style={{ color: 'var(--text)' }} aria-label="Smazat měsíc">
+                                    {getLineIcon('delete', 16)}
+                                </button>
                             </>
-                        )}
-                        <button onClick={() => setViewMode(v => v === 'month' ? 'year' : 'month')} className={`btn btn-sm ${viewMode === 'year' ? 'btn-primary' : ''}`}>
-                            {viewMode === 'year' ? '← Měsíc' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('chart', 15)} Roční</span>}
-                        </button>
-                        {viewMode === 'month' && !isCurrentMonth && (
-                            <button className="btn btn-sm" onClick={() => { setSelectedMonth(currentMonth); setSelectedYear(currentYear); }}>Dnes</button>
-                        )}
-                        {viewMode === 'month' && (
-                            <button className="btn btn-sm btn-primary" onClick={matchTransactions}>
-                                Auto-plán
-                            </button>
-                        )}
-                        {viewMode === 'month' && (
-                            <button className="btn btn-sm btn-icon" onClick={deleteBudgetMonth} style={{ color: 'var(--text)' }} aria-label="Smazat měsíc">
-                                {getLineIcon('delete', 16)}
-                            </button>
                         )}
                     </div>
                 </div>
@@ -948,15 +938,6 @@ export default function RozpocetPage() {
                                 {formatCurrency(Math.max(remaining, 0))} zbývá
                             </div>
                         </div>
-                    </div>
-                )}
-
-                {/* ── Year nav ── */}
-                {viewMode === 'year' && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button className="btn btn-sm" onClick={() => setSelectedYear(y => y - 1)}>←</button>
-                        <span style={{ fontWeight: 600, fontSize: 15, minWidth: 60, textAlign: 'center' }}>{selectedYear}</span>
-                        <button className="btn btn-sm" onClick={() => setSelectedYear(y => y + 1)}>→</button>
                     </div>
                 )}
 

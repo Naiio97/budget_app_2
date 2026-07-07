@@ -176,46 +176,39 @@ export default function ManualAccountDetailPage() {
     return (
         <MainLayout>
             <div className="page-container">
-            <header style={{ marginBottom: 'var(--spacing-xl)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--spacing-md)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                        <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {account.name}
-                        </h1>
-                    </div>
+            <header className="account-detail-head" style={{ marginBottom: 'var(--spacing-xl)' }}>
+                <div className="account-title-block">
+                    <h1>{account.name}</h1>
+                    <div className="account-detail-sub">Spořicí účet · spravováno ručně</div>
                 </div>
+                <button onClick={() => router.back()} className="btn account-back-btn">← Zpět</button>
             </header>
+
+            {/* Hero: celkový zůstatek — stejný vzor jako detail banky/Trading 212 */}
+            <section className="surface" style={{ padding: '24px 28px', marginBottom: 'var(--spacing-md)' }}>
+                <div className="kpi-label">Celkem na účtu</div>
+                {editingBalance ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, maxWidth: 340 }}>
+                        <input
+                            type="number"
+                            className="input"
+                            value={balance}
+                            onChange={(e) => setBalance(Number(e.target.value))}
+                            style={{ flex: 1 }}
+                        />
+                        <button className="btn btn-primary" onClick={updateBalance} style={{ padding: '4px 10px' }}>✓</button>
+                        <button className="btn" onClick={() => setEditingBalance(false)} style={{ padding: '4px 10px' }}>{Icons.action.cancel}</button>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 6 }}>
+                        <div className="num account-balance-value">{formatCurrency(account.balance)}</div>
+                        <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Upravit zůstatek">{Icons.action.edit}</button>
+                    </div>
+                )}
+            </section>
 
             {/* Balance Cards */}
             <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-xl)' }}>
-                {/* 1. Celkem na účtu */}
-                <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: '1.25rem' }}>{Icons.section.assetGrowth}</span>
-                        <div className="stat-label" style={{ fontSize: '0.8125rem', marginBottom: 0, textTransform: 'uppercase', flex: 1, paddingTop: '2px' }}>Celkem na účtu</div>
-                    </div>
-                    {editingBalance ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: '4px', alignItems: 'center', marginTop: 'auto' }}>
-                            <input
-                                type="number"
-                                className="input"
-                                value={balance}
-                                onChange={(e) => setBalance(Number(e.target.value))}
-                                style={{ width: '100%' }}
-                            />
-                            <button className="btn btn-primary" onClick={updateBalance} style={{ padding: '4px 8px' }}>✓</button>
-                            <button className="btn" onClick={() => setEditingBalance(false)} style={{ padding: '4px 8px' }}>{Icons.action.cancel}</button>
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: 'auto' }}>
-                            <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                {formatCurrency(account.balance)}
-                            </div>
-                            <button onClick={() => setEditingBalance(true)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>{Icons.action.edit}</button>
-                        </div>
-                    )}
-                </div>
-
                 {/* 2. Číslo účtu */}
                 <div className="glass glass-card stat-card animate-fade-in" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', color: 'var(--text-secondary)' }}>

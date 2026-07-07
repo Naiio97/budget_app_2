@@ -211,10 +211,12 @@ export default function ManualInvestmentDetailPage() {
         <MainLayout>
             <div className="page-container">
                 {/* Header */}
-                <header className="section-header-wrap" style={{ marginBottom: 'var(--spacing-xl)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', flexWrap: 'wrap' }}>
-                         <h1 style={{ margin: 0, fontSize: '1.75rem' }}>{account.name}</h1>
-                    </div>        
+                <header className="account-detail-head" style={{ marginBottom: 'var(--spacing-xl)' }}>
+                    <div className="account-title-block">
+                        <h1>{account.name}</h1>
+                        <div className="account-detail-sub">Investiční účet · spravováno ručně</div>
+                    </div>
+                    <button onClick={() => router.back()} className="btn account-back-btn">← Zpět</button>
                 </header>
                 {/* Two-column layout: left = summary + pie, right = positions */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
@@ -227,7 +229,7 @@ export default function ManualInvestmentDetailPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
                                 <div>
                                     <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Celková hodnota</div>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: 600 }}>{fmt(account.total_value, account.currency)}</div>
+                                    <div className="num account-balance-value">{fmt(account.total_value, account.currency)}</div>
                                 </div>
                                 {account.invested > 0 && (
                                     <>

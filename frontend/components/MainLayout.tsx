@@ -49,6 +49,21 @@ interface MainLayoutProps {
     disableScroll?: boolean;
 }
 
+// U nainstalované PWA barví meta theme-color pruh kolem výřezu/hodin (Android
+// status bar, iOS Safari tab bar). Statická hodnota z layout.tsx odpovídá jen
+// tmavému režimu — při přepnutí tématu ji přepisujeme na --bg daného režimu.
+const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
+function applyThemeToDocument(mode: 'dark' | 'light') {
+    document.documentElement.setAttribute('data-mode', mode);
+    let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+    if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
+    }
+    meta.content = THEME_BAR_COLOR[mode];
+}
+
 export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {
     const pathname = usePathname();
     const [isSyncing, setIsSyncing] = useState(false);
@@ -104,14 +119,14 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
         const initial = saved ?? 'dark';
         setTheme(initial);
-        document.documentElement.setAttribute('data-mode', initial);
+        applyThemeToDocument(initial);
     }, []);
 
     const toggleTheme = () => {
         const next = theme === 'dark' ? 'light' : 'dark';
         setTheme(next);
         localStorage.setItem('theme', next);
-        document.documentElement.setAttribute('data-mode', next);
+        applyThemeToDocument(next);
     };
 
     useEffect(() => {

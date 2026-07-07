@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Transaction, TransactionDetail, TransactionShare, Tag, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getTags, createTag, setTransactionTags, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
@@ -51,6 +51,31 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [shareLearnRule, setShareLearnRule] = useState(false);
     const [savingShare, setSavingShare] = useState(false);
     const [savingExclude, setSavingExclude] = useState(false);
+    // Bottom sheet na telefonu: švihnutí dolů zavře detail. Táhne se jen
+    // když je vnitřní scroll úplně nahoře, jinak gesto patří scrollování.
+    const [sheetDrag, setSheetDrag] = useState({ y: 0, dragging: false });
+    const sheetScrollRef = useRef<HTMLDivElement>(null);
+    const sheetDragStartY = useRef<number | null>(null);
+
+    const onSheetTouchStart = (e: React.TouchEvent) => {
+        if (window.innerWidth > 680) return;
+        if ((sheetScrollRef.current?.scrollTop ?? 0) > 0) return;
+        sheetDragStartY.current = e.touches[0].clientY;
+        setSheetDrag({ y: 0, dragging: true });
+    };
+    const onSheetTouchMove = (e: React.TouchEvent) => {
+        if (sheetDragStartY.current === null) return;
+        const dy = e.touches[0].clientY - sheetDragStartY.current;
+        setSheetDrag({ y: Math.max(dy, 0), dragging: true });
+    };
+    const onSheetTouchEnd = () => {
+        if (sheetDragStartY.current === null) return;
+        sheetDragStartY.current = null;
+        setSheetDrag(prev => {
+            if (prev.y > 110) setSelectedTx(null);
+            return { y: 0, dragging: false };
+        });
+    };
 
     // Build icon map from categories
     useEffect(() => {
@@ -337,8 +362,14 @@ export default function TransactionList({ transactions: initialTransactions, sho
 
     const modalEl = modalTx ? (
         <div onClick={() => setSelectedTx(null)} className="modal-backdrop tx-modal-overlay">
-            <div onClick={e => e.stopPropagation()} className="modal tx-modal-card">
-                <div className="tx-modal-scroll">
+            <div onClick={e => e.stopPropagation()} className="modal tx-modal-card"
+                onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}
+                style={{
+                    transform: sheetDrag.y > 0 ? `translateY(${sheetDrag.y}px)` : undefined,
+                    transition: sheetDrag.dragging ? 'none' : 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+                }}>
+                <div className="tx-sheet-grip" aria-hidden />
+                <div className="tx-modal-scroll" ref={sheetScrollRef}>
 
                 {/* ── Hero header ── */}
                 <div style={{
@@ -350,8 +381,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     textAlign: 'center',
                     position: 'relative',
                 }}>
-                    <button onClick={() => setSelectedTx(null)} className="btn btn-icon btn-ghost"
-                        style={{ position: 'absolute', top: 12, left: 12 }}>✕</button>
+                    <button onClick={() => setSelectedTx(null)} className="btn btn-icon btn-ghost tx-modal-close"
+                        aria-label="Zavřít">{getLineIcon('close', 16)}</button>
 
                     <div style={{ fontSize: '2.8rem', lineHeight: 1, marginBottom: 10 }}>
                         {getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 40)}
@@ -729,7 +760,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             onClick={() => handleToggleExcluded(modalTx, true)}>
                                             {savingExclude
                                                 ? '…'
-                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('ban', 14)} New</span>}
+                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('ban', 14)} Ne</span>}
                                         </button>
                                     )}
                                 </dd>

@@ -1,12 +1,12 @@
 {
-    "name": "Budget Tracker",
-    "short_name": "Budget",
-    "description": "Osobní správa financí s moderním designem",
+    "name": "Koruna",
+    "short_name": "Koruna",
+    "description": "Osobní správa financí",
     "start_url": "/",
     "display": "standalone",
     "orientation": "portrait-primary",
-    "theme_color": "#1a1a2e",
-    "background_color": "#1a1a2e",
+    "theme_color": "#000000",
+    "background_color": "#000000",
     "icons": [
         {
             "src": "/icons/icon-192x192.png",

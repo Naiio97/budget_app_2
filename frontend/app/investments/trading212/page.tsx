@@ -291,7 +291,7 @@ export default function Trading212DetailPage() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-lg)', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                         <div style={{ minWidth: 0 }}>
                             <div className="kpi-label">Celková hodnota</div>
-                            <div className="num" style={{ fontSize: 'clamp(2.45rem, 4.2vw, 3.7rem)', fontWeight: 720, letterSpacing: '-0.055em', lineHeight: 1, marginTop: 6 }}>
+                            <div className="num account-balance-value" style={{ marginTop: 6 }}>
                                 {formatCurrency(total)}
                             </div>
                         </div>

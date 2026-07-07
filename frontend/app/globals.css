@@ -988,16 +988,6 @@ select.input {
   justify-content: flex-end;
   gap: 8px;
 }
-.budget-period-controls .custom-select-container {
-  width: auto;
-}
-.budget-period-controls .custom-select-trigger {
-  min-height: 34px;
-  height: 34px;
-  border-radius: var(--radius-full);
-  padding: 0 13px;
-  background: var(--surface-sunken);
-}
 .budget-period-controls .btn {
   height: 34px;
   min-height: 34px;
@@ -1014,8 +1004,19 @@ select.input {
 .budget-period-controls .btn:has(> span:only-child) {
   min-width: 44px;
 }
-.budget-arrow-btn {
-  width: 28px;
+/* ── Period navigator — pilulka ‹ Červenec 2026 › ─────────── */
+.period-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 34px;
+  padding: 0 3px;
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-full);
+}
+.period-nav-arrow {
+  width: 30px;
   height: 28px;
   display: inline-flex;
   align-items: center;
@@ -1023,14 +1024,105 @@ select.input {
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
-  color: var(--accent);
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1;
+  color: var(--text-2);
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
-.budget-arrow-btn:hover {
+.period-nav-arrow:hover {
   background: var(--accent-soft);
+  color: var(--accent);
+}
+.period-nav-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+/* Pevná šířka v měsíčním režimu, ať šipky neposkakují mezi „Únor" a „Červenec" */
+.period-nav[data-mode="month"] .period-nav-label { min-width: 128px; }
+.period-nav-label:hover,
+.period-nav-label.open { background: var(--surface-strong); }
+.period-nav-label svg { color: var(--text-3); }
+
+/* ── Popover s výběrem měsíce a roku ──────────────────────── */
+.month-picker-pop {
+  position: fixed;
+  z-index: 999999;
+  width: 272px;
+  padding: 10px;
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+.month-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+.month-picker-year {
+  font-size: 14px;
+  font-weight: 650;
+}
+.month-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+.mp-month {
+  position: relative;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.mp-month:hover { background: var(--surface-sunken); }
+.mp-month.current:not(.selected) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent);
+}
+.mp-month.selected {
+  background: var(--accent);
+  color: #fff;
+}
+.mp-dot {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.mp-month.selected .mp-dot { background: rgba(255, 255, 255, 0.85); }
+.month-picker-foot {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  justify-content: center;
 }
 .budget-hero-metrics {
   display: flex;
@@ -1128,22 +1220,121 @@ select.input {
   font-size: 14px;
   font-weight: 620;
 }
-.budget-plan-section-body {
+/* ── Měsíční plán — tiché inline-edit řádky ──────────────────
+   Jeden mřížkový vzor pro všechny řádky (název | částka | akce),
+   aby částky lícovaly v jednom sloupci a nic „neplavalo". Inputy
+   jsou neviditelné, podklad se ukáže až na hover/focus. */
+.plan-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
-.budget-surplus-body {
-  gap: 12px;
-}
-.budget-income-row,
-.budget-surplus-row {
-  display: flex;
+.plan-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 112px;
+  gap: 6px;
   align-items: center;
-  gap: 8px;
 }
-.budget-surplus-row {
+.plan-label {
+  font-size: 13.5px;
+  color: var(--text-2);
+  min-width: 0;
+}
+.plan-input {
+  width: 100%;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  box-sizing: border-box;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.plan-input:hover { background: var(--surface-sunken); }
+.plan-input:focus {
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.plan-input::placeholder { color: var(--text-3); font-weight: 400; }
+/* Textové inputy (název) mají vnitřní padding 10px — záporný okraj ho
+   opticky vyruší, takže text lícuje s levou hranou karty a nadpisy sekcí.
+   Hover/focus podklad pak přesahuje 10px do paddingu karty, což nevadí. */
+.plan-input:not(.plan-amount) {
+  margin-left: -10px;
+  width: calc(100% + 10px);
+}
+.plan-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+  background: var(--surface-sunken);
+}
+.plan-row-delete {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-full);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.plan-row-delete:hover {
+  background: color-mix(in srgb, var(--neg) 12%, transparent);
+  color: var(--neg);
+}
+.plan-row-spacer { width: 28px; }
+.plan-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0 10px;
+  margin-left: -10px;
+  margin-top: 2px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-full);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.plan-add-btn:hover { background: var(--accent-soft); }
+.plan-total-row {
+  display: flex;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+  border-top: 0.5px solid var(--border);
+  padding-top: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.plan-total-amount {
+  text-align: right;
+  padding-right: 10px;
+  color: var(--pos);
+  font-variant-numeric: tabular-nums;
+}
+.plan-delta {
+  font-size: 11.5px;
+  text-align: right;
+  padding-right: 10px;
+  margin-top: 3px;
+  font-variant-numeric: tabular-nums;
 }
 .budget-payment-list,
 .budget-envelope-list {
@@ -1704,9 +1895,13 @@ select.input {
   .bd-head .recurring-date,
   .bd-head .recurring-status { display: none; }
   .bd-head .recurring-chevron { justify-self: end; }
-  .bd-cols-2,
-  .bd-cols-3 { grid-template-columns: 1fr; }
+  /* Podíl přes celou šířku, Částka + K platbě vedle sebe — kratší karta
+     a související čísla na jednom řádku. */
+  .bd-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bd-cols-3 > .bd-field:first-child { grid-column: 1 / -1; }
   .bd-actions-right { gap: 10px; }
+  /* Užší segmenty, ať se stavový přepínač vejde na řádek vedle Smazat */
+  .bd-seg { padding: 7px 13px; }
 }
 .budget-expenses-split {
   display: grid;
@@ -2188,36 +2383,26 @@ select.input {
   flex-shrink: 0;
   color: var(--text);
 }
+/* Jednotná hlavička detailu účtu (synchronizované, ruční i investiční) —
+   dřív měly synchronizované až 3.5rem a ruční jen 1.75rem bez podtitulku. */
 .account-detail-head h1 {
-  font-size: clamp(2.35rem, 5vw, 3.5rem);
-  line-height: 0.98;
-  letter-spacing: -0.045em;
-  font-weight: 760;
+  font-size: clamp(1.75rem, 2.5vw, 2.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 700;
   margin: 0;
 }
 .account-detail-sub {
-  margin-top: 10px;
+  margin-top: 6px;
   color: var(--text-3);
   font-size: 14px;
 }
-.account-balance-hero {
-  padding: 24px 28px;
-  min-height: 310px;
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 24px;
-  align-items: stretch;
-}
-.account-balance-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  justify-content: center;
-}
+/* Jednotná velikost hlavní hodnoty účtu — sdílí ji detail banky, Trading 212,
+   ruční spořicí i investiční účet a hero přehledu investic. */
 .account-balance-value {
-  font-size: clamp(2.45rem, 4.2vw, 3.7rem);
+  font-size: clamp(1.9rem, 2.6vw, 2.45rem);
   font-weight: 720;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.045em;
   line-height: 1;
 }
 .account-balance-delta {
@@ -2995,52 +3180,10 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     padding: 0 16px;
     border-radius: var(--radius-full);
   }
-  .budget-plan-section-body {
-    gap: 10px;
-  }
-  .budget-income-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(96px, 0.8fr) 40px;
-    gap: 8px;
-    align-items: center;
-  }
-  .budget-income-row .input,
-  .budget-income-row .btn,
-  .budget-surplus-row .input {
-    width: 100% !important;
-    min-height: 40px !important;
-    height: 40px !important;
-    border-radius: var(--radius-full);
-    box-sizing: border-box;
-    font-size: 13px !important;
-  }
-  .budget-income-row .input {
-    padding: 0 12px !important;
-  }
-  .budget-income-row input[type="number"],
-  .budget-surplus-row input[type="number"] {
-    text-align: right !important;
-  }
-  .budget-income-row .btn-icon {
-    min-width: 40px;
-    padding: 0;
-  }
-  .budget-plan-section-body > .btn {
-    align-self: flex-start !important;
+  /* Řádky plánu potřebují na dotyk vyšší inputy než na desktopu */
+  .plan-input {
     min-height: 40px;
     height: 40px;
-    padding: 0 14px;
-    border-radius: var(--radius-full);
-  }
-  .budget-surplus-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 96px;
-    gap: 12px;
-    align-items: center;
-  }
-  .budget-surplus-row span {
-    min-width: 0;
-    line-height: 1.2;
   }
   .budget-savings-rate-card {
     border-radius: 16px !important;
@@ -3418,11 +3561,9 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   .budget-expenses-split { grid-template-columns: minmax(0, 1fr); }
   .budget-category-panel { position: static; }
-  .account-detail-head h1 { font-size: 2.35rem; }
+  .account-detail-head h1 { font-size: 1.75rem; }
   .account-detail-head { flex-direction: column-reverse; gap: var(--spacing-sm); }
   .account-back-btn { align-self: flex-start; }
-  .account-balance-hero { grid-template-columns: 1fr; padding: 22px 20px; min-height: 0; }
-  .account-balance-value { font-size: 2.85rem; }
   .account-insight-grid { grid-template-columns: 1fr !important; }
   .reports-insight-grid { grid-template-columns: 1fr !important; }
   .account-chart-wrap,
@@ -3567,8 +3708,8 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 }
 .investment-hero-copy { display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
 .investment-total {
-  display: block; margin-top: 12px; font-size: clamp(3.2rem, 6vw, 5.6rem);
-  line-height: 0.96; letter-spacing: -0.055em; color: var(--text);
+  display: block; margin-top: 12px; font-size: clamp(1.9rem, 2.6vw, 2.45rem);
+  font-weight: 720; line-height: 1; letter-spacing: -0.045em; color: var(--text);
 }
 .investment-hero-sub {
   display: flex; align-items: center; gap: 10px; margin-top: 14px; color: var(--text-2); font-size: 13px;
@@ -3728,7 +3869,6 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   .investment-create-card { grid-template-columns: minmax(0, 1fr); }
   .investment-hero { padding: 20px; min-height: 0; }
-  .investment-total { font-size: 3.1rem; }
   .investment-kpi-strip, .investment-projection-summary { grid-template-columns: minmax(0, 1fr); }
   .investment-periods { position: static; margin-bottom: 12px; width: 100%; overflow-x: auto; }
   .investment-chart-panel {
@@ -3824,4 +3964,63 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     font-weight: 550;
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* ══ TX DETAIL — zavírací tlačítko + bottom sheet na telefonu ═════ */
+/* Kotva pro absolutně pozicovaný grabber */
+.tx-modal-card { position: relative; }
+.tx-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--text-3) 14%, transparent);
+  color: var(--text-2);
+}
+.tx-modal-close:hover { background: color-mix(in srgb, var(--text-3) 24%, transparent); }
+
+/* Grabber — vidět jen na telefonu, kde funguje švihnutí dolů */
+.tx-sheet-grip {
+  display: none;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text-3) 55%, transparent);
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (max-width: 680px) {
+  /* Detail transakce jako bottom sheet: přes celou šířku, vyjíždí zespodu,
+     zaoblené jen horní rohy. Zavření: švihnutí dolů, ✕, tap na pozadí. */
+  .tx-modal-overlay {
+    place-items: end stretch;
+    padding: 0 !important;
+  }
+  .tx-modal-card {
+    min-width: 0;
+    max-width: none;
+    border-radius: 22px 22px 0 0;
+    border-bottom: none;
+    animation: tx-sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .tx-modal-scroll {
+    max-height: calc(94dvh - env(safe-area-inset-top));
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  .tx-sheet-grip { display: block; }
+  /* Hero potřebuje kousek místa navíc pod grabberem (přebíjí inline padding) */
+  .tx-modal-card .tx-modal-scroll > div:first-child { padding-top: 28px !important; }
+}
+
+@keyframes tx-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }

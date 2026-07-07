@@ -18,6 +18,8 @@ interface CustomSelectProps {
     searchPlaceholder?: string;
     disabled?: boolean;
     style?: React.CSSProperties;
+    /** Styly navíc pro trigger tlačítko — např. sladění výšky/rádiusu s okolními inputy. */
+    triggerStyle?: React.CSSProperties;
     compact?: boolean;
 }
 
@@ -30,6 +32,7 @@ export default function CustomSelect({
     searchPlaceholder = 'Hledat...',
     disabled = false,
     style,
+    triggerStyle,
     compact = false,
 }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
@@ -185,6 +188,7 @@ export default function CustomSelect({
                     transition: 'all 0.15s ease-out', outline: 'none',
                     opacity: disabled ? 0.5 : 1,
                     boxShadow: isOpen ? '0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent)' : 'none',
+                    ...triggerStyle,
                 }}
             >
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
