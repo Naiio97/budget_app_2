@@ -82,27 +82,6 @@ Google/Apple + záloha email/heslo, ověření Google ID tokenu na serveru, idle
 > **Rozhodnuto (2026-05-31):** Stačí **jedna protistrana = „žena"** (žádný obecný systém víc lidí).
 > → jde se **lehčí variantou** (sloupce na `transactions` + příznak `settlement`), bez plné
 > tabulky splitů. Plný modul je popsaný níže jen jako možné budoucí rozšíření.
->
-> **✅ MVP implementováno (2026-07-03):** sloupce `my_share_amount` / `settlement_flag` /
-> `settlement_note` (migrace 0013), `PATCH /transactions/{id}/share`, agregace v dashboardu
-> a monthly-reportu počítají moji část a vyřazují vypořádání z příjmů, UI v detailu transakce
-> (rozdělení výdaje % / částkou, označení příchozího balíku) + badge v seznamu.
->
-> **✅ Fáze 2 implementována (2026-07-03):**
-> - **Saldo / stránka `/vyporadani`** — `GET /transactions/settlement-summary`: kdo kolik
->   dluží vs. kolik poslal, po měsících i po protistranách, seznamy položek. V navigaci.
-> - **Pravidla automatického dělení** (`share_rules`, migrace 0014) — „nájem → moje část 50 %";
->   sync dělí nové výdaje automaticky, při založení pravidla retroaktivní aplikace.
->   Správa v Nastavení + checkbox „Dělit takhle i příště" přímo v detailu transakce.
-> - **Více protistran** — sloupec `share_counterparty` („Žena", „Sestra"…), neutrální texty
->   v UI, saldo per osoba.
-> - **Návrh vypořádání** — příchozí rodinný převod jde v detailu rovnou označit jako
->   vypořádání (normalizuje se na běžnou transakci, počítá se do salda).
-> - **Guardrail kategorizace** — pravidla se NEUČÍ pro převodové kategorie (Internal/Family
->   Transfer); převody detekuje jen IBAN matching. Zabraňuje recidivě chyby „bureš nicolas".
-> - **Reporty: přepínač Moje podíly / Plné částky** (`?full_amounts=true`).
-> - **Předplatné: sledování příspěvků** — `contribution_pattern` na subscription (sestra
->   posílá podíl), badge „Podíl přišel ✓ / nepřišel".
 
 **Problém.** Žena ti každý měsíc posílá peníze na půlku nájmu, energií atd. Ten příchozí převod
 se ti počítá jako **příjem** a původní platby (nájem, energie) jako **výdaj** v plné výši. Navíc ti
@@ -195,7 +174,7 @@ místo `amount`, pokud má transakce split, a **vyřadit** `settlement` z příj
 
 ---
 
-### 3.2 Přehled předplatného (subscriptions) 🟡
+### 3.2 Přehled předplatného (subscriptions) 🟡 - hotovo
 
 **Cíl.** Vidět, kolik a za co platíš v opakovaných platbách (Netflix, Spotify, mobil, pojistky…),
 měsíční i **roční** náklad, nejbližší obnovení, „zapomenutá" předplatná a změny ceny.
@@ -294,7 +273,7 @@ frontend ──> backend (FastAPI) ──HTTP──> ai-service (FastAPI, vlastn
 
 ---
 
-### 3.4 Úvěry a splátky 🟡
+### 3.4 Úvěry a splátky 🟡 - hotovo
 
 **Cíl.** Přehled úvěrů: výše splátky, kolik už zaplaceno, kolik zbývá, do kdy splácíš,
 měsíční splátka.
@@ -370,8 +349,8 @@ bez zásahu do citlivých agregací.
 
 Seřazeno podle poměru přínos/úsilí a závislostí:
 
-1. **3.4 Úvěry** 🟡 – čistý přírůstek, žádné riziko pro stávající výpočty, hned užitečné.
-2. **3.2 Předplatné** 🟡 – vysoká hodnota, znovupoužitelná detekce opakovaných plateb (využije i 4.5).
+1. **3.4 Úvěry** 🟡 – čistý přírůstek, žádné riziko pro stávající výpočty, hned užitečné. - hotovo
+2. **3.2 Předplatné** 🟡 – vysoká hodnota, znovupoužitelná detekce opakovaných plateb (využije i 4.5). - hotovo
 3. **3.1 Peníze od ženy** (lehčí varianta) 🟡 – nejvyšší osobní hodnota; dotýká se výpočtů →
    dělat fázovaně (MVP: `my_share_amount` + `settlement_flag`; potom saldo).
 4. **3.3 AI – Fáze A (ML kategorizace)** 🟡 – velký přínos za rozumné úsilí; až pak Fáze B/C.
