@@ -36,6 +36,7 @@ const PATHS: Record<string, ReactNode> = {
     gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" /></>,
     zap: <><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></>,
     clipboard: <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></>,
+    split: <><path d="M12 3v5" /><path d="M12 8 6 14" /><path d="M12 8l6 6" /><path d="M6 14v6" /><path d="M18 14v6" /></>,
 };
 
 // Starší kategorie mají v DB emoji — mapa je překládá na klíče výše.
@@ -75,6 +76,7 @@ export const CATEGORY_ICON_OPTIONS: { value: string; label: string }[] = [
     { value: 'gift', label: 'Dárky' },
     { value: 'plane', label: 'Cestování' },
     { value: 'zap', label: 'Ostatní služby' },
+    { value: 'split', label: 'Vyrovnání (settlement)' },
     { value: 'box', label: 'Ostatní' },
 ];
 
