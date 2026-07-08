@@ -17,36 +17,36 @@ from models import CategoryRuleModel
 _KEYWORDS_BY_CATEGORY: dict[str, list[str]] = {
     "Food": [
         "lidl", "albert", "tesco", "billa", "kaufland", "penny", "globus", "makro", "coop", "norma", "žabka",
-        "restaurant", "restaurace", "bistro", "food", "wolt", "dáme jídlo", "dame jidlo", "damejidlo", "bolt food", "foodora",
-        "jídelna", "jidelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa",
+        "restaurant", "restaurace", "bistro", "food", "wolt", "dáme jídlo", "damejidlo", "bolt food", "foodora",
+        "jídelna", "mcdonalds", "mcdonald", "kfc", "burger king", "subway", "starbucks", "costa",
         "pizza", "sushi", "kebab", "banh mi", "thai", "vietnam", "čína", "china", "asia", "grill",
-        "kavárna", "kavarna", "café", "cafe", "pekárna", "pekarna", "cukrárna", "cukrarna", "bakery",
+        "kavárna", "café", "pekárna", "cukrárna", "bakery",
         "hospoda", "pub", "pivnice", "bar", "pivovar", "brewery",
-        "bageterie", "qerko", "rohlik", "rohlík", "košík", "kosik",
-        "řeznictví", "reznictvi", "uzeniny", "maso",
+        "bageterie", "qerko", "rohlík", "košík",
+        "řeznictví", "uzeniny", "maso",
         "luxor", "miners", "cinestar bar",
     ],
     "Transport": [
         "uber", "bolt", "liftago", "taxi",
         "benzina", "orlen", "omv", "shell", "mol", "eni", "cng", "euro oil", "pap oil",
-        "mhd", "jízdenka", "jizdenka", "prague transport", "dpp", "pid", "litacka", "lítačka",
-        "parking", "parkovani", "parkoviště", "parkování",
-        "dálnice", "dalnice", "mýto", "myto",
+        "mhd", "jízdenka", "prague transport", "dpp", "pid", "lítačka",
+        "parking", "parkoviště", "parkování",
+        "dálnice", "mýto",
         "autoservis", "pneuservis", "autopůjčovna",
     ],
     "Utilities": [
-        "čez", "cez", "pražské vodovody", "innogy", "eon", "pre", "pražská energetika",
+        "čez", "pražské vodovody", "innogy", "eon", "pre", "pražská energetika",
         "vodafone", "t-mobile", "o2", "nordic telecom", "nej.cz",
         "upc", "skylink", "digi",
-        "pojištění", "pojisteni", "allianz", "generali", "kooperativa", "čpp", "cpp",
-        "nájem", "najem", "rent", "svj", "bytové",
-        "plyn", "elektřina", "elektrina", "voda", "teplo",
+        "pojištění", "allianz", "generali", "kooperativa", "čpp",
+        "nájem", "rent", "svj", "bytové",
+        "plyn", "elektřina", "voda", "teplo",
     ],
     "Entertainment": [
         "netflix", "spotify", "hbo", "disney", "apple tv", "youtube", "deezer", "tidal",
         "cinema", "kino", "cinestar", "cinema city", "divadlo", "theatre",
         "steam", "playstation", "xbox", "nintendo", "epic games", "tipsport", "fortuna", "sazka",
-        "fitness", "gym", "posilovna", "bazén", "bazen", "wellness", "sauna", "squash", "tenis",
+        "fitness", "gym", "posilovna", "bazén", "wellness", "sauna", "squash", "tenis",
         "ticketmaster", "ticketportal", "goout", "eventim",
         "audioteka", "bookbeat",
     ],
@@ -61,11 +61,11 @@ _KEYWORDS_BY_CATEGORY: dict[str, list[str]] = {
     # Pozor: "plat" tu záměrně není — je to substring slova "platba", takže by
     # chytal každou nezařazenou platbu (starý kód to jen maskoval pořadím slovníku).
     "Salary": [
-        "mzda", "salary", "výplata", "vyplata", "odměna", "odmena", "bonus", "prémie", "premie",
+        "mzda", "salary", "výplata", "odměna", "bonus", "prémie",
     ],
     "Health": [
-        "lékárna", "lekarna", "pharmacy", "doktor", "doctor", "nemocnice", "hospital", "klinika", "clinic",
-        "zubař", "zubar", "dentist", "optika", "optician", "zdravotní", "zdravotni",
+        "lékárna", "pharmacy", "doktor", "doctor", "nemocnice", "hospital", "klinika", "clinic",
+        "zubař", "dentist", "optika", "optician", "zdravotní",
     ],
 }
 

@@ -9,6 +9,7 @@ from auth import get_current_user
 from database import get_db
 from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel, UserModel, TagModel, TransactionTagModel
 from routers.contacts import normalize_iban
+from services.categorization import fold
 
 router = APIRouter()
 
@@ -323,28 +324,6 @@ async def get_settlement_summary(
     }
 
 
-def categorize_transaction(tx: dict) -> str:
-    """Simple category detection based on description"""
-    desc = (tx.get("remittanceInformationUnstructured", "") or 
-            tx.get("creditorName", "") or 
-            tx.get("debtorName", "")).lower()
-    
-    categories = {
-        "food": ["lidl", "albert", "tesco", "billa", "kaufland", "restaurant", "bistro", "food"],
-        "transport": ["uber", "bolt", "benzina", "orlen", "mhd", "jízdenka", "prague transport"],
-        "utilities": ["čez", "pražské vodovody", "innogy", "vodafone", "t-mobile", "o2"],
-        "entertainment": ["netflix", "spotify", "cinema", "hbo", "disney"],
-        "shopping": ["amazon", "alza", "mall.cz", "czc", "datart"],
-        "salary": ["mzda", "plat", "salary", "výplata"],
-    }
-    
-    for category, keywords in categories.items():
-        if any(kw in desc for kw in keywords):
-            return category.capitalize()
-    
-    return "Other"
-
-
 @router.get("/")
 async def get_category_summary(
     date_from: Optional[str] = Query(None),
@@ -396,7 +375,10 @@ async def update_transaction_category(
     
     old_category = tx.category
     tx.category = data.category
-    
+    # Ruční volba uživatele — ochránit před přepsáním hromadným /recategorize
+    # nebo retroaktivní aplikací jiného pravidla (viz níže).
+    tx.category_locked = True
+
     # Set is_excluded flag based on category type (ruční vyřazení má přednost)
     excluded_categories = ["Internal Transfer", "Family Transfer"]
     tx.is_excluded = (data.category in excluded_categories) or bool(tx.user_excluded)
@@ -433,6 +415,24 @@ async def update_transaction_category(
         if not pattern:
             pattern = tx.description.lower().strip()
 
+        # Pojistka proti vlastnímu jménu: platby na vlastní účty (kreditka,
+        # spoření…) mají v creditorName/description jméno uživatele. Pravidlo
+        # z něj by chytalo každou příchozí platbu bez zprávy — porovnáváme
+        # množiny slov, aby to zablokovalo obě pořadí ("bureš nicolas" i
+        # "nicolas bureš") vůči jménu uživatele a názvům jeho účtů.
+        own_names = [current_user.name]
+        acc_names = await db.execute(
+            select(AccountModel.name).where(AccountModel.user_id == current_user.id)
+        )
+        own_names.extend(n for (n,) in acc_names.all())
+        pattern_words = set(fold(pattern).split())
+        if pattern_words and any(
+            pattern_words == set(fold(n).split()) for n in own_names if n
+        ):
+            learnable = False
+
+    if data.learn and learnable and tx.description:
+
         # Check if rule already exists for this pattern (per-user)
         existing = await db.execute(
             select(CategoryRuleModel).where(
@@ -460,12 +460,15 @@ async def update_transaction_category(
         # Retroactive: apply the rule to all existing transactions matching this pattern
         # so past Billa transactions become Supermarkets too — not just future ones.
         # Match against description OR raw_json (covers creditorName from bank).
+        # Skip category_locked transactions — the user (or transfer detection)
+        # already made an explicit call on those; a bulk rule shouldn't override it.
         like_pattern = f"%{pattern}%"
         retro_result = await db.execute(
             select(TransactionModel).where(
                 and_(
                     TransactionModel.user_id == current_user.id,
                     TransactionModel.id != transaction_id,
+                    TransactionModel.category_locked == False,
                     or_(
                         TransactionModel.description.ilike(like_pattern),
                         TransactionModel.raw_json.ilike(like_pattern),

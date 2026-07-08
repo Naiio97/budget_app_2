@@ -617,11 +617,16 @@ export default function SettingsPage() {
     };
     const [newPattern, setNewPattern] = useState('');
     const [newRuleCategory, setNewRuleCategory] = useState('Food');
+    const [ruleSearch, setRuleSearch] = useState('');
     const [savingRule, setSavingRule] = useState(false);
     const [showRuleForm, setShowRuleForm] = useState(false);
     const [showAddCategory, setShowAddCategory] = useState(false);
     const [showConnectBank, setShowConnectBank] = useState(false);
     const [detailRule, setDetailRule] = useState<CategoryRule | null>(null);
+    const [editingRule, setEditingRule] = useState(false);
+    const [editRulePattern, setEditRulePattern] = useState('');
+    const [editRuleCategory, setEditRuleCategory] = useState('');
+    const [savingRuleEdit, setSavingRuleEdit] = useState(false);
     const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
     // Manual account creation
@@ -819,6 +824,18 @@ export default function SettingsPage() {
     const handleDeleteRule = async (id: number) => {
         await apiFetch(`/settings/category-rules/${id}`, { method: 'DELETE' });
         setCategoryRules(categoryRules.filter(r => r.id !== id));
+    };
+
+    const handleUpdateRule = async () => {
+        if (!detailRule || !editRulePattern.trim()) return;
+        setSavingRuleEdit(true);
+        try {
+            const r = await apiFetch(`/settings/category-rules/${detailRule.id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern: editRulePattern, category: editRuleCategory }),
+            });
+            if (r.ok) { setEditingRule(false); setDetailRule(null); loadCategoryRules(); }
+        } finally { setSavingRuleEdit(false); }
     };
 
     const handleRecategorize = async () => {
@@ -1061,20 +1078,46 @@ export default function SettingsPage() {
                                         Zatím žádná pravidla. Přidej přes „+ Pravidlo“ nebo změň kategorii u transakce.
                                     </div>
                                 ) : (
-                                    <div className="settings-scroll-list settings-rules-list">
-                                        {categoryRules.map(rule => {
-                                            const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
+                                    <>
+                                        <div className="set-search" style={{ marginBottom: 8 }}>
+                                            {SearchIcon}
+                                            <input
+                                                className="input"
+                                                placeholder="Hledat v pravidlech…"
+                                                value={ruleSearch}
+                                                onChange={e => setRuleSearch(e.target.value)}
+                                            />
+                                        </div>
+                                        {(() => {
+                                            const q = ruleSearch.trim().toLowerCase();
+                                            const visibleRules = q
+                                                ? categoryRules.filter(r => r.pattern.toLowerCase().includes(q) || r.category.toLowerCase().includes(q))
+                                                : categoryRules;
+                                            if (visibleRules.length === 0) {
+                                                return (
+                                                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                                                        Žádné pravidlo neodpovídá hledání „{ruleSearch}“.
+                                                    </div>
+                                                );
+                                            }
                                             return (
-                                                <button key={rule.id} type="button" className="set-rule-row" onClick={() => setDetailRule(rule)}>
-                                                    <span className="set-rule-pattern">„{rule.pattern}“</span>
-                                                    <span className="set-rule-arrow">→</span>
-                                                    <span className="set-rule-dot" style={{ background: catColor }} />
-                                                    <span className="set-rule-cat">{rule.category}</span>
-                                                    <span className="set-rule-chevron">›</span>
-                                                </button>
+                                                <div className="settings-scroll-list settings-rules-list">
+                                                    {visibleRules.map(rule => {
+                                                        const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
+                                                        return (
+                                                            <button key={rule.id} type="button" className="set-rule-row" onClick={() => { setDetailRule(rule); setEditingRule(false); setEditRulePattern(rule.pattern); setEditRuleCategory(rule.category); }}>
+                                                                <span className="set-rule-pattern">„{rule.pattern}“</span>
+                                                                <span className="set-rule-arrow">→</span>
+                                                                <span className="set-rule-dot" style={{ background: catColor }} />
+                                                                <span className="set-rule-cat">{rule.category}</span>
+                                                                <span className="set-rule-chevron">›</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             );
-                                        })}
-                                    </div>
+                                        })()}
+                                    </>
                                 )}
                             </SurfaceCard>
 
@@ -1160,27 +1203,58 @@ export default function SettingsPage() {
                     <div className="set-modal-overlay" onClick={() => setDetailRule(null)}>
                         <div className="set-modal" onClick={e => e.stopPropagation()}>
                             <div className="set-modal-head">
-                                <h3 style={{ margin: 0 }}>Detail pravidla</h3>
+                                <h3 style={{ margin: 0 }}>{editingRule ? 'Upravit pravidlo' : 'Detail pravidla'}</h3>
                                 <button className="set-icon-btn" title="Zavřít" onClick={() => setDetailRule(null)}>{CloseIcon}</button>
                             </div>
-                            <div>
-                                <label className="set-field-label">Obsahuje text</label>
-                                <div className="set-modal-value">„{detailRule.pattern}“</div>
-                            </div>
-                            <div>
-                                <label className="set-field-label">Přiřadí kategorii</label>
-                                <div className="set-modal-value" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span className="set-rule-dot" style={{ background: ruleCategories.find(c => c.name === detailRule.category)?.color ?? 'var(--text-3)' }} />
-                                    {detailRule.category}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="set-field-label">Původ</label>
-                                <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : detailRule.is_builtin ? 'Výchozí pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
-                            </div>
-                            <button className="btn" style={{ color: 'var(--neg)' }} onClick={() => { handleDeleteRule(detailRule.id); setDetailRule(null); }}>
-                                {TrashIcon} Smazat pravidlo
-                            </button>
+                            {editingRule ? (
+                                <>
+                                    <div>
+                                        <label className="set-field-label">Obsahuje text</label>
+                                        <div className="set-search">
+                                            {SearchIcon}
+                                            <input className="input" autoFocus value={editRulePattern} onChange={e => setEditRulePattern(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && editRulePattern.trim()) handleUpdateRule(); }} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="set-field-label">Přiřadit kategorii</label>
+                                        <CustomSelect
+                                            value={editRuleCategory}
+                                            onChange={setEditRuleCategory}
+                                            options={ruleCategories.filter(c => c.is_active).map(c => ({ value: c.name, label: c.name, icon: getCategoryIcon(c.icon, 15) }))}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn" style={{ flex: 1 }} onClick={() => setEditingRule(false)}>Zrušit</button>
+                                        <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleUpdateRule} disabled={savingRuleEdit || !editRulePattern.trim()}>
+                                            {savingRuleEdit ? 'Ukládám...' : 'Uložit'}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="set-field-label">Obsahuje text</label>
+                                        <div className="set-modal-value">„{detailRule.pattern}“</div>
+                                    </div>
+                                    <div>
+                                        <label className="set-field-label">Přiřadí kategorii</label>
+                                        <div className="set-modal-value" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span className="set-rule-dot" style={{ background: ruleCategories.find(c => c.name === detailRule.category)?.color ?? 'var(--text-3)' }} />
+                                            {detailRule.category}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="set-field-label">Původ</label>
+                                        <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : detailRule.is_builtin ? 'Výchozí pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn" style={{ flex: 1 }} onClick={() => setEditingRule(true)}>{Icons.action.edit} Upravit</button>
+                                        <button className="btn" style={{ flex: 1, color: 'var(--neg)' }} onClick={() => { handleDeleteRule(detailRule.id); setDetailRule(null); }}>
+                                            {TrashIcon} Smazat
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}

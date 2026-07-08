@@ -219,6 +219,51 @@ async def create_category_rule(
     }
 
 
+@router.put("/category-rules/{rule_id}")
+async def update_category_rule(
+    rule_id: int,
+    request: CategoryRuleRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing category rule's pattern/category"""
+    result = await db.execute(
+        select(CategoryRuleModel).where(
+            CategoryRuleModel.id == rule_id,
+            CategoryRuleModel.user_id == current_user.id,
+        )
+    )
+    rule = result.scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Rule not found")
+
+    new_pattern = request.pattern.lower()
+    if new_pattern != rule.pattern:
+        existing = await db.execute(
+            select(CategoryRuleModel).where(
+                CategoryRuleModel.user_id == current_user.id,
+                CategoryRuleModel.pattern == new_pattern,
+                CategoryRuleModel.id != rule_id,
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Rule with this pattern already exists")
+
+    rule.pattern = new_pattern
+    rule.category = request.category
+    await db.commit()
+    await db.refresh(rule)
+
+    return CategoryRuleResponse(
+        id=rule.id,
+        pattern=rule.pattern,
+        category=rule.category,
+        is_user_defined=rule.is_user_defined,
+        is_builtin=rule.is_builtin,
+        match_count=rule.match_count,
+    )
+
+
 @router.delete("/category-rules/{rule_id}")
 async def delete_category_rule(
     rule_id: int,
