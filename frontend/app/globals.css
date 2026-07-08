@@ -4065,3 +4065,40 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     font-size: 13px;
   }
 }
+
+/* ── Toast — krátké potvrzení akce (components/Toast.tsx) ── */
+.app-toast {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(92vw, 480px);
+  padding: 10px 16px;
+  background: var(--surface-strong);
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  animation: app-toast-in 0.18s ease-out;
+}
+.app-toast .app-toast-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pos);
+}
+.app-toast.error .app-toast-dot { background: var(--neg); }
+@keyframes app-toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast { animation: none; }
+}

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
+import Toast, { ToastMessage } from '@/components/Toast';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule, Tag, getTags, createTag, deleteTag, getVapidPublicKey, subscribePush, unsubscribePush, sendTestPush } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
 import { getCategoryIcon, categoryIconKey, CATEGORY_ICON_OPTIONS } from '@/lib/category-icons';
@@ -516,6 +517,7 @@ export default function SettingsPage() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncError, setSyncError] = useState<string | null>(null);
     const [detecting, setDetecting] = useState(false);
+    const [toast, setToast] = useState<ToastMessage>(null);
 
     // Category rules
     const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
@@ -804,7 +806,13 @@ export default function SettingsPage() {
             const res = await apiFetch(`/sync/detect-transfers`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                alert(`Detekce hotová.\nInterní převody: ${data.marked_internal_transfers ?? 0}\nMoje účty: ${data.marked_my_account_transfers ?? 0}\nRodinné: ${data.marked_family_transfers ?? 0}\nVráceno na běžný výdaj (vyloučené účty): ${data.unmarked_excluded_accounts ?? 0}`);
+                const marked = (data.marked_internal_transfers ?? 0) + (data.marked_my_account_transfers ?? 0) + (data.marked_family_transfers ?? 0);
+                const unmarked = data.unmarked_excluded_accounts ?? 0;
+                setToast({
+                    text: marked === 0 && unmarked === 0
+                        ? 'Detekce hotová — žádné nové převody.'
+                        : `Detekce hotová — ${marked} nově označených převodů${unmarked > 0 ? `, ${unmarked} vráceno mezi výdaje` : ''}.`,
+                });
             }
         } finally { setDetecting(false); }
     };
@@ -841,8 +849,18 @@ export default function SettingsPage() {
     const handleRecategorize = async () => {
         setIsSyncing(true);
         try {
-            await apiFetch(`/sync/recategorize`, { method: 'POST' });
-            alert('Transakce byly překategorizovány.');
+            const r = await apiFetch(`/sync/recategorize`, { method: 'POST' });
+            if (!r.ok) throw new Error(`recategorize ${r.status}`);
+            const data = await r.json();
+            const n: number = data.updated ?? 0;
+            setToast({
+                text: n === 0
+                    ? 'Hotovo — všechny transakce už byly zařazené správně.'
+                    : `Hotovo — překategorizováno ${n} ${n === 1 ? 'transakce' : n < 5 ? 'transakce' : 'transakcí'}.`,
+            });
+        } catch (err) {
+            console.error(err);
+            setToast({ text: 'Rekategorizace selhala.', kind: 'error' });
         } finally { setIsSyncing(false); }
     };
 
@@ -1438,6 +1456,8 @@ export default function SettingsPage() {
                         </SurfaceCard>
                     </div>
                 )}
+
+                <Toast toast={toast} onClose={() => setToast(null)} />
             </div>
         </MainLayout>
     );
