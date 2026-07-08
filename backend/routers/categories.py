@@ -39,17 +39,19 @@ class CategoryResponse(BaseModel):
     is_active: bool
 
 
+# Ikony jsou klíče z frontend/lib/category-icons.tsx (čárové ikony), barvy
+# drží jednotnou paletu — každá kategorie má vlastní odstín (viz migrace 0022).
 DEFAULT_CATEGORIES = [
-    {"name": "Food", "icon": "🍔", "color": "#ef4444", "is_income": False},
-    {"name": "Transport", "icon": "🚗", "color": "#f97316", "is_income": False},
-    {"name": "Utilities", "icon": "💡", "color": "#eab308", "is_income": False},
-    {"name": "Entertainment", "icon": "🎬", "color": "#22c55e", "is_income": False},
-    {"name": "Shopping", "icon": "🛒", "color": "#14b8a6", "is_income": False},
-    {"name": "Investment", "icon": "📈", "color": "#3b82f6", "is_income": False},
-    {"name": "Dividend", "icon": "💵", "color": "#8b5cf6", "is_income": True},
-    {"name": "Salary", "icon": "💰", "color": "#10b981", "is_income": True},
-    {"name": "Internal Transfer", "icon": "🔄", "color": "#6b7280", "is_income": False},
-    {"name": "Other", "icon": "📦", "color": "#6b7280", "is_income": False},
+    {"name": "Food", "icon": "basket", "color": "#84cc16", "is_income": False},
+    {"name": "Transport", "icon": "car", "color": "#f97316", "is_income": False},
+    {"name": "Utilities", "icon": "bulb", "color": "#eab308", "is_income": False},
+    {"name": "Entertainment", "icon": "film", "color": "#d946ef", "is_income": False},
+    {"name": "Shopping", "icon": "bag", "color": "#14b8a6", "is_income": False},
+    {"name": "Investment", "icon": "trending", "color": "#3b82f6", "is_income": False},
+    {"name": "Dividend", "icon": "percent", "color": "#8b5cf6", "is_income": True},
+    {"name": "Salary", "icon": "wallet", "color": "#10b981", "is_income": True},
+    {"name": "Internal Transfer", "icon": "transfer", "color": "#6b7280", "is_income": False},
+    {"name": "Other", "icon": "box", "color": "#9ca3af", "is_income": False},
 ]
 
 

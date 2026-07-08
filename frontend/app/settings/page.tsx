@@ -18,8 +18,10 @@ interface CategoryRule { id: number; pattern: string; category: string; is_user_
 interface Category { id: number; name: string; icon: string; color: string; order_index: number; is_income: boolean; is_active: boolean; }
 
 const CATEGORY_PALETTE = [
-    '#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981', '#14b8a6',
-    '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#6b7280', '#111827',
+    '#ef4444', '#f97316', '#f28f64', '#eab308', '#b45309', '#84cc16',
+    '#22c55e', '#10b981', '#14b8a6', '#0e7490', '#0ea5e9', '#3b82f6',
+    '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#9f1239',
+    '#6b7280', '#9ca3af', '#475569', '#111827',
 ];
 // Nabídka ikon kategorií (čárové ikony, ukládá se klíč) — viz lib/category-icons.
 const ICON_OPTIONS = CATEGORY_ICON_OPTIONS.map(o => ({ value: o.value, label: o.label, icon: getCategoryIcon(o.value, 15) }));
