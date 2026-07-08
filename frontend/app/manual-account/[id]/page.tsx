@@ -36,13 +36,15 @@ export default function ManualAccountDetailPage() {
     const queryClient = useQueryClient();
 
     const [editingBalance, setEditingBalance] = useState(false);
-    const [balance, setBalance] = useState(0);
+    // Editované částky žijí jako string a parsují se až při uložení — number
+    // state s Number(e.target.value) vrací po smazání pole otravnou nulu.
+    const [balance, setBalance] = useState('');
     const [editingName, setEditingName] = useState(false);
     const [accountName, setAccountName] = useState('');
     const [showAddEnvelope, setShowAddEnvelope] = useState(false);
-    const [newEnvelope, setNewEnvelope] = useState({ name: '', amount: 0, is_mine: false, note: '' });
+    const [newEnvelope, setNewEnvelope] = useState({ name: '', amount: '', is_mine: false, note: '' });
     const [editingEnvelope, setEditingEnvelope] = useState<number | null>(null);
-    const [editEnvelopeData, setEditEnvelopeData] = useState<{ name: string; amount: number; is_mine: boolean; note: string }>({ name: '', amount: 0, is_mine: false, note: '' });
+    const [editEnvelopeData, setEditEnvelopeData] = useState<{ name: string; amount: string; is_mine: boolean; note: string }>({ name: '', amount: '', is_mine: false, note: '' });
     const [editingAccountNumber, setEditingAccountNumber] = useState(false);
     const [accountNumber, setAccountNumber] = useState('');
 
@@ -58,7 +60,7 @@ export default function ManualAccountDetailPage() {
             if (!res.ok) throw new Error('Failed to load account');
             const data = await res.json();
             // sync local input states on first load
-            setBalance(data.balance);
+            setBalance(String(data.balance));
             setAccountNumber(data.account_number || '');
             return data;
         },
@@ -66,11 +68,13 @@ export default function ManualAccountDetailPage() {
     });
 
     const updateBalance = async () => {
+        const parsed = parseFloat(balance.replace(',', '.'));
+        if (Number.isNaN(parsed)) return;
         try {
             await apiFetch(`/manual-accounts/${accountId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ balance })
+                body: JSON.stringify({ balance: parsed })
             });
             setEditingBalance(false);
             invalidate();
@@ -80,14 +84,15 @@ export default function ManualAccountDetailPage() {
     };
 
     const addEnvelope = async () => {
-        if (!newEnvelope.name.trim() || newEnvelope.amount <= 0) return;
+        const amount = parseFloat(newEnvelope.amount.replace(',', '.'));
+        if (!newEnvelope.name.trim() || Number.isNaN(amount) || amount <= 0) return;
         try {
             await apiFetch(`/manual-accounts/${accountId}/envelopes`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newEnvelope)
+                body: JSON.stringify({ ...newEnvelope, amount })
             });
-            setNewEnvelope({ name: '', amount: 0, is_mine: false, note: '' });
+            setNewEnvelope({ name: '', amount: '', is_mine: false, note: '' });
             setShowAddEnvelope(false);
             invalidate();
         } catch (err) {
@@ -113,7 +118,7 @@ export default function ManualAccountDetailPage() {
         setEditingEnvelope(envelope.id);
         setEditEnvelopeData({
             name: envelope.name,
-            amount: envelope.amount,
+            amount: String(envelope.amount),
             is_mine: envelope.is_mine,
             note: envelope.note || ''
         });
@@ -121,7 +126,9 @@ export default function ManualAccountDetailPage() {
 
     const saveEnvelopeEdit = async () => {
         if (editingEnvelope === null) return;
-        await updateEnvelope(editingEnvelope, editEnvelopeData);
+        const amount = parseFloat(editEnvelopeData.amount.replace(',', '.'));
+        if (Number.isNaN(amount)) return;
+        await updateEnvelope(editingEnvelope, { ...editEnvelopeData, amount });
     };
 
     const deleteEnvelope = async (envelopeId: number) => {
@@ -191,9 +198,10 @@ export default function ManualAccountDetailPage() {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, maxWidth: 340 }}>
                         <input
                             type="number"
+                            inputMode="decimal"
                             className="input"
                             value={balance}
-                            onChange={(e) => setBalance(Number(e.target.value))}
+                            onChange={(e) => setBalance(e.target.value)}
                             style={{ flex: 1 }}
                         />
                         <button className="btn btn-primary" onClick={updateBalance} style={{ padding: '4px 10px' }}>✓</button>
@@ -302,10 +310,11 @@ export default function ManualAccountDetailPage() {
                             />
                             <input
                                 type="number"
+                                inputMode="decimal"
                                 className="input"
                                 placeholder="Částka"
-                                value={newEnvelope.amount || ''}
-                                onChange={(e) => setNewEnvelope({ ...newEnvelope, amount: Number(e.target.value) })}
+                                value={newEnvelope.amount}
+                                onChange={(e) => setNewEnvelope({ ...newEnvelope, amount: e.target.value })}
                             />
                             <label className="envelope-form-check">
                                 <input
@@ -360,9 +369,10 @@ export default function ManualAccountDetailPage() {
                                             />
                                             <input
                                                 type="number"
+                                                inputMode="decimal"
                                                 className="input"
                                                 value={editEnvelopeData.amount}
-                                                onChange={(e) => setEditEnvelopeData({ ...editEnvelopeData, amount: Number(e.target.value) })}
+                                                onChange={(e) => setEditEnvelopeData({ ...editEnvelopeData, amount: e.target.value })}
                                             />
                                             <label className="envelope-form-check">
                                                 <input
