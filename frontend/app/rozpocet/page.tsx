@@ -6,10 +6,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
 import PeriodNavigator from '@/components/PeriodNavigator';
+import CashflowCard from '@/components/CashflowCard';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { getLineIcon } from '@/lib/line-icons';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getCashflowCurrent, Cashflow } from '@/lib/api';
 
 interface MonthlyExpense {
     id: number; name: string; amount: number;
@@ -112,6 +113,14 @@ export default function RozpocetPage() {
         enabled: viewMode === 'month',
     });
 
+    // Cashflow projekce má smysl jen pro aktuální měsíc
+    const { data: cashflow } = useQuery<Cashflow>({
+        queryKey: queryKeys.cashflow,
+        queryFn: getCashflowCurrent,
+        enabled: viewMode === 'month'
+            && selectedYear === currentYear && selectedMonth === currentMonth,
+    });
+
     const { data: annualData } = useQuery<AnnualData>({
         queryKey: queryKeys.annualOverview(selectedYear),
         queryFn: () => apiFetch(`/annual-overview/${selectedYear}`).then(r => r.json()),
@@ -123,10 +132,11 @@ export default function RozpocetPage() {
         enabled: selectedMonth === 1,
     });
 
-    const refreshBudget = useCallback(() =>
+    const refreshBudget = useCallback(() => Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.monthlyBudget(yearMonth) }),
-        [queryClient, yearMonth]
-    );
+        // Zaplacení/úprava položky mění i projekci cashflow
+        queryClient.invalidateQueries({ queryKey: queryKeys.cashflow }),
+    ]), [queryClient, yearMonth]);
     const refreshManualAccounts = () => queryClient.invalidateQueries({ queryKey: queryKeys.manualAccounts });
 
     useEffect(() => {
@@ -341,7 +351,8 @@ export default function RozpocetPage() {
 
     // ── tab content ──────────────────────────────────────────────
 
-    const renderOverview = () => (
+    const renderOverview = () => (<>
+        {isCurrentMonth && cashflow && <CashflowCard data={cashflow} />}
         <div className="budget-overview-grid">
             <div className="surface budget-upcoming-card">
                 <div className="card-head">
@@ -383,7 +394,7 @@ export default function RozpocetPage() {
                 </div>
             </div>
         </div>
-    );
+    </>);
 
     const renderExpenses = () => (
         <div className="budget-expenses-split">

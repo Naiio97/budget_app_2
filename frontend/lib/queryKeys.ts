@@ -19,6 +19,7 @@ export const queryKeys = {
   manualAccounts: ['manual-accounts'] as const,
   manualAccount: (id: string) => ['manual-account', id] as const,
   monthlyBudget: (yearMonth: string) => ['monthly-budget', yearMonth] as const,
+  cashflow: ['cashflow'] as const,
   annualOverview: (year: number) => ['annual-overview', year] as const,
   monthlyReport: (months: number) => ['monthly-report', months] as const,
   familyAccounts: ['family-accounts'] as const,

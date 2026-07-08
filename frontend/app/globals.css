@@ -1236,6 +1236,22 @@ select.input {
   width: 112px;
   height: 112px;
 }
+/* ── Cashflow karta (VYLEPSENI.md 4.5) ─────────────────────── */
+.cashflow-card { margin-bottom: var(--spacing-md); }
+.cashflow-card .card-body { display: flex; flex-direction: column; gap: 10px; }
+.cashflow-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--spacing-sm);
+}
+.cashflow-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cashflow-kpi-label { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.cashflow-kpi-value { font-size: 14px; font-weight: 590; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cashflow-warning { font-size: 12px; font-weight: 510; }
+@media (max-width: 680px) {
+  .cashflow-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+}
+
 .budget-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
