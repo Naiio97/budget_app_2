@@ -242,7 +242,7 @@ class MonthlyIncomeItemModel(Base):
     __tablename__ = "monthly_income_items"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    budget_id = Column(Integer, ForeignKey("monthly_budgets.id"), nullable=False)
+    budget_id = Column(Integer, ForeignKey("monthly_budgets.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
     amount = Column(Float, nullable=False, default=0.0)
     order_index = Column(Integer, default=0)
@@ -275,7 +275,7 @@ class MonthlyExpenseModel(Base):
     __tablename__ = "monthly_expenses"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    budget_id = Column(Integer, ForeignKey("monthly_budgets.id"), nullable=False)
+    budget_id = Column(Integer, ForeignKey("monthly_budgets.id", ondelete="CASCADE"), nullable=False)
     recurring_expense_id = Column(Integer, ForeignKey("recurring_expenses.id"), nullable=True)
     
     name = Column(String, nullable=False)  # Může být jiný než recurring
