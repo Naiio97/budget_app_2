@@ -13,6 +13,7 @@ from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRule
 from services.share_rules import match_share_rule, compute_my_share
 from services.gocardless import gocardless_service, select_balance
 from services.push import send_push_to_user
+from services.timefmt import utc_iso
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from services.categorization import (
@@ -968,7 +969,7 @@ async def get_sync_status(
 
     return {
         "status": sync_status.status,
-        "last_sync": sync_status.completed_at.isoformat() if sync_status.completed_at else sync_status.started_at.isoformat(),
+        "last_sync": utc_iso(sync_status.completed_at or sync_status.started_at),
         "accounts_synced": sync_status.accounts_synced,
         "transactions_synced": sync_status.transactions_synced,
         "error": sync_status.error_message,
