@@ -36,6 +36,11 @@ const PATHS: Record<string, ReactNode> = {
     gift: <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" /></>,
     zap: <><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></>,
     clipboard: <><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></>,
+    split: <><path d="M12 3v5" /><path d="M12 8 6 14" /><path d="M12 8l6 6" /><path d="M6 14v6" /><path d="M18 14v6" /></>,
+    bag: <><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" /></>,
+    percent: <><path d="M19 5 5 19" /><circle cx="6.5" cy="6.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /></>,
+    calendar: <><path d="M8 2v4" /><path d="M16 2v4" /><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M3 10h18" /></>,
+    shield: <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></>,
 };
 
 // Starší kategorie mají v DB emoji — mapa je překládá na klíče výše.
@@ -56,9 +61,10 @@ const EMOJI_TO_KEY: Record<string, string> = {
 
 /** Nabídka pro výběr ikony v Nastavení — ukládá se klíč, ne emoji. */
 export const CATEGORY_ICON_OPTIONS: { value: string; label: string }[] = [
-    { value: 'utensils', label: 'Jídlo' },
-    { value: 'basket', label: 'Nákup potravin' },
-    { value: 'cart', label: 'Nákupy' },
+    { value: 'utensils', label: 'Jídlo / restaurace' },
+    { value: 'basket', label: 'Potraviny' },
+    { value: 'cart', label: 'Supermarket (vozík)' },
+    { value: 'bag', label: 'Nákupy (taška)' },
     { value: 'car', label: 'Doprava' },
     { value: 'bulb', label: 'Energie' },
     { value: 'home', label: 'Bydlení' },
@@ -66,8 +72,11 @@ export const CATEGORY_ICON_OPTIONS: { value: string; label: string }[] = [
     { value: 'gamepad', label: 'Hry' },
     { value: 'phone', label: 'Předplatné' },
     { value: 'trending', label: 'Investice' },
+    { value: 'percent', label: 'Dividendy / úroky' },
     { value: 'wallet', label: 'Výplata' },
     { value: 'banknote', label: 'Hotovost' },
+    { value: 'calendar', label: 'Splátky / termíny' },
+    { value: 'shield', label: 'Pojištění' },
     { value: 'health', label: 'Zdraví' },
     { value: 'shirt', label: 'Oblečení' },
     { value: 'sparkles', label: 'Kosmetika' },
@@ -75,6 +84,9 @@ export const CATEGORY_ICON_OPTIONS: { value: string; label: string }[] = [
     { value: 'gift', label: 'Dárky' },
     { value: 'plane', label: 'Cestování' },
     { value: 'zap', label: 'Ostatní služby' },
+    { value: 'split', label: 'Vyrovnání (settlement)' },
+    { value: 'transfer', label: 'Převod' },
+    { value: 'family', label: 'Rodina' },
     { value: 'box', label: 'Ostatní' },
 ];
 

@@ -10,6 +10,7 @@ from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, PortfolioSnapshotModel, UserModel
 from services.exchange_rates import get_exchange_rate
+from services.timefmt import utc_iso
 
 router = APIRouter()
 
@@ -90,7 +91,7 @@ async def get_portfolio(
     return {
         "total_value": round(total_value, 2),
         "currency": "CZK",
-        "last_synced": account.last_synced.isoformat() if account.last_synced else None,
+        "last_synced": utc_iso(account.last_synced),
         "transactions": [
             {
                 "id": tx.id,
@@ -165,7 +166,7 @@ async def get_portfolio_detail(
         "result": round(result_czk, 2),
         "cash_free": round(cash_free_czk, 2),
         "currency": "CZK",
-        "last_synced": account.last_synced.isoformat() if account.last_synced else None,
+        "last_synced": utc_iso(account.last_synced),
     }
 
 
@@ -357,7 +358,7 @@ async def get_investment_summary(
             "name": account.name,
             "balance": account.balance,
             "currency": account.currency,
-            "last_synced": account.last_synced.isoformat() if account.last_synced else None
+            "last_synced": utc_iso(account.last_synced)
         },
         "recent_transactions": [
             {

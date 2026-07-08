@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime, timedelta
 import asyncio
@@ -13,8 +13,15 @@ from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRule
 from services.share_rules import match_share_rule, compute_my_share
 from services.gocardless import gocardless_service, select_balance
 from services.push import send_push_to_user
+from services.timefmt import utc_iso
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
+from services.categorization import (
+    RULE_ORDER,
+    categorize_transaction,
+    categorize_transaction_with_rules,
+    categorize_with_preloaded_rules,
+)
 
 router = APIRouter()
 
@@ -94,6 +101,10 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     
     # Build set of all my account identifiers (bank + manual)
     my_account_identifiers = set()
+    # Identifikátory VLASTNÍHO účtu každé transakce — banka často pošle jen
+    # jednu stranu převodu, a ta druhá je z definice účet, na kterém záznam
+    # leží. Odečtením vlastního účtu z (creditor ∪ debtor) zbyde protiúčet.
+    own_ids_by_account: dict[str, set] = {}
 
     result = await db.execute(
         select(AccountModel).where(
@@ -107,10 +118,13 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
             try:
                 details = json.loads(acc.details_json)
                 account_info = details.get("account", {})
+                acc_ids: set = set()
                 if account_info.get("iban"):
-                    my_account_identifiers.update(extract_account_number(account_info["iban"]))
+                    acc_ids.update(extract_account_number(account_info["iban"]))
                 if account_info.get("bban"):
-                    my_account_identifiers.update(extract_account_number(account_info["bban"]))
+                    acc_ids.update(extract_account_number(account_info["bban"]))
+                my_account_identifiers.update(acc_ids)
+                own_ids_by_account[acc.id] = acc_ids
             except:
                 pass
     
@@ -189,6 +203,7 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
                 continue
             tx.transaction_type = "normal"
             tx.is_excluded = False
+            tx.category_locked = False
             if has_transfer_category:
                 try:
                     raw = json.loads(tx.raw_json) if tx.raw_json else {}
@@ -218,9 +233,10 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
             tx.transaction_type = "family_transfer"
             tx.is_excluded = True
             tx.category = "Family Transfer"
+            tx.category_locked = True
             marked_family += 1
             continue
-        
+
         # Check text-based patterns for my accounts (description matching)
         if my_account_patterns:
             matched_pattern = False
@@ -229,6 +245,7 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
                     tx.transaction_type = "my_account_transfer"
                     tx.is_excluded = True
                     tx.category = "Internal Transfer"
+                    tx.category_locked = True
                     marked_my_account += 1
                     matched_pattern = True
                     break
@@ -254,17 +271,27 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
 
                 creditor_ids.discard("")
                 debtor_ids.discard("")
-                
-                if not creditor_ids or not debtor_ids:
+
+                if not creditor_ids and not debtor_ids:
                     continue
-                
-                creditor_is_mine = bool(creditor_ids & my_account_identifiers)
-                debtor_is_mine = bool(debtor_ids & my_account_identifiers)
-                
-                if creditor_is_mine and debtor_is_mine:
+
+                # Banka často pošle jen jednu stranu převodu — druhá strana je
+                # ale vždy účet, na kterém záznam leží. Převod mezi mými účty:
+                # každá UVEDENÁ strana je moje (vlastní účet transakce se
+                # počítá) a protiúčet (strany minus vlastní účet) je taky můj.
+                own_ids = own_ids_by_account.get(tx.account_id, set())
+                mine_or_own = my_account_identifiers | own_ids
+                creditor_ok = not creditor_ids or bool(creditor_ids & mine_or_own)
+                debtor_ok = not debtor_ids or bool(debtor_ids & mine_or_own)
+                counterparty_is_mine = bool(
+                    ((creditor_ids | debtor_ids) - own_ids) & my_account_identifiers
+                )
+
+                if creditor_ok and debtor_ok and counterparty_is_mine:
                     tx.transaction_type = "internal_transfer"
                     tx.is_excluded = True
                     tx.category = "Internal Transfer"
+                    tx.category_locked = True
                     marked_internal += 1
                     
                     # Track balance changes for manual accounts
@@ -290,7 +317,54 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
                     
         except Exception as e:
             logger.error(f"Error parsing raw_json for tx {tx.id}: {e}")
-    
+
+    # Dopárování jednostranných záznamů: druhá noha převodu mezi mými účty
+    # často přijde úplně bez protiúčtu (banka pošle jen vlastní stranu).
+    # Spáruje se s už označenou nohou na jiném účtu: stejná částka s opačným
+    # znaménkem, stejná měna, datum ±2 dny — a pokud označená noha protiúčet
+    # zná, musí mířit na účet kandidáta. Každá noha se spotřebuje nejvýš jednou.
+    def _tx_date(t):
+        try:
+            return datetime.strptime(t.date, "%Y-%m-%d")
+        except Exception:
+            return None
+
+    pair_legs = [
+        t for t in transactions
+        if t.transaction_type == "internal_transfer" and not t.user_excluded
+    ]
+    used_leg_ids: set = set()
+    for tx in transactions:
+        if tx.user_excluded or tx.is_excluded or tx.transaction_type != "normal":
+            continue
+        own_ids = own_ids_by_account.get(tx.account_id, set())
+        if tx_counterparty_ids(tx) - own_ids:
+            continue  # protiúčet známe → řešila ho hlavní smyčka
+        tx_dt = _tx_date(tx)
+        if tx_dt is None:
+            continue
+        for leg in pair_legs:
+            if leg.id in used_leg_ids or leg.account_id == tx.account_id:
+                continue
+            if (leg.currency or "CZK") != (tx.currency or "CZK"):
+                continue
+            if abs(float(leg.amount) + float(tx.amount)) > 0.01:
+                continue
+            leg_dt = _tx_date(leg)
+            if leg_dt is None or abs((leg_dt - tx_dt).days) > 2:
+                continue
+            leg_counterparty = tx_counterparty_ids(leg) - own_ids_by_account.get(leg.account_id, set())
+            if leg_counterparty and not (leg_counterparty & own_ids):
+                continue
+            tx.transaction_type = "internal_transfer"
+            tx.is_excluded = True
+            tx.category = "Internal Transfer"
+            tx.category_locked = True
+            used_leg_ids.add(leg.id)
+            marked_internal += 1
+            logger.info(f"Paired one-sided transfer: {tx.date} {tx.description[:40]} ({tx.amount}) <-> leg {leg.date}")
+            break
+
     # Apply manual account balance updates
     for acc_id, delta in manual_balance_updates.items():
         for acc in manual_accounts:
@@ -304,209 +378,22 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     return {"marked_internal": marked_internal, "marked_family": marked_family, "marked_my_account": marked_my_account, "unmarked_excluded": unmarked_excluded}
 
 
-# ISO 20022 purpose codes → category
-PURPOSE_CODE_MAP: dict[str, str] = {
-    "SALA": "Salary",   # Salary payment
-    "PAYR": "Salary",   # Payroll
-    "BONU": "Salary",   # Bonus payment
-    "PENS": "Salary",   # Pension payment
-    "SSBE": "Salary",   # Social security benefit
-    "BENE": "Salary",   # Unemployment benefit
-    "TAXS": "Utilities",  # Tax payment
-    "VATX": "Utilities",  # VAT tax
-    "INSR": "Utilities",  # Insurance premium
-    "RENT": "Utilities",  # Rent
-    "OTHR": None,         # Other — don't auto-assign
-}
-
-# MCC (Merchant Category Code) → category
-MCC_CATEGORY_MAP: dict[str, str] = {
-    # Food & Grocery
-    "5411": "Food",  # Grocery stores
-    "5412": "Food",  # Convenience stores
-    "5422": "Food",  # Meat shops
-    "5441": "Food",  # Candy/nut/confectionery
-    "5451": "Food",  # Dairies
-    "5461": "Food",  # Bakeries
-    "5499": "Food",  # Misc food stores
-    "5811": "Food",  # Caterers
-    "5812": "Food",  # Eating places / restaurants
-    "5813": "Food",  # Bars / taverns
-    "5814": "Food",  # Fast food
-    "5912": "Health",  # Drug stores / pharmacies
-    # Transport
-    "4111": "Transport",  # Local commuter transport
-    "4112": "Transport",  # Passenger railways
-    "4121": "Transport",  # Taxicabs / limousines
-    "4131": "Transport",  # Bus lines
-    "4411": "Transport",  # Cruise lines
-    "4511": "Transport",  # Airlines
-    "4814": "Utilities",  # Telecom
-    "4816": "Utilities",  # Computer network services (internet)
-    "4899": "Utilities",  # Cable / satellite TV
-    "4900": "Utilities",  # Utilities (electric, gas, water)
-    "5541": "Transport",  # Service stations / gas stations
-    "5542": "Transport",  # Automated fuel dispensers
-    "7523": "Transport",  # Parking lots
-    "7531": "Transport",  # Auto repair
-    "7534": "Transport",  # Tyre retreading
-    "7538": "Transport",  # Auto service shops
-    # Shopping
-    "5045": "Shopping",  # Computers / peripherals
-    "5065": "Shopping",  # Electrical parts
-    "5200": "Shopping",  # Home supply / hardware
-    "5211": "Shopping",  # Lumber / building materials
-    "5251": "Shopping",  # Hardware stores
-    "5310": "Shopping",  # Discount stores
-    "5311": "Shopping",  # Department stores
-    "5331": "Shopping",  # Variety stores
-    "5399": "Shopping",  # Misc general merchandise
-    "5621": "Shopping",  # Women's clothing
-    "5631": "Shopping",  # Accessories / lingerie
-    "5641": "Shopping",  # Children's clothing
-    "5651": "Shopping",  # Family clothing
-    "5661": "Shopping",  # Shoe stores
-    "5691": "Shopping",  # Men's clothing
-    "5699": "Shopping",  # Misc clothing
-    "5712": "Shopping",  # Furniture
-    "5719": "Shopping",  # Misc home furnishings
-    "5732": "Shopping",  # Electronics
-    "5733": "Shopping",  # Music stores
-    "5734": "Shopping",  # Computer software
-    "5912": "Health",    # Pharmacies
-    "5940": "Shopping",  # Sporting goods
-    "5941": "Shopping",  # Sporting goods
-    "5945": "Shopping",  # Hobby / toy / game shops
-    "5977": "Shopping",  # Cosmetics
-    "5999": "Shopping",  # Misc retail
-    # Health
-    "5047": "Health",    # Medical / dental supplies
-    "5122": "Health",    # Drugs / proprietaries
-    "8011": "Health",    # Doctors / physicians
-    "8021": "Health",    # Dentists
-    "8031": "Health",    # Osteopaths
-    "8041": "Health",    # Chiropractors
-    "8042": "Health",    # Optometrists
-    "8049": "Health",    # Podiatrists
-    "8050": "Health",    # Nursing / personal care
-    "8062": "Health",    # Hospitals
-    "8071": "Health",    # Medical lab
-    "8099": "Health",    # Health practitioners
-    # Entertainment
-    "5815": "Entertainment",  # Digital content (streaming)
-    "5816": "Entertainment",  # Digital games
-    "5817": "Entertainment",  # Digital apps
-    "5818": "Entertainment",  # Digital media
-    "7011": "Entertainment",  # Hotels / lodging
-    "7832": "Entertainment",  # Motion picture theatres
-    "7922": "Entertainment",  # Theatrical producers
-    "7929": "Entertainment",  # Bands / orchestras
-    "7941": "Entertainment",  # Sports clubs / fields
-    "7991": "Entertainment",  # Tourist attractions
-    "7993": "Entertainment",  # Video game arcades
-    "7996": "Entertainment",  # Amusement parks
-    "7997": "Entertainment",  # Membership clubs (fitness etc.)
-    "7999": "Entertainment",  # Recreation services
-}
-
-
-def categorize_by_purpose_code(tx: dict) -> str | None:
-    """Return category based on ISO 20022 purposeCode, or None if not applicable"""
-    purpose = tx.get("purposeCode") or tx.get("purpose_code") or ""
-    if not purpose:
-        return None
-    mapped = PURPOSE_CODE_MAP.get(purpose.upper())
-    return mapped  # may be None
-
-
-def categorize_by_mcc(tx: dict) -> str | None:
-    """Return category based on MCC code, or None if no MCC present"""
-    mcc = tx.get("merchantCategoryCode") or tx.get("mcc") or ""
-    if not mcc:
-        return None
-    return MCC_CATEGORY_MAP.get(str(mcc).strip())
-
-
-def categorize_transaction(tx: dict) -> str:
-    """Category detection from transaction metadata only: purposeCode → MCC.
-
-    Keyword matching moved to category_rules in the DB (is_builtin=True, see
-    services/default_rules.py) — merchant keywords are the learned-rules bucket
-    now, so callers that want them must go through the rule-based variants.
-    """
-    by_purpose = categorize_by_purpose_code(tx)
-    if by_purpose:
-        return by_purpose
-
-    by_mcc = categorize_by_mcc(tx)
-    if by_mcc:
-        return by_mcc
-
-    return "Other"
-
-
-async def categorize_transaction_with_rules(tx: dict, db: AsyncSession, user_id: int) -> str:
-    """Smart category detection with priority: user rules > purposeCode > MCC > keywords"""
-    raw_desc = (tx.get("remittanceInformationUnstructured") or
-                tx.get("creditorName") or
-                tx.get("debtorName") or
-                "")
-    desc = str(raw_desc).lower()
-
-    # 1. User-defined rules (highest priority — explicit user preference)
-    user_rules = await db.execute(
-        select(CategoryRuleModel)
-        .where(
-            CategoryRuleModel.user_id == user_id,
-            CategoryRuleModel.is_user_defined == True,
-        )
-        .order_by(CategoryRuleModel.match_count.desc())
-    )
-    for rule in user_rules.scalars():
-        if rule.pattern.lower() in desc:
-            rule.match_count += 1
-            return rule.category
-
-    # 2. purposeCode (ISO 20022 — very reliable for salary, insurance, tax, rent)
-    by_purpose = categorize_by_purpose_code(tx)
-    if by_purpose:
-        return by_purpose
-
-    # 3. MCC code (merchant category — reliable for card payments)
-    by_mcc = categorize_by_mcc(tx)
-    if by_mcc:
-        return by_mcc
-
-    # 4. Learned + builtin rules (longer pattern = more specific wins on ties,
-    #    e.g. "dáme jídlo" before "dm")
-    if desc:
-        learned_rules = await db.execute(
-            select(CategoryRuleModel)
-            .where(
-                CategoryRuleModel.user_id == user_id,
-                CategoryRuleModel.is_user_defined == False,
-            )
-            .order_by(CategoryRuleModel.match_count.desc(), func.length(CategoryRuleModel.pattern).desc())
-        )
-        for rule in learned_rules.scalars():
-            if rule.pattern.lower() in desc:
-                rule.match_count += 1
-                return rule.category
-
-    # 5. Metadata fallback (purposeCode / MCC)
-    return categorize_transaction(tx)
-
-
 @router.post("/recategorize")
 async def recategorize_transactions(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Recategorize all existing transactions using improved category detection with rules"""
+    """Recategorize all existing transactions using improved category detection with rules.
+
+    Skips locked transactions (category_locked=True) — manual corrections and
+    transfers detected by IBAN matching must survive a bulk recategorize."""
     import json
 
     result = await db.execute(
-        select(TransactionModel).where(TransactionModel.user_id == current_user.id)
+        select(TransactionModel).where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.category_locked == False,
+        )
     )
     transactions = result.scalars().all()
 
@@ -541,41 +428,6 @@ async def recategorize_transactions(
         "categories": categories_count
     }
 
-
-
-def _categorize_with_preloaded_rules(
-    tx: dict,
-    user_rules: list[CategoryRuleModel],
-    learned_rules: list[CategoryRuleModel],
-) -> str:
-    """In-memory variant of categorize_transaction_with_rules — avoids N+1 DB queries during sync.
-    Priority: user rules > purposeCode > MCC > learned rules > keyword fallback."""
-    raw_desc = (tx.get("remittanceInformationUnstructured") or
-                tx.get("creditorName") or
-                tx.get("debtorName") or
-                "")
-    desc = str(raw_desc).lower()
-
-    for rule in user_rules:
-        if rule.pattern.lower() in desc:
-            rule.match_count += 1
-            return rule.category
-
-    by_purpose = categorize_by_purpose_code(tx)
-    if by_purpose:
-        return by_purpose
-
-    by_mcc = categorize_by_mcc(tx)
-    if by_mcc:
-        return by_mcc
-
-    if desc:
-        for rule in learned_rules:
-            if rule.pattern.lower() in desc:
-                rule.match_count += 1
-                return rule.category
-
-    return categorize_transaction(tx)
 
 
 async def notify_after_sync(db: AsyncSession, user_id: int, failed_accounts: list[str]) -> None:
@@ -647,7 +499,7 @@ async def sync_all_data(
             CategoryRuleModel.user_id == current_user.id,
             CategoryRuleModel.is_user_defined == True,
         )
-        .order_by(CategoryRuleModel.match_count.desc())
+        .order_by(*RULE_ORDER)
     )
     preloaded_user_rules = list(user_rules_result.scalars())
     learned_rules_result = await db.execute(
@@ -656,7 +508,7 @@ async def sync_all_data(
             CategoryRuleModel.user_id == current_user.id,
             CategoryRuleModel.is_user_defined == False,
         )
-        .order_by(CategoryRuleModel.match_count.desc(), func.length(CategoryRuleModel.pattern).desc())
+        .order_by(*RULE_ORDER)
     )
     preloaded_learned_rules = list(learned_rules_result.scalars())
 
@@ -754,7 +606,7 @@ async def sync_all_data(
                             "description": description,
                             "amount": tx_amount,
                             "currency": tx_data.transactionAmount.currency,
-                            "category": _categorize_with_preloaded_rules(tx_dict, preloaded_user_rules, preloaded_learned_rules),
+                            "category": categorize_with_preloaded_rules(tx_dict, preloaded_user_rules, preloaded_learned_rules),
                             "account_type": "bank",
                             "transaction_type": "normal",
                             "is_excluded": False,
@@ -1117,7 +969,7 @@ async def get_sync_status(
 
     return {
         "status": sync_status.status,
-        "last_sync": sync_status.completed_at.isoformat() if sync_status.completed_at else sync_status.started_at.isoformat(),
+        "last_sync": utc_iso(sync_status.completed_at or sync_status.started_at),
         "accounts_synced": sync_status.accounts_synced,
         "transactions_synced": sync_status.transactions_synced,
         "error": sync_status.error_message,

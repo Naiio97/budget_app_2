@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import CustomSelect from '@/components/CustomSelect';
+import Toast, { ToastMessage } from '@/components/Toast';
 import { syncData, getSyncStatus, SyncStatus, getDashboard, getApiKeys, saveApiKeys, ApiKeysResponse, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, apiFetch, ShareRule, getShareRules, createShareRule, deleteShareRule, Tag, getTags, createTag, deleteTag, getVapidPublicKey, subscribePush, unsubscribePush, sendTestPush } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
 import { getCategoryIcon, categoryIconKey, CATEGORY_ICON_OPTIONS } from '@/lib/category-icons';
@@ -17,8 +18,10 @@ interface CategoryRule { id: number; pattern: string; category: string; is_user_
 interface Category { id: number; name: string; icon: string; color: string; order_index: number; is_income: boolean; is_active: boolean; }
 
 const CATEGORY_PALETTE = [
-    '#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981', '#14b8a6',
-    '#3b82f6', '#6366f1', '#a855f7', '#ec4899', '#6b7280', '#111827',
+    '#ef4444', '#f97316', '#f28f64', '#eab308', '#b45309', '#84cc16',
+    '#22c55e', '#10b981', '#14b8a6', '#0e7490', '#0ea5e9', '#3b82f6',
+    '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899', '#9f1239',
+    '#6b7280', '#9ca3af', '#475569', '#111827',
 ];
 // Nabídka ikon kategorií (čárové ikony, ukládá se klíč) — viz lib/category-icons.
 const ICON_OPTIONS = CATEGORY_ICON_OPTIONS.map(o => ({ value: o.value, label: o.label, icon: getCategoryIcon(o.value, 15) }));
@@ -516,6 +519,7 @@ export default function SettingsPage() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncError, setSyncError] = useState<string | null>(null);
     const [detecting, setDetecting] = useState(false);
+    const [toast, setToast] = useState<ToastMessage>(null);
 
     // Category rules
     const [categoryRules, setCategoryRules] = useState<CategoryRule[]>([]);
@@ -617,11 +621,16 @@ export default function SettingsPage() {
     };
     const [newPattern, setNewPattern] = useState('');
     const [newRuleCategory, setNewRuleCategory] = useState('Food');
+    const [ruleSearch, setRuleSearch] = useState('');
     const [savingRule, setSavingRule] = useState(false);
     const [showRuleForm, setShowRuleForm] = useState(false);
     const [showAddCategory, setShowAddCategory] = useState(false);
     const [showConnectBank, setShowConnectBank] = useState(false);
     const [detailRule, setDetailRule] = useState<CategoryRule | null>(null);
+    const [editingRule, setEditingRule] = useState(false);
+    const [editRulePattern, setEditRulePattern] = useState('');
+    const [editRuleCategory, setEditRuleCategory] = useState('');
+    const [savingRuleEdit, setSavingRuleEdit] = useState(false);
     const [ruleCategories, setRuleCategories] = useState<Category[]>([]);
 
     // Manual account creation
@@ -799,7 +808,13 @@ export default function SettingsPage() {
             const res = await apiFetch(`/sync/detect-transfers`, { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
-                alert(`Detekce hotová.\nInterní převody: ${data.marked_internal_transfers ?? 0}\nMoje účty: ${data.marked_my_account_transfers ?? 0}\nRodinné: ${data.marked_family_transfers ?? 0}\nVráceno na běžný výdaj (vyloučené účty): ${data.unmarked_excluded_accounts ?? 0}`);
+                const marked = (data.marked_internal_transfers ?? 0) + (data.marked_my_account_transfers ?? 0) + (data.marked_family_transfers ?? 0);
+                const unmarked = data.unmarked_excluded_accounts ?? 0;
+                setToast({
+                    text: marked === 0 && unmarked === 0
+                        ? 'Detekce hotová — žádné nové převody.'
+                        : `Detekce hotová — ${marked} nově označených převodů${unmarked > 0 ? `, ${unmarked} vráceno mezi výdaje` : ''}.`,
+                });
             }
         } finally { setDetecting(false); }
     };
@@ -821,11 +836,33 @@ export default function SettingsPage() {
         setCategoryRules(categoryRules.filter(r => r.id !== id));
     };
 
+    const handleUpdateRule = async () => {
+        if (!detailRule || !editRulePattern.trim()) return;
+        setSavingRuleEdit(true);
+        try {
+            const r = await apiFetch(`/settings/category-rules/${detailRule.id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pattern: editRulePattern, category: editRuleCategory }),
+            });
+            if (r.ok) { setEditingRule(false); setDetailRule(null); loadCategoryRules(); }
+        } finally { setSavingRuleEdit(false); }
+    };
+
     const handleRecategorize = async () => {
         setIsSyncing(true);
         try {
-            await apiFetch(`/sync/recategorize`, { method: 'POST' });
-            alert('Transakce byly překategorizovány.');
+            const r = await apiFetch(`/sync/recategorize`, { method: 'POST' });
+            if (!r.ok) throw new Error(`recategorize ${r.status}`);
+            const data = await r.json();
+            const n: number = data.updated ?? 0;
+            setToast({
+                text: n === 0
+                    ? 'Hotovo — všechny transakce už byly zařazené správně.'
+                    : `Hotovo — překategorizováno ${n} ${n === 1 ? 'transakce' : n < 5 ? 'transakce' : 'transakcí'}.`,
+            });
+        } catch (err) {
+            console.error(err);
+            setToast({ text: 'Rekategorizace selhala.', kind: 'error' });
         } finally { setIsSyncing(false); }
     };
 
@@ -1061,20 +1098,46 @@ export default function SettingsPage() {
                                         Zatím žádná pravidla. Přidej přes „+ Pravidlo“ nebo změň kategorii u transakce.
                                     </div>
                                 ) : (
-                                    <div className="settings-scroll-list settings-rules-list">
-                                        {categoryRules.map(rule => {
-                                            const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
+                                    <>
+                                        <div className="set-search" style={{ marginBottom: 8 }}>
+                                            {SearchIcon}
+                                            <input
+                                                className="input"
+                                                placeholder="Hledat v pravidlech…"
+                                                value={ruleSearch}
+                                                onChange={e => setRuleSearch(e.target.value)}
+                                            />
+                                        </div>
+                                        {(() => {
+                                            const q = ruleSearch.trim().toLowerCase();
+                                            const visibleRules = q
+                                                ? categoryRules.filter(r => r.pattern.toLowerCase().includes(q) || r.category.toLowerCase().includes(q))
+                                                : categoryRules;
+                                            if (visibleRules.length === 0) {
+                                                return (
+                                                    <div style={{ color: 'var(--text-3)', fontSize: 13 }}>
+                                                        Žádné pravidlo neodpovídá hledání „{ruleSearch}“.
+                                                    </div>
+                                                );
+                                            }
                                             return (
-                                                <button key={rule.id} type="button" className="set-rule-row" onClick={() => setDetailRule(rule)}>
-                                                    <span className="set-rule-pattern">„{rule.pattern}“</span>
-                                                    <span className="set-rule-arrow">→</span>
-                                                    <span className="set-rule-dot" style={{ background: catColor }} />
-                                                    <span className="set-rule-cat">{rule.category}</span>
-                                                    <span className="set-rule-chevron">›</span>
-                                                </button>
+                                                <div className="settings-scroll-list settings-rules-list">
+                                                    {visibleRules.map(rule => {
+                                                        const catColor = ruleCategories.find(c => c.name === rule.category)?.color ?? 'var(--text-3)';
+                                                        return (
+                                                            <button key={rule.id} type="button" className="set-rule-row" onClick={() => { setDetailRule(rule); setEditingRule(false); setEditRulePattern(rule.pattern); setEditRuleCategory(rule.category); }}>
+                                                                <span className="set-rule-pattern">„{rule.pattern}“</span>
+                                                                <span className="set-rule-arrow">→</span>
+                                                                <span className="set-rule-dot" style={{ background: catColor }} />
+                                                                <span className="set-rule-cat">{rule.category}</span>
+                                                                <span className="set-rule-chevron">›</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             );
-                                        })}
-                                    </div>
+                                        })()}
+                                    </>
                                 )}
                             </SurfaceCard>
 
@@ -1160,27 +1223,58 @@ export default function SettingsPage() {
                     <div className="set-modal-overlay" onClick={() => setDetailRule(null)}>
                         <div className="set-modal" onClick={e => e.stopPropagation()}>
                             <div className="set-modal-head">
-                                <h3 style={{ margin: 0 }}>Detail pravidla</h3>
+                                <h3 style={{ margin: 0 }}>{editingRule ? 'Upravit pravidlo' : 'Detail pravidla'}</h3>
                                 <button className="set-icon-btn" title="Zavřít" onClick={() => setDetailRule(null)}>{CloseIcon}</button>
                             </div>
-                            <div>
-                                <label className="set-field-label">Obsahuje text</label>
-                                <div className="set-modal-value">„{detailRule.pattern}“</div>
-                            </div>
-                            <div>
-                                <label className="set-field-label">Přiřadí kategorii</label>
-                                <div className="set-modal-value" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span className="set-rule-dot" style={{ background: ruleCategories.find(c => c.name === detailRule.category)?.color ?? 'var(--text-3)' }} />
-                                    {detailRule.category}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="set-field-label">Původ</label>
-                                <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : detailRule.is_builtin ? 'Výchozí pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
-                            </div>
-                            <button className="btn" style={{ color: 'var(--neg)' }} onClick={() => { handleDeleteRule(detailRule.id); setDetailRule(null); }}>
-                                {TrashIcon} Smazat pravidlo
-                            </button>
+                            {editingRule ? (
+                                <>
+                                    <div>
+                                        <label className="set-field-label">Obsahuje text</label>
+                                        <div className="set-search">
+                                            {SearchIcon}
+                                            <input className="input" autoFocus value={editRulePattern} onChange={e => setEditRulePattern(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && editRulePattern.trim()) handleUpdateRule(); }} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="set-field-label">Přiřadit kategorii</label>
+                                        <CustomSelect
+                                            value={editRuleCategory}
+                                            onChange={setEditRuleCategory}
+                                            options={ruleCategories.filter(c => c.is_active).map(c => ({ value: c.name, label: c.name, icon: getCategoryIcon(c.icon, 15) }))}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn" style={{ flex: 1 }} onClick={() => setEditingRule(false)}>Zrušit</button>
+                                        <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleUpdateRule} disabled={savingRuleEdit || !editRulePattern.trim()}>
+                                            {savingRuleEdit ? 'Ukládám...' : 'Uložit'}
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div>
+                                        <label className="set-field-label">Obsahuje text</label>
+                                        <div className="set-modal-value">„{detailRule.pattern}“</div>
+                                    </div>
+                                    <div>
+                                        <label className="set-field-label">Přiřadí kategorii</label>
+                                        <div className="set-modal-value" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span className="set-rule-dot" style={{ background: ruleCategories.find(c => c.name === detailRule.category)?.color ?? 'var(--text-3)' }} />
+                                            {detailRule.category}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="set-field-label">Původ</label>
+                                        <div className="set-modal-value">{detailRule.is_user_defined ? 'Vlastní pravidlo' : detailRule.is_builtin ? 'Výchozí pravidlo' : 'Naučené'} · {detailRule.match_count}× použito</div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button className="btn" style={{ flex: 1 }} onClick={() => setEditingRule(true)}>{Icons.action.edit} Upravit</button>
+                                        <button className="btn" style={{ flex: 1, color: 'var(--neg)' }} onClick={() => { handleDeleteRule(detailRule.id); setDetailRule(null); }}>
+                                            {TrashIcon} Smazat
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
@@ -1364,6 +1458,8 @@ export default function SettingsPage() {
                         </SurfaceCard>
                     </div>
                 )}
+
+                <Toast toast={toast} onClose={() => setToast(null)} />
             </div>
         </MainLayout>
     );

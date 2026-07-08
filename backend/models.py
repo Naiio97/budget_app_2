@@ -67,6 +67,10 @@ class TransactionModel(Base):
     # Ruční vyřazení uživatelem — nezávislé na is_excluded, aby ho sync/detekce
     # transferů nepřepsala. Když je True, is_excluded se drží také True.
     user_excluded = Column(Boolean, default=False, server_default="false", nullable=False)
+    # True = kategorii nastavil ručně uživatel, nebo ji odvodila detekce
+    # transferů (IBAN match) — /sync/recategorize a retroaktivní aplikace
+    # nového pravidla takové transakce nesmí přepsat.
+    category_locked = Column(Boolean, default=False, server_default="false", nullable=False)
     # Shared costs & settlement (VYLEPSENI.md 3.1, light variant):
     my_share_amount = Column(Float, nullable=True)  # my part of a shared expense (positive); aggregations count this instead of the full amount
     settlement_flag = Column(Boolean, default=False)  # True = incoming settlement transfer — excluded from income
