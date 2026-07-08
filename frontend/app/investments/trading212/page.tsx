@@ -60,6 +60,12 @@ function formatPct(value: number) {
     return `${value.toFixed(Math.abs(value) >= 10 ? 0 : 1)} %`;
 }
 
+function czPlural(n: number, one: string, few: string, many: string) {
+    if (n === 1) return one;
+    if (n >= 2 && n <= 4) return few;
+    return many;
+}
+
 function formatDate(dateStr: string) {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('cs-CZ');
@@ -174,23 +180,30 @@ export default function Trading212DetailPage() {
     const resultPct = invested > 0 ? (result / invested) * 100 : 0;
     const cashFree = detail?.cash_free ?? 0;
 
-    // Allocation rows: pies first, then orphan positions
+    // Allocation rows: pies first, then orphan positions — carry result info
+    // so the legend can replace the former standalone "Koláče" section
     const allocationRows = [
         ...pies.map((pie, i) => ({
             key: `pie:${pie.id}`,
             scope: 'pie' as PositionScope,
-            id: pie.id,
+            id: pie.id as string | number,
             name: pie.name,
+            sub: `${pie.instruments.length} ${czPlural(pie.instruments.length, 'pozice', 'pozice', 'pozic')}`,
             value: pie.value_czk,
+            result: pie.result_czk,
+            resultPct: pie.result_pct,
             color: colorFor('pie', pie.id, i),
             fallbackIdx: i,
         })),
         ...orphanPositions.map((pos, i) => ({
             key: `t212:${cleanTicker(pos.ticker)}`,
             scope: 't212' as PositionScope,
-            id: cleanTicker(pos.ticker),
+            id: cleanTicker(pos.ticker) as string | number,
             name: cleanTicker(pos.ticker),
+            sub: 'mimo koláč',
             value: pos.value_czk,
+            result: pos.ppl_czk,
+            resultPct: pos.ppl_pct,
             color: colorFor('t212', cleanTicker(pos.ticker), pies.length + i),
             fallbackIdx: pies.length + i,
         })),
@@ -364,151 +377,121 @@ export default function Trading212DetailPage() {
                     </div>
                 </section>
 
-                {/* Allocation pie + legend */}
-                <section className="surface">
-                    <div className="card-head">
-                        <h3>Rozložení</h3>
-                        <span className="muted" style={{ fontSize: 12 }}>{allocationRows.length} skupin</span>
-                    </div>
-                    <div className="card-body">
-                        {allocationRows.length === 0 ? (
-                            <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Žádné pozice.</div>
-                        ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) minmax(0, 1.4fr)', gap: 'var(--spacing-lg)', alignItems: 'center' }} className="reports-insight-grid">
-                                <div style={{ height: 240, position: 'relative' }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie data={allocationRows} cx="50%" cy="50%" innerRadius={60} outerRadius={95} dataKey="value" strokeWidth={2} stroke="var(--surface)">
-                                                {allocationRows.map(r => <Cell key={r.key} fill={r.color} />)}
-                                            </Pie>
-                                            <Tooltip formatter={(v: number | undefined, name) => [formatCurrency(Number(v ?? 0)), name as string]} />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                    <div style={{
-                                        position: 'absolute', top: '50%', left: '50%',
-                                        transform: 'translate(-50%, -50%)',
-                                        textAlign: 'center', pointerEvents: 'none',
-                                    }}>
-                                        <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Celkem</div>
-                                        <div className="num" style={{ fontSize: 16, fontWeight: 700 }}>{formatCurrency(total)}</div>
+                {/* Allocation (incl. pie results) + positions, side by side */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--spacing-lg)', alignItems: 'stretch' }}>
+                    <section className="surface">
+                        <div className="card-head">
+                            <h3>Rozložení</h3>
+                            <span className="muted" style={{ fontSize: 12 }}>
+                                {allocationRows.length} {czPlural(allocationRows.length, 'skupina', 'skupiny', 'skupin')}
+                            </span>
+                        </div>
+                        <div className="card-body">
+                            {allocationRows.length === 0 ? (
+                                <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Žádné pozice.</div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                                    <div style={{ height: 180, position: 'relative' }}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie data={allocationRows} cx="50%" cy="50%" innerRadius={52} outerRadius={82} dataKey="value" strokeWidth={2} stroke="var(--surface)">
+                                                    {allocationRows.map(r => <Cell key={r.key} fill={r.color} />)}
+                                                </Pie>
+                                                <Tooltip formatter={(v: number | undefined, name) => [formatCurrency(Number(v ?? 0)), name as string]} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div style={{
+                                            position: 'absolute', top: '50%', left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            textAlign: 'center', pointerEvents: 'none',
+                                        }}>
+                                            <div style={{ fontSize: 11, color: 'var(--text-3)' }}>Celkem</div>
+                                            <div className="num" style={{ fontSize: 15, fontWeight: 700 }}>{formatCurrency(total)}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        {allocationRows.map((row, i) => {
+                                            const pct = total > 0 ? (row.value / total) * 100 : 0;
+                                            return (
+                                                <div key={row.key} style={{
+                                                    display: 'flex', alignItems: 'center', gap: 10,
+                                                    padding: '10px 0',
+                                                    borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
+                                                }}>
+                                                    {renderSwatch(row.scope, row.id, row.color)}
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontSize: 13, fontWeight: 600 }}>{row.name}</div>
+                                                        <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{row.sub} · {formatPct(pct)}</div>
+                                                    </div>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <div className="num" style={{ fontSize: 13, fontWeight: 600 }}>{formatCurrency(row.value)}</div>
+                                                        <div className="num" style={{ fontSize: 12, color: row.result >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
+                                                            {row.result >= 0 ? '+' : ''}{formatCurrency(row.result)} ({row.resultPct >= 0 ? '+' : ''}{formatPct(row.resultPct)})
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    {allocationRows.map(row => {
-                                        const pct = total > 0 ? (row.value / total) * 100 : 0;
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="surface">
+                        <div className="card-head">
+                            <h3>Pozice</h3>
+                            <span className="muted" style={{ fontSize: 12 }}>
+                                {positions.length} {czPlural(positions.length, 'pozice', 'pozice', 'pozic')}
+                            </span>
+                        </div>
+                        <div className="card-body-nopad">
+                            {positions.length === 0 ? (
+                                <div style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>Žádné pozice.</div>
+                            ) : (
+                                <div>
+                                    {[...positions].sort((a, b) => b.value_czk - a.value_czk).map((pos, i) => {
+                                        const ticker = cleanTicker(pos.ticker);
+                                        const color = colorFor('t212', ticker, i);
                                         return (
-                                            <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-                                                {renderSwatch(row.scope, row.id, row.color)}
-                                                <span style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{row.name}</span>
-                                                <span className="num" style={{ fontSize: 13, color: 'var(--text-2)' }}>{formatCurrency(row.value)}</span>
-                                                <span className="num" style={{ fontSize: 12, color: 'var(--text-3)', minWidth: 44, textAlign: 'right' }}>{formatPct(pct)}</span>
+                                            <div key={pos.ticker} style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '36px minmax(0, 1fr) auto auto',
+                                                gap: 12, alignItems: 'center',
+                                                padding: '10px var(--spacing-lg)',
+                                                borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
+                                            }}>
+                                                <div style={{
+                                                    width: 32, height: 32, borderRadius: 8,
+                                                    background: color + '22',
+                                                    color,
+                                                    display: 'grid', placeItems: 'center',
+                                                    fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
+                                                }}>{ticker.slice(0, 3).toUpperCase()}</div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 600, fontSize: 14 }}>{ticker}</div>
+                                                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                                                        {pos.quantity.toFixed(pos.quantity < 1 ? 4 : 2)} ks · prům. {formatCurrency(pos.average_price_eur, 'EUR')}
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div className="num" style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(pos.value_czk)}</div>
+                                                    <div className="num" style={{
+                                                        fontSize: 12,
+                                                        color: pos.ppl_czk >= 0 ? 'var(--pos)' : 'var(--neg)',
+                                                    }}>
+                                                        {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)} ({pos.ppl_pct >= 0 ? '+' : ''}{formatPct(pos.ppl_pct)})
+                                                    </div>
+                                                </div>
+                                                {renderSwatch('t212', ticker, color)}
                                             </div>
                                         );
                                     })}
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                </section>
-
-                {/* All positions list with color picker */}
-                <section className="surface">
-                    <div className="card-head">
-                        <h3>Pozice</h3>
-                        <span className="muted" style={{ fontSize: 12 }}>{positions.length} položek</span>
-                    </div>
-                    <div className="card-body-nopad">
-                        {positions.length === 0 ? (
-                            <div style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>Žádné pozice.</div>
-                        ) : (
-                            <div>
-                                {[...positions].sort((a, b) => b.value_czk - a.value_czk).map((pos, i) => {
-                                    const ticker = cleanTicker(pos.ticker);
-                                    const color = colorFor('t212', ticker, i);
-                                    return (
-                                        <div key={pos.ticker} style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: '36px minmax(0, 1fr) auto auto',
-                                            gap: 14, alignItems: 'center',
-                                            padding: '12px var(--spacing-lg)',
-                                            borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
-                                        }}>
-                                            <div style={{
-                                                width: 32, height: 32, borderRadius: 8,
-                                                background: color + '22',
-                                                color,
-                                                display: 'grid', placeItems: 'center',
-                                                fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
-                                            }}>{ticker.slice(0, 3).toUpperCase()}</div>
-                                            <div style={{ minWidth: 0 }}>
-                                                <div style={{ fontWeight: 600, fontSize: 14 }}>{ticker}</div>
-                                                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                                                    {pos.quantity.toFixed(pos.quantity < 1 ? 4 : 2)} ks · prům. {formatCurrency(pos.average_price_eur, 'EUR')}
-                                                </div>
-                                            </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div className="num" style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(pos.value_czk)}</div>
-                                                <div className="num" style={{
-                                                    fontSize: 12,
-                                                    color: pos.ppl_czk >= 0 ? 'var(--pos)' : 'var(--neg)',
-                                                }}>
-                                                    {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)} ({pos.ppl_pct >= 0 ? '+' : ''}{formatPct(pos.ppl_pct)})
-                                                </div>
-                                            </div>
-                                            {renderSwatch('t212', ticker, color)}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </section>
-
-                {/* Pies (if any) */}
-                {pies.length > 0 && (
-                    <section className="surface">
-                        <div className="card-head">
-                            <h3>Koláče (pies)</h3>
-                            <span className="muted" style={{ fontSize: 12 }}>{pies.length}</span>
-                        </div>
-                        <div className="card-body-nopad">
-                            {pies.map((pie, i) => {
-                                const color = colorFor('pie', pie.id, i);
-                                return (
-                                    <div key={pie.id} style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '36px minmax(0, 1fr) auto auto',
-                                        gap: 14, alignItems: 'center',
-                                        padding: '12px var(--spacing-lg)',
-                                        borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
-                                    }}>
-                                        <div style={{
-                                            width: 32, height: 32, borderRadius: 8,
-                                            background: color + '22',
-                                            color,
-                                            display: 'grid', placeItems: 'center',
-                                            fontSize: 14,
-                                        }}>{pie.icon || '🥧'}</div>
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontWeight: 600, fontSize: 14 }}>{pie.name}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{pie.instruments.length} pozic</div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <div className="num" style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(pie.value_czk)}</div>
-                                            <div className="num" style={{
-                                                fontSize: 12,
-                                                color: pie.result_czk >= 0 ? 'var(--pos)' : 'var(--neg)',
-                                            }}>
-                                                {pie.result_czk >= 0 ? '+' : ''}{formatCurrency(pie.result_czk)} ({pie.result_pct >= 0 ? '+' : ''}{formatPct(pie.result_pct)})
-                                            </div>
-                                        </div>
-                                        {renderSwatch('pie', pie.id, color)}
-                                    </div>
-                                );
-                            })}
+                            )}
                         </div>
                     </section>
-                )}
+                </div>
 
                 {/* Recent transactions + dividends */}
                 {(portfolio.transactions.length > 0 || dividends.length > 0) && (
