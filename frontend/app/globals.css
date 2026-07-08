@@ -821,6 +821,58 @@ select.input {
 .label-row dt { font-size: 13px; color: var(--text-3); flex-shrink: 0; padding-top: 1px; }
 .label-row dd { font-size: 13px; color: var(--text); font-weight: 500; text-align: right; min-width: 0; word-break: break-word; }
 
+/* ── Editor "Společný náklad" / "Vypořádání" — rozbalený panel pod
+   řádkem, stejný vzor jako výběr kategorie/tagů výše v detailu. ── */
+.share-editor {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px var(--spacing-lg);
+  background: var(--surface-sunken);
+  border-bottom: 0.5px solid var(--border);
+}
+.share-pcts { display: flex; gap: 6px; }
+.share-pct {
+  flex: 1; height: 30px;
+  font-family: inherit; font-size: 12px; font-weight: 510; letter-spacing: -0.01em;
+  border: 0.5px solid var(--border); border-radius: var(--radius-full);
+  background: transparent; color: var(--text-2);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.share-pct:hover { background: var(--accent-soft); color: var(--accent); }
+.share-pct.active { background: var(--accent); border-color: transparent; color: #fff; font-weight: 590; }
+.share-amount-row { display: flex; align-items: center; gap: 10px; }
+.share-amount-row > label { font-size: 13px; color: var(--text-3); flex-shrink: 0; }
+.share-amount-row .input { flex: 1; min-width: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 510; }
+.share-amount-total { font-size: 12.5px; color: var(--text-3); white-space: nowrap; }
+.share-rest {
+  margin-top: -4px;
+  font-size: 12px; color: var(--text-3); text-align: right;
+}
+.share-rest strong { font-weight: 590; color: var(--text-2); }
+.share-saldo {
+  font-size: 12.5px; color: var(--text-2); line-height: 1.45;
+}
+.share-saldo strong { font-weight: 590; color: var(--text); font-variant-numeric: tabular-nums; }
+.share-saldo.match { color: var(--pos); }
+.share-saldo.match strong { color: var(--pos); }
+.share-rule-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12.5px; color: var(--text-2);
+  cursor: pointer; user-select: none;
+}
+.share-rule-check input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px; height: 16px; margin: 0; flex-shrink: 0;
+}
+.share-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.share-remove {
+  margin-right: auto;
+  background: transparent; border-color: transparent;
+  color: var(--neg);
+}
+.share-remove:hover { background: color-mix(in srgb, var(--neg) 10%, transparent); filter: none; }
+
 /* ══ COMMAND PALETTE (Cmd+K) ═════════════════════════════════ */
 .cmdk-backdrop {
   position: fixed; inset: 0; z-index: 400;
@@ -3082,6 +3134,11 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     min-height: 32px;
     padding: 0 12px;
     font-size: 12px;
+  }
+  /* Inline editory v detailu (tag, rozdělení nákladu, vypořádání) — 16px font
+     zůstává kvůli iOS zoomu při fokusu, ale 44px touch výška je tu obří. */
+  .tx-modal-scroll input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 36px;
   }
 
   .section-header-wrap { flex-direction: column; align-items: flex-start; }

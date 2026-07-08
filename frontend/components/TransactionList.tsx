@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Transaction, TransactionDetail, TransactionShare, Tag, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getTags, createTag, setTransactionTags, apiFetch } from '@/lib/api';
+import { Transaction, TransactionDetail, TransactionShare, Tag, SettlementSummary, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getSettlementSummary, getTags, createTag, setTransactionTags, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 import { getCategoryIcon } from '@/lib/category-icons';
 import { getLineIcon } from '@/lib/line-icons';
@@ -51,6 +51,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
     const [shareLearnRule, setShareLearnRule] = useState(false);
     const [savingShare, setSavingShare] = useState(false);
     const [savingExclude, setSavingExclude] = useState(false);
+    const [settlementSummary, setSettlementSummary] = useState<SettlementSummary | null>(null);
     // Bottom sheet na telefonu: švihnutí dolů zavře detail. Táhne se jen
     // když je vnitřní scroll úplně nahoře, jinak gesto patří scrollování.
     const [sheetDrag, setSheetDrag] = useState({ y: 0, dragging: false });
@@ -92,6 +93,18 @@ export default function TransactionList({ transactions: initialTransactions, sho
         }, { ...FALLBACK_ICONS } as Record<string, string>),
         [categories]
     );
+
+    // Návrhy protistran pro rozdělení/vypořádání — z reálně použitých hodnot,
+    // seřazené podle četnosti. "Žena" jen jako fallback pro první použití.
+    const counterpartySuggestions = useMemo(() => {
+        const freq = new Map<string, number>();
+        for (const tx of transactions) {
+            const name = tx.share_counterparty?.trim();
+            if (name) freq.set(name, (freq.get(name) || 0) + 1);
+        }
+        const names = [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+        return names.length > 0 ? names : ['Žena'];
+    }, [transactions]);
 
     // Close modal on Escape + lock body scroll while open
     useEffect(() => {
@@ -371,6 +384,11 @@ export default function TransactionList({ transactions: initialTransactions, sho
                 <div className="tx-sheet-grip" aria-hidden />
                 <div className="tx-modal-scroll" ref={sheetScrollRef}>
 
+                {/* Sdílený datalist pro oba editory (společný náklad i vypořádání) */}
+                <datalist id="share-counterparties">
+                    {counterpartySuggestions.map(name => <option key={name} value={name} />)}
+                </datalist>
+
                 {/* ── Hero header ── */}
                 <div style={{
                     padding: '20px var(--spacing-lg) 18px',
@@ -480,7 +498,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             value={newTagName}
                                             onChange={e => setNewTagName(e.target.value)}
                                             onKeyDown={e => { if (e.key === 'Enter') handleCreateTag(modalTx.id); }}
-                                            style={{ width: 130, padding: '4px 10px', fontSize: '0.8rem' }}
+                                            style={{ flex: '0 1 180px', minWidth: 120, height: 32, minHeight: 32, padding: '0 12px', fontSize: '0.8rem' }}
                                         />
                                     </>
                                 )}
@@ -528,7 +546,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                 return (
                                     <div className="label-row">
                                         <dt>{label}</dt>
-                                        <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 0 }}>
+                                        <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 0, flex: 1 }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                 <span style={{ fontWeight: name ? 500 : 400, color: name ? 'var(--text)' : 'var(--text-3)', fontStyle: name ? 'normal' : 'italic' }}>
                                                     {name || 'Nepojmenovaná protistrana'}
@@ -549,7 +567,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                                             if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
                                                         }}
                                                         placeholder="Např. Táta, Nájem, ČEZ…"
-                                                        style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                        style={{ flex: '1 1 200px', minWidth: 0, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
                                                     />
                                                     <button onClick={() => handleSaveContact(iban, dir)} disabled={savingContact || !nameInput.trim()}
                                                         className="btn btn-primary btn-sm">{savingContact ? '…' : 'OK'}</button>
@@ -589,157 +607,182 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         )}
 
                         {/* ── Společný náklad / vypořádání (VYLEPSENI.md 3.1) ── */}
-                        {modalTx.account_type === 'bank' && modalTx.transaction_type === 'normal' && !modalTx.is_excluded && modalTx.amount < 0 && (
-                            <div className="label-row">
-                                <dt>Společný náklad</dt>
-                                <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: 0 }}>
-                                    {!shareEditing ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                                            {modalTx.my_share_amount != null ? (
-                                                <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                    {getLineIcon('users', 12)} Moje část {formatCurrency(modalTx.my_share_amount, modalTx.currency)}
-                                                    {modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
-                                                </span>
-                                            ) : (
-                                                <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Celý výdaj je můj</span>
-                                            )}
-                                            <button className="tx-act"
-                                                onClick={() => {
-                                                    setShareEditing(true);
-                                                    setShareInput(String(modalTx.my_share_amount ?? Math.round(Math.abs(modalTx.amount) / 2 * 100) / 100));
-                                                    setShareNoteInput(modalTx.settlement_note || '');
-                                                    setShareCounterpartyInput(modalTx.share_counterparty || '');
-                                                    setShareLearnRule(false);
-                                                }}>
-                                                {modalTx.my_share_amount != null
-                                                    ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{getLineIcon('edit', 13)} Upravit</span>
-                                                    : 'Rozdělit náklad'}
-                                            </button>
+                        {modalTx.account_type === 'bank' && modalTx.transaction_type === 'normal' && !modalTx.is_excluded && modalTx.amount < 0 && (() => {
+                            const total = Math.abs(modalTx.amount);
+                            const parsedShare = parseFloat(shareInput.replace(',', '.'));
+                            const shareValid = parsedShare >= 0 && parsedShare <= total;
+                            const rest = total - parsedShare;
+                            const openShareEditor = () => {
+                                setShareEditing(true);
+                                setShareInput(String(modalTx.my_share_amount ?? Math.round(total / 2 * 100) / 100));
+                                setShareNoteInput(modalTx.settlement_note || '');
+                                setShareCounterpartyInput(modalTx.share_counterparty || '');
+                                setShareLearnRule(false);
+                            };
+                            const saveShare = () => {
+                                if (savingShare || !shareValid) return;
+                                handleSaveShare(modalTx, {
+                                    my_share_amount: parsedShare,
+                                    settlement_flag: false,
+                                    settlement_note: shareNoteInput.trim() || null,
+                                    share_counterparty: shareCounterpartyInput.trim() || null,
+                                }, shareLearnRule);
+                            };
+                            const onShareKeys = (e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') saveShare();
+                                if (e.key === 'Escape') { e.stopPropagation(); setShareEditing(false); }
+                            };
+                            return <>
+                                <div className="label-row" onClick={() => shareEditing ? setShareEditing(false) : openShareEditor()} style={{ cursor: 'pointer' }}>
+                                    <dt>Společný náklad</dt>
+                                    <dd style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                        {modalTx.my_share_amount != null ? (
+                                            <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                {getLineIcon('users', 12)} Moje část {formatCurrency(modalTx.my_share_amount, modalTx.currency)}
+                                                {modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Celý výdaj je můj</span>
+                                        )}
+                                        <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
+                                    </dd>
+                                </div>
+                                {shareEditing && (
+                                    <div className="share-editor" onClick={e => e.stopPropagation()}>
+                                        <div className="share-pcts">
+                                            {[25, 50, 75].map(pct => {
+                                                const val = Math.round(total * pct / 100 * 100) / 100;
+                                                return (
+                                                    <button key={pct} className={`share-pct${Math.abs(parsedShare - val) < 0.005 ? ' active' : ''}`}
+                                                        onClick={() => setShareInput(String(val))}>
+                                                        {pct} %
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="share-amount-row">
+                                            <label htmlFor="share-amount">Moje část</label>
+                                            <input id="share-amount" className="input" type="number" inputMode="decimal" min={0} max={total} step="0.01"
+                                                value={shareInput} onChange={e => setShareInput(e.target.value)} onKeyDown={onShareKeys} />
+                                            <span className="share-amount-total">z {formatCurrency(total, modalTx.currency)}</span>
+                                        </div>
+                                        {shareValid && (
+                                            <div className="share-rest">
+                                                {rest > 0.005
+                                                    ? <>Zbytek <strong>{formatCurrency(rest, modalTx.currency)}</strong> dluží {shareCounterpartyInput.trim() || 'protistrana'}</>
+                                                    : 'Nic k vypořádání — celý výdaj je tvůj'}
+                                            </div>
+                                        )}
+                                        <input className="input" value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
+                                            onKeyDown={onShareKeys}
+                                            placeholder="Kdo dluží zbytek (např. Žena)" list="share-counterparties" />
+                                        <input className="input" value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
+                                            onKeyDown={onShareKeys}
+                                            placeholder="Poznámka (nájem…)" />
+                                        <label className="share-rule-check">
+                                            <input type="checkbox" checked={shareLearnRule} onChange={e => setShareLearnRule(e.target.checked)} />
+                                            Dělit takhle i příště (vytvořit pravidlo)
+                                        </label>
+                                        <div className="share-actions">
                                             {modalTx.my_share_amount != null && (
-                                                <button className="tx-act" disabled={savingShare}
+                                                <button className="btn btn-sm share-remove" disabled={savingShare}
                                                     onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
                                                     Zrušit rozdělení
                                                 </button>
                                             )}
+                                            <button className="btn btn-sm" onClick={() => setShareEditing(false)}>Zrušit</button>
+                                            <button className="btn btn-primary btn-sm"
+                                                disabled={savingShare || !shareValid}
+                                                onClick={saveShare}>
+                                                {savingShare ? '…' : 'Uložit'}
+                                            </button>
                                         </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }} onClick={e => e.stopPropagation()}>
-                                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                                                {[25, 50, 75].map(pct => (
-                                                    <button key={pct} className="chip" style={{ cursor: 'pointer', border: 'none' }}
-                                                        onClick={() => setShareInput(String(Math.round(Math.abs(modalTx.amount) * pct / 100 * 100) / 100))}>
-                                                        {pct} %
-                                                    </button>
-                                                ))}
-                                                <input type="number" inputMode="decimal" min={0} max={Math.abs(modalTx.amount)} step="0.01"
-                                                    value={shareInput} onChange={e => setShareInput(e.target.value)}
-                                                    style={{ width: 110, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none', textAlign: 'right' }}
-                                                />
-                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 400 }}>z {formatCurrency(Math.abs(modalTx.amount), modalTx.currency)}</span>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 6 }}>
-                                                <input value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
-                                                    placeholder="Kdo dluží zbytek (např. Žena)" list="share-counterparties"
-                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
-                                                />
-                                                <datalist id="share-counterparties">
-                                                    <option value="Žena" />
-                                                    <option value="Sestra" />
-                                                </datalist>
-                                                <input value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
-                                                    placeholder="Poznámka (nájem…)"
-                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
-                                                />
-                                            </div>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: 'var(--text-2)', justifyContent: 'flex-end', cursor: 'pointer' }}>
-                                                <input type="checkbox" checked={shareLearnRule} onChange={e => setShareLearnRule(e.target.checked)} />
-                                                Dělit takhle i příště (vytvořit pravidlo)
-                                            </label>
-                                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                                <button className="btn btn-primary btn-sm"
-                                                    disabled={savingShare || !(parseFloat(shareInput.replace(',', '.')) >= 0 && parseFloat(shareInput.replace(',', '.')) <= Math.abs(modalTx.amount))}
-                                                    onClick={() => handleSaveShare(modalTx, {
-                                                        my_share_amount: parseFloat(shareInput.replace(',', '.')),
-                                                        settlement_flag: false,
-                                                        settlement_note: shareNoteInput.trim() || null,
-                                                        share_counterparty: shareCounterpartyInput.trim() || null,
-                                                    }, shareLearnRule)}>
-                                                    {savingShare ? '…' : 'Uložit'}
-                                                </button>
-                                                <button className="btn btn-sm" onClick={() => setShareEditing(false)}>✕</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </dd>
-                            </div>
-                        )}
+                                    </div>
+                                )}
+                            </>;
+                        })()}
                         {modalTx.account_type === 'bank' && modalTx.amount > 0
-                            && ((modalTx.transaction_type === 'normal' && !modalTx.is_excluded) || modalTx.transaction_type === 'family_transfer') && (
-                            <div className="label-row">
-                                <dt>Vypořádání</dt>
-                                <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: 0 }}>
-                                    {modalTx.settlement_flag ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            && ((modalTx.transaction_type === 'normal' && !modalTx.is_excluded) || modalTx.transaction_type === 'family_transfer') && (() => {
+                            const openSettlementEditor = () => {
+                                setShareEditing(true);
+                                setShareNoteInput(modalTx.settlement_note || '');
+                                setShareCounterpartyInput(modalTx.share_counterparty || (modalTx.transaction_type === 'family_transfer' ? 'Žena' : ''));
+                                // Saldo pro nápovědu v editoru — čerstvé při každém otevření
+                                getSettlementSummary().then(setSettlementSummary).catch(() => setSettlementSummary(null));
+                            };
+                            const saveSettlement = () => handleSaveShare(modalTx, {
+                                my_share_amount: null, settlement_flag: true,
+                                settlement_note: shareNoteInput.trim() || null,
+                                share_counterparty: shareCounterpartyInput.trim() || null,
+                            });
+                            const onSettlementKeys = (e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') saveSettlement();
+                                if (e.key === 'Escape') { e.stopPropagation(); setShareEditing(false); }
+                            };
+                            // Saldo protistrany z inputu; když nesedí na žádnou, celkové saldo.
+                            const cpName = shareCounterpartyInput.trim();
+                            const cpRow = settlementSummary?.counterparties.find(c => (c.name || '').toLowerCase() === cpName.toLowerCase());
+                            const saldo = cpRow ? cpRow.balance : settlementSummary?.balance;
+                            // U už označené vratky je tahle platba v saldu započtená — porovnání nedává smysl
+                            const saldoMatches = !modalTx.settlement_flag && saldo != null && Math.abs(modalTx.amount - saldo) < 0.01;
+                            return <>
+                                <div className="label-row" onClick={() => shareEditing ? setShareEditing(false) : openSettlementEditor()} style={{ cursor: 'pointer' }}>
+                                    <dt>Vypořádání</dt>
+                                    <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                            {modalTx.settlement_flag ? (
                                                 <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                                     {getLineIcon('handshake', 12)} Vypořádání{modalTx.share_counterparty ? ` · ${modalTx.share_counterparty}` : ''}
                                                 </span>
-                                                <button className="btn btn-sm" disabled={savingShare}
+                                            ) : (
+                                                <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Označit jako vypořádání</span>
+                                            )}
+                                            <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
+                                        </div>
+                                        {modalTx.settlement_flag && modalTx.settlement_note && (
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 400 }}>{modalTx.settlement_note}</span>
+                                        )}
+                                        {!modalTx.settlement_flag && modalTx.transaction_type === 'family_transfer' && (
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 500 }}>
+                                                Vypadá jako vratka — označ ji a započítá se do salda vypořádání.
+                                            </span>
+                                        )}
+                                    </dd>
+                                </div>
+                                {shareEditing && (
+                                    <div className="share-editor" onClick={e => e.stopPropagation()}>
+                                        {settlementSummary && saldo != null && (
+                                            <div className={`share-saldo${saldoMatches ? ' match' : ''}`}>
+                                                {saldo > 0.005
+                                                    ? <>
+                                                        {cpRow ? cpName : 'Celkem'} ti aktuálně dluží <strong>{formatCurrency(saldo, settlementSummary.currency)}</strong>
+                                                        {saldoMatches && ' — tahle platba to přesně srovná'}
+                                                    </>
+                                                    : 'Žádný nevyrovnaný zůstatek'}
+                                            </div>
+                                        )}
+                                        <input className="input" autoFocus value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
+                                            onKeyDown={onSettlementKeys}
+                                            placeholder="Od koho (např. Žena)" list="share-counterparties" />
+                                        <input className="input" value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
+                                            onKeyDown={onSettlementKeys}
+                                            placeholder="Poznámka (nájem + kreditka…)" />
+                                        <div className="share-actions">
+                                            {modalTx.settlement_flag && (
+                                                <button className="btn btn-sm share-remove" disabled={savingShare}
                                                     onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
-                                                    Zrušit
+                                                    Zrušit vypořádání
                                                 </button>
-                                            </div>
-                                            {modalTx.settlement_note && (
-                                                <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 400 }}>{modalTx.settlement_note}</span>
                                             )}
-                                        </div>
-                                    ) : shareEditing ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }} onClick={e => e.stopPropagation()}>
-                                            <div style={{ display: 'flex', gap: 6 }}>
-                                                <input autoFocus value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
-                                                    placeholder="Od koho (např. Žena)" list="share-counterparties"
-                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
-                                                />
-                                                <datalist id="share-counterparties">
-                                                    <option value="Žena" />
-                                                    <option value="Sestra" />
-                                                </datalist>
-                                                <input value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: true, settlement_note: shareNoteInput.trim() || null, share_counterparty: shareCounterpartyInput.trim() || null });
-                                                        if (e.key === 'Escape') setShareEditing(false);
-                                                    }}
-                                                    placeholder="Poznámka (nájem + kreditka…)"
-                                                    style={{ flex: 1, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
-                                                />
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                                <button className="btn btn-primary btn-sm" disabled={savingShare}
-                                                    onClick={() => handleSaveShare(modalTx, { my_share_amount: null, settlement_flag: true, settlement_note: shareNoteInput.trim() || null, share_counterparty: shareCounterpartyInput.trim() || null })}>
-                                                    {savingShare ? '…' : 'Potvrdit'}
-                                                </button>
-                                                <button className="btn btn-sm" onClick={() => setShareEditing(false)}>✕</button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                                            {modalTx.transaction_type === 'family_transfer' && (
-                                                <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 500 }}>
-                                                    Vypadá jako vratka — označ ji a započítá se do salda vypořádání.
-                                                </span>
-                                            )}
-                                            <button className="tx-act" onClick={() => {
-                                                setShareEditing(true);
-                                                setShareNoteInput('');
-                                                setShareCounterpartyInput(modalTx.transaction_type === 'family_transfer' ? 'Žena' : '');
-                                            }}>
-                                                {getLineIcon('handshake', 14)} Označit jako vypořádání
+                                            <button className="btn btn-sm" onClick={() => setShareEditing(false)}>Zrušit</button>
+                                            <button className="btn btn-primary btn-sm" disabled={savingShare} onClick={saveSettlement}>
+                                                {savingShare ? '…' : 'Potvrdit'}
                                             </button>
                                         </div>
-                                    )}
-                                </dd>
-                            </div>
-                        )}
+                                    </div>
+                                )}
+                            </>;
+                        })()}
 
                         {/* Ruční vyřazení z příjmů/výdajů — na splátkové konstrukce
                             (Air/Twisto: plná platba + okamžitá vratka) apod. */}
