@@ -9,6 +9,7 @@ from database import get_db
 from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
+from services.timefmt import utc_iso
 from routers.contacts import normalize_iban
 import json
 
@@ -253,7 +254,7 @@ async def get_dashboard(
             # consent_expires_at se ztratil při merge fix/fe_bugs — bez něj
             # UI nemá jak varovat před vypršelým souhlasem banky
             "consent_expires_at": acc.consent_expires_at.isoformat() if acc.consent_expires_at else None,
-            "last_synced": acc.last_synced.isoformat() if acc.last_synced else None,
+            "last_synced": utc_iso(acc.last_synced),
             "last_sync_error": acc.last_sync_error,
         })
 

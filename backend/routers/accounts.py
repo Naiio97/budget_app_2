@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from services.gocardless import gocardless_service, select_balance
+from services.timefmt import utc_iso
 from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, UserModel
@@ -264,7 +265,7 @@ async def get_account_detail(
             "currency": account.currency,
             "institution": account.institution,
             "is_visible": account.is_visible,
-            "last_synced": account.last_synced.isoformat() if account.last_synced else None,
+            "last_synced": utc_iso(account.last_synced),
             "consent_expires_at": account.consent_expires_at.isoformat() if account.consent_expires_at else None
         },
         "transactions": [
