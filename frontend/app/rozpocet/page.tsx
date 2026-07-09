@@ -445,7 +445,7 @@ export default function RozpocetPage() {
                                             {isLoan && <span className="bd-loan-tag">ÚVĚR</span>}
                                             {isSubscription && <span className="bd-loan-tag">PŘEDPLATNÉ</span>}
                                         </span>
-                                        <span className="recurring-date">{dueLabel(expense)}</span>
+                                        <span className={`recurring-date${dueLabel(expense) ? '' : ' recurring-date--empty'}`}>{dueLabel(expense)}</span>
                                         <span className="num recurring-amount">{amountLabel}</span>
                                         <span className={`recurring-status ${expense.is_paid ? 'paid' : 'pending'}`}>
                                             {expense.is_paid ? 'Zaplaceno' : 'Čekající'}
