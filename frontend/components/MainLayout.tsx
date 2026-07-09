@@ -49,13 +49,30 @@ interface MainLayoutProps {
     disableScroll?: boolean;
 }
 
-// U standalone PWA barvil meta theme-color pruh kolem výřezu/hodin — což je
-// přesně ten pruh, který nechceme. Se statusBarStyle "black-translucent" má
-// obsah plynout přímo za hodiny, takže theme-color aktivně NEnastavujeme a
-// případný zděděný (i z cachnutého HTML) meta tag odstraníme.
+// V prohlížeči theme-color tónuje Safari toolbar do barvy motivu, takže lišta
+// splývá s appkou. U standalone PWA ho ale NEnastavujeme — tam by iOS obarvil
+// stavovou lištu a vznikl by ten pruh; se statusBarStyle "black-translucent"
+// má obsah plynout za hodiny. Proto rozlišujeme prohlížeč vs. instalovanou PWA.
+const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
+function isStandalonePWA(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(display-mode: standalone)').matches
+        || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
 function applyThemeToDocument(mode: 'dark' | 'light') {
     document.documentElement.setAttribute('data-mode', mode);
-    document.querySelector('meta[name="theme-color"]')?.remove();
+    let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
+    if (isStandalonePWA()) {
+        // Zděděný (i z cachnutého HTML) meta tag odstraníme, ať lišta nezůstane obarvená.
+        meta?.remove();
+        return;
+    }
+    if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        document.head.appendChild(meta);
+    }
+    meta.content = THEME_BAR_COLOR[mode];
 }
 
 export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {
