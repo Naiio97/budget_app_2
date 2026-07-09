@@ -360,6 +360,7 @@ export default function SubscriptionsPage() {
                                 onEdit={() => startEdit(sub)}
                                 onToggleActive={() => updateMutation.mutate({ id: sub.id, data: { is_active: !sub.is_active } })}
                                 onDelete={() => { if (confirm(`Smazat předplatné „${sub.name}"?`)) deleteMutation.mutate(sub.id); }}
+                                onAdoptPrice={() => { if (sub.price_change_to != null) updateMutation.mutate({ id: sub.id, data: { amount: sub.price_change_to } }); }}
                             />
                         ))}
                     </div>
@@ -369,11 +370,12 @@ export default function SubscriptionsPage() {
     );
 }
 
-function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
+function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete, onAdoptPrice }: {
     sub: Subscription;
     onEdit: () => void;
     onToggleActive: () => void;
     onDelete: () => void;
+    onAdoptPrice: () => void;
 }) {
     const isShared = sub.my_amount_override != null || sub.my_percentage !== 100;
     return (
@@ -412,9 +414,14 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete }: {
                 {sub.is_active && sub.renewing_soon && <span className="chip chip-accent">Obnovení do 7 dní</span>}
                 {sub.is_active && sub.is_stale && <span className="chip chip-warn">Dlouho žádná platba — zrušené?</span>}
                 {sub.price_change_from != null && sub.price_change_to != null && (
-                    <span className={`chip ${sub.price_change_to > sub.price_change_from ? 'chip-danger' : 'chip-success'}`}>
+                    <button
+                        className={`chip chip-action ${sub.price_change_to > sub.price_change_from ? 'chip-danger' : 'chip-success'}`}
+                        onClick={onAdoptPrice}
+                        title="Kliknutím převezmeš novou cenu do předplatného — upozornění pak zmizí"
+                    >
                         {sub.price_change_to > sub.price_change_from ? 'Zdraženo' : 'Zlevněno'}: {formatCurrency(sub.price_change_from)} → {formatCurrency(sub.price_change_to)}
-                    </span>
+                        <span className="chip-action-cta">Srovnat</span>
+                    </button>
                 )}
                 {sub.is_active && sub.contribution_received_this_period === true && (
                     <span className="chip chip-success" title={`Poslední příspěvek ${formatDate(sub.last_contribution_date)}${sub.last_contribution_amount != null ? ` · ${formatCurrency(sub.last_contribution_amount, sub.currency)}` : ''}`}>

@@ -280,7 +280,9 @@ def _build_response(
         is_stale = (today - last_date).days > 2 * period_months * 31
 
     # Zdražení/zlevnění: porovnej aktuální cenu s cenou před ní. Badge svítí,
-    # dokud je nová cena „čerstvá" (max 3 platby) — pak zhasne.
+    # dokud je nová cena „čerstvá" (max 3 platby) — pak zhasne. Zhasne taky,
+    # jakmile uživatel srovná uloženou částku s novou cenou (upozornění splnilo
+    # účel — netroubí dál na něco, co je už opravené).
     price_from = price_to = None
     if len(charges) >= 2 and last_amount is not None:
         streak = 1  # kolik posledních plateb má aktuální cenu
@@ -291,7 +293,8 @@ def _build_response(
             else:
                 prev_amount = a
                 break
-        if prev_amount is not None and streak <= 3:
+        already_matched = abs(sub.amount - last_amount) < 1.0
+        if prev_amount is not None and streak <= 3 and not already_matched:
             price_from, price_to = prev_amount, last_amount
 
     # Příspěvky ostatních: podíl "přišel v této periodě", pokud poslední příchozí
