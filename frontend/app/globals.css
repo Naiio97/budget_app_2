@@ -2878,6 +2878,41 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
    right rail + multi-column grids got squeezed into the leftover width (cards
    overflowing with horizontal scrollbars). Real laptops (≥1366px) stay desktop. */
 @media (max-width: 1200px) {
+  /* Sjednocení pruhu kolem výřezu (notch) s appkou:
+     1) horní hrana pozadí přechází do plné barvy (--bg), takže barevně
+        navazuje na systémový pruh / theme-color — modrá záře gradientu
+        začíná až pod stavovou lištou;
+     2) pod stavovou lištou je blur podklad (jako v nativních appkách),
+        takže obsah při scrollu nepodjíždí hodiny/notch napřímo. */
+  :root, [data-mode="dark"] {
+    --bg-scene:
+      linear-gradient(180deg, #000 0, #000 70px, rgba(0, 0, 0, 0) 240px),
+      radial-gradient(1100px 600px at 12% -8%,  rgba(0,122,255,0.15)   0%, transparent 55%),
+      radial-gradient(900px  500px at 95%  110%, rgba(94,92,230,0.11)   0%, transparent 60%),
+      #000000;
+  }
+  [data-mode="light"] {
+    --bg-scene:
+      linear-gradient(180deg, #f2f2f7 0, #f2f2f7 70px, rgba(242, 242, 247, 0) 240px),
+      radial-gradient(1200px 600px at 12% -10%, rgba(120,180,255,0.18) 0%, transparent 60%),
+      radial-gradient(1000px 500px at 88%  110%, rgba(255,180,200,0.12) 0%, transparent 60%),
+      #f2f2f7;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: env(safe-area-inset-top, 0px);
+    z-index: 500;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+  [data-mode="light"] body::before {
+    background: rgba(242, 242, 247, 0.55);
+  }
+
   .appbar { display: none; }
   .layout { padding-top: 0; }
 
