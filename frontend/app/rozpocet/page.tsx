@@ -18,6 +18,7 @@ interface MonthlyExpense {
     is_paid: boolean; is_auto_paid: boolean;
     matched_transaction_id: string | null; recurring_expense_id: number | null;
     is_loan?: boolean; loan_id?: number | null; loan_payment_id?: number | null;
+    is_subscription?: boolean; subscription_id?: number | null;
     due_day?: number | null;
 }
 interface IncomeItem { id: number; name: string; amount: number; order_index: number; is_salary: boolean; }
@@ -431,16 +432,18 @@ export default function RozpocetPage() {
                         {sortedExpenses.map(expense => {
                             const isExpanded = expandedExpenseId === expense.id;
                             const isLoan = !!expense.is_loan;
+                            const isSubscription = !!expense.is_subscription;
                             const amountLabel = expense.my_amount_override !== null || expense.my_percentage < 100
                                 ? formatCurrency(expense.my_amount)
                                 : formatCurrency(expense.amount);
                             return (
-                                <div key={isLoan ? `loan-${expense.loan_payment_id}` : expense.id} className={`bd-card ${isExpanded ? 'expanded' : ''}`}>
+                                <div key={isLoan ? `loan-${expense.loan_payment_id}` : isSubscription ? `sub-${expense.subscription_id}` : expense.id} className={`bd-card ${isExpanded ? 'expanded' : ''}`}>
                                     <button type="button" className="bd-head" onClick={() => setExpandedExpenseId(isExpanded ? null : expense.id)}>
                                         <span className={`recurring-dot ${expense.is_paid ? 'paid' : ''}`} />
                                         <span className={`recurring-name ${expense.is_paid ? 'paid' : ''}`}>
                                             {expense.name}
                                             {isLoan && <span className="bd-loan-tag">ÚVĚR</span>}
+                                            {isSubscription && <span className="bd-loan-tag">PŘEDPLATNÉ</span>}
                                         </span>
                                         <span className="recurring-date">{dueLabel(expense)}</span>
                                         <span className="num recurring-amount">{amountLabel}</span>
@@ -453,7 +456,30 @@ export default function RozpocetPage() {
                                     <div className="bd-expand">
                                         <div className="bd-expand-inner">
                                             <div className="bd-expand-content">
-                                                {isLoan ? (
+                                                {isSubscription ? (
+                                                    <>
+                                                        <div className="bd-field">
+                                                            <span className="bd-label">Název</span>
+                                                            <div className="bd-readonly">{expense.name}</div>
+                                                        </div>
+                                                        <div className="bd-cols bd-cols-2">
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Částka za období</span>
+                                                                <div className="bd-readonly num">{formatCurrency(expense.amount)}</div>
+                                                            </div>
+                                                            <div className="bd-field">
+                                                                <span className="bd-label">Moje část</span>
+                                                                <div className="bd-readonly bd-readonly-accent num">{formatCurrency(expense.my_amount)}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bd-actions">
+                                                            <span className="bd-note"><span className="bd-note-icon">ⓘ</span> {expense.is_paid ? 'Spárováno s platbou — zaplaceno' : 'Označí se samo, jakmile se platba napáruje'} · spravuje se na stránce Předplatné</span>
+                                                            <div className="bd-actions-right">
+                                                                <Link href="/subscriptions" className="bd-link">Otevřít Předplatné ›</Link>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                ) : isLoan ? (
                                                     <>
                                                         <div className="bd-field">
                                                             <span className="bd-label">Název</span>
