@@ -2882,8 +2882,9 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
      1) horní hrana pozadí přechází do plné barvy (--bg), takže barevně
         navazuje na systémový pruh / theme-color — modrá záře gradientu
         začíná až pod stavovou lištou;
-     2) pod stavovou lištou je blur podklad (jako v nativních appkách),
-        takže obsah při scrollu nepodjíždí hodiny/notch napřímo. */
+     2) pod stavovou lištou je podklad v plné barvě pozadí — iOS jinak
+        do pruhu míchá vlastní šedý poloprůhledný materiál a lišta
+        nesplyne s appkou; obsah při scrollu nepodjíždí hodiny napřímo. */
   :root, [data-mode="dark"] {
     --bg-scene:
       linear-gradient(180deg, #000 0, #000 70px, rgba(0, 0, 0, 0) 240px),
@@ -2905,12 +2906,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     height: env(safe-area-inset-top, 0px);
     z-index: 500;
     pointer-events: none;
-    background: rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(16px) saturate(180%);
-    -webkit-backdrop-filter: blur(16px) saturate(180%);
-  }
-  [data-mode="light"] body::before {
-    background: rgba(242, 242, 247, 0.55);
+    background: var(--bg);
   }
 
   .appbar { display: none; }

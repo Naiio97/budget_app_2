@@ -3,7 +3,7 @@ Monthly Budget Router - Měsíční rozpočet
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -13,8 +13,10 @@ from database import get_db
 from models import (
     MonthlyBudgetModel, MonthlyIncomeItemModel, RecurringExpenseModel, MonthlyExpenseModel,
     ManualAccountModel, ManualAccountItemModel, TransactionModel, UserModel,
-    LoanModel, LoanPaymentModel, AccountModel
+    LoanModel, LoanPaymentModel, AccountModel, SubscriptionModel
 )
+from routers.subscriptions import PERIOD_MONTHS, _add_months, _my_amount, _parse_date, _primary_token
+from services.categorization import fold
 
 router = APIRouter(tags=["Budget & Expenses"])
 
@@ -69,6 +71,10 @@ class MonthlyExpenseResponse(BaseModel):
     is_loan: bool = False
     loan_id: Optional[int] = None
     loan_payment_id: Optional[int] = None
+    # Subscription-derived virtual row (live-linked to a subscription; paid
+    # state computed from the matched transaction, read-only in the budget UI).
+    is_subscription: bool = False
+    subscription_id: Optional[int] = None
     # Den v měsíci splatnosti (1-31) — u běžných řádků z recurring_expenses,
     # u úvěrových řádků odvozený z loan_payments.due_date. NULL = neznámý.
     due_day: Optional[int] = None
@@ -247,6 +253,130 @@ async def _loan_expense_rows(db: AsyncSession, user_id: int, year_month: str) ->
     return rows
 
 
+# Virtuální id řádků: úvěry používají -payment.id, předplatná dostávají vlastní
+# pásmo, aby se obě záporné řady nikdy nepotkaly.
+SUBSCRIPTION_ROW_ID_OFFSET = 1_000_000
+
+
+def _month_bounds(year_month: str) -> tuple[str, str]:
+    """(start, end) — end je exkluzivní první den dalšího měsíce."""
+    year, month = map(int, year_month.split("-"))
+    if month == 12:
+        return f"{year_month}-01", f"{year + 1:04d}-01-01"
+    return f"{year_month}-01", f"{year:04d}-{month + 1:02d}-01"
+
+
+async def _subscription_expense_rows(
+    db: AsyncSession, user_id: int, year_month: str, taken_names: set[str],
+) -> List[MonthlyExpenseResponse]:
+    """Virtual expense rows for active subscriptions due in this month.
+
+    Live-linked like loans: paid state = a charge matching merchant_pattern
+    exists in the month, nothing is persisted. Monthly subs are due every
+    month; quarterly/yearly only in months where the renewal falls (derived
+    from the last charge before the month, fallback first_seen_date anchor).
+
+    Dedupe: sub is skipped when an existing expense row's name occurs inside
+    the sub's name or merchant pattern (diacritics-insensitive substring) —
+    a manually tracked "Netflix" row wins over the "NETFLIX.COM Amsterdam NL"
+    subscription, so nothing shows up twice during the transition.
+    """
+    result = await db.execute(
+        select(SubscriptionModel).where(
+            SubscriptionModel.user_id == user_id,
+            SubscriptionModel.is_active.is_(True),
+        ).order_by(SubscriptionModel.name)
+    )
+    subs = list(result.scalars().all())
+    if not subs:
+        return []
+
+    start_date, end_date = _month_bounds(year_month)
+    month_start = _parse_date(start_date)
+    rows: List[MonthlyExpenseResponse] = []
+
+    folded_taken = {fold(n).strip() for n in taken_names}
+    folded_taken.discard("")
+
+    for sub in subs:
+        sub_text = fold(f"{sub.name} {sub.merchant_pattern}")
+        if any(len(t) >= 3 and t in sub_text for t in folded_taken):
+            continue
+
+        period_months = PERIOD_MONTHS.get(sub.period, 1)
+
+        # Poslední platby patternu do konce měsíce — stejné matchování jako
+        # na stránce Předplatná (_primary_token, popis i raw_json).
+        like = f"%{_primary_token(sub.merchant_pattern)}%"
+        charge_result = await db.execute(
+            select(TransactionModel.id, TransactionModel.date)
+            .where(
+                TransactionModel.user_id == user_id,
+                TransactionModel.account_type == "bank",
+                TransactionModel.amount < 0,
+                TransactionModel.is_excluded.is_(False),
+                TransactionModel.date < end_date,
+                or_(
+                    TransactionModel.description.ilike(like),
+                    TransactionModel.raw_json.ilike(like),
+                ),
+            )
+            .order_by(TransactionModel.date.desc())
+            .limit(6)
+        )
+        charges = charge_result.all()
+        in_month = next((c for c in charges if c.date >= start_date), None)
+        last_before = next((c for c in charges if c.date < start_date), None)
+
+        due_day: Optional[int] = None
+        if in_month is not None:
+            # Platba v měsíci proběhla → řádek je splatný a zaplacený.
+            due_day = (_parse_date(in_month.date) or month_start).day
+        elif sub.period == "monthly":
+            # Měsíční předplatné je splatné každý měsíc.
+            anchor = last_before.date if last_before else sub.first_seen_date
+            anchor_date = _parse_date(anchor) if anchor else None
+            due_day = anchor_date.day if anchor_date else None
+        elif last_before is not None:
+            # Kvartální/roční: splatné jen v měsíci, kam padne obnovení
+            # (poslední platba + perioda); po termínu zůstává viset jako
+            # nezaplacené i v dalších měsících.
+            last_d = _parse_date(last_before.date)
+            if last_d is None:
+                continue
+            expected = _add_months(last_d, period_months)
+            if expected.strftime("%Y-%m-%d") >= end_date:
+                continue
+            due_day = expected.day if expected.strftime("%Y-%m") == year_month else None
+        else:
+            # Žádná platba v historii — fáze se odvodí z first_seen_date.
+            first_seen = _parse_date(sub.first_seen_date) if sub.first_seen_date else None
+            if first_seen is None or month_start is None:
+                continue
+            months_diff = (month_start.year - first_seen.year) * 12 + (month_start.month - first_seen.month)
+            if months_diff < 0 or months_diff % period_months != 0:
+                continue
+            due_day = first_seen.day
+
+        my_pct = sub.my_percentage if sub.my_percentage is not None else 100
+        rows.append(MonthlyExpenseResponse(
+            id=-(SUBSCRIPTION_ROW_ID_OFFSET + sub.id),
+            name=sub.name,
+            amount=sub.amount,
+            my_percentage=my_pct,
+            my_amount=_my_amount(sub),
+            my_amount_override=sub.my_amount_override,
+            is_paid=in_month is not None,
+            is_auto_paid=True,  # předplatné se strhává z karty samo
+            matched_transaction_id=in_month.id if in_month is not None else None,
+            recurring_expense_id=None,
+            is_subscription=True,
+            subscription_id=sub.id,
+            due_day=due_day,
+        ))
+    return rows
+
+
 @router.get("/monthly-budget/{year_month}", response_model=MonthlyBudgetResponse)
 async def get_monthly_budget(
     year_month: str,
@@ -307,6 +437,11 @@ async def get_monthly_budget(
 
     # Append live-linked loan installments due this month (read-only rows).
     expense_rows.extend(await _loan_expense_rows(db, current_user.id, year_month))
+
+    # Append live-linked subscriptions due this month (read-only rows);
+    # rows already present by name (manual recurring expense) win.
+    taken_names = {r.name.lower().strip() for r in expense_rows}
+    expense_rows.extend(await _subscription_expense_rows(db, current_user.id, year_month, taken_names))
 
     total_expenses = sum(r.my_amount for r in expense_rows)
 
