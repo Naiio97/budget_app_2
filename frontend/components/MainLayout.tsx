@@ -49,24 +49,15 @@ interface MainLayoutProps {
     disableScroll?: boolean;
 }
 
-// V prohlížeči theme-color tónuje Safari toolbar do barvy motivu, takže lišta
-// splývá s appkou. U standalone PWA ho ale NEnastavujeme — tam by iOS obarvil
-// stavovou lištu a vznikl by ten pruh; se statusBarStyle "black-translucent"
-// má obsah plynout za hodiny. Proto rozlišujeme prohlížeč vs. instalovanou PWA.
+// iOS u appky přidané na plochu stavovou lištu neschová ani nenechá protéct —
+// vždycky tam je neprůhledný proužek. Nejlepší dosažitelné je naladit ho meta
+// theme-color na barvu pozadí motivu, aby s appkou splynul (tmavý v tmavém,
+// světlý ve světlém; iOS podle jasu barvy zvolí i barvu textu hodin). Držíme ho
+// v obou režimech — prohlížeč i PWA. Bez něj iOS spadne na defaultní světlou lištu.
 const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
-function isStandalonePWA(): boolean {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(display-mode: standalone)').matches
-        || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-}
 function applyThemeToDocument(mode: 'dark' | 'light') {
     document.documentElement.setAttribute('data-mode', mode);
     let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
-    if (isStandalonePWA()) {
-        // Zděděný (i z cachnutého HTML) meta tag odstraníme, ať lišta nezůstane obarvená.
-        meta?.remove();
-        return;
-    }
     if (!meta) {
         meta = document.createElement('meta');
         meta.name = 'theme-color';
