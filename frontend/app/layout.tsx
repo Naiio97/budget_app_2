@@ -47,6 +47,14 @@ export const metadata: Metadata = {
     ],
     apple: "/icons/apple-touch-icon.png",
   },
+  // Next 16 generuje z appleWebApp.capable jen nový `mobile-web-app-capable`
+  // (Chrome ten apple-prefixovaný označil za zastaralý), jenže iOS Safari
+  // vyžaduje právě starý `apple-mobile-web-app-capable` — bez něj ignoruje
+  // statusBarStyle "black-translucent" a nakreslí defaultní neprůhlednou lištu.
+  // Doplňujeme ho proto ručně, aby obsah plynul za hodiny.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export default function RootLayout({
