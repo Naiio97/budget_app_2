@@ -2814,6 +2814,9 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   gap: var(--spacing-md);
 }
 .subs-card-inactive { opacity: 0.55; }
+/* Karta v režimu editace se roztáhne přes celou šířku mřížky,
+   aby se formulář (loan-form-grid) měl kam rozložit. */
+.subs-card-editing { grid-column: 1 / -1; }
 
 /* Reserve a fixed 2-line height for the title (long merchant names wrap,
    short ones don't) so everything below — subtitle, amount, meta row —
