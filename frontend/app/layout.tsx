@@ -10,8 +10,10 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  // Záměrně bez themeColor: u standalone PWA by obarvil pruh kolem výřezu.
-  // Se statusBarStyle "black-translucent" má obsah plynout za hodiny.
+  // Výchozí (tmavá) barva stavové lišty už při startu, než se z localStorage
+  // načte motiv a MainLayout ji případně přebarví na světlou. iOS jinak ukáže
+  // defaultní světle šedou lištu. Viz applyThemeToDocument v MainLayout.tsx.
+  themeColor: "#000000",
 };
 
 export const metadata: Metadata = {
