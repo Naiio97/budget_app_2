@@ -49,19 +49,13 @@ interface MainLayoutProps {
     disableScroll?: boolean;
 }
 
-// U nainstalované PWA barví meta theme-color pruh kolem výřezu/hodin (Android
-// status bar, iOS Safari tab bar). Statická hodnota z layout.tsx odpovídá jen
-// tmavému režimu — při přepnutí tématu ji přepisujeme na --bg daného režimu.
-const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
+// U standalone PWA barvil meta theme-color pruh kolem výřezu/hodin — což je
+// přesně ten pruh, který nechceme. Se statusBarStyle "black-translucent" má
+// obsah plynout přímo za hodiny, takže theme-color aktivně NEnastavujeme a
+// případný zděděný (i z cachnutého HTML) meta tag odstraníme.
 function applyThemeToDocument(mode: 'dark' | 'light') {
     document.documentElement.setAttribute('data-mode', mode);
-    let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
-    if (!meta) {
-        meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        document.head.appendChild(meta);
-    }
-    meta.content = THEME_BAR_COLOR[mode];
+    document.querySelector('meta[name="theme-color"]')?.remove();
 }
 
 export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {

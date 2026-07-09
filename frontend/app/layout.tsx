@@ -10,7 +10,8 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#000000",
+  // Záměrně bez themeColor: u standalone PWA by obarvil pruh kolem výřezu.
+  // Se statusBarStyle "black-translucent" má obsah plynout za hodiny.
 };
 
 export const metadata: Metadata = {
