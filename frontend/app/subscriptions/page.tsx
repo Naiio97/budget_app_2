@@ -38,6 +38,93 @@ const emptyForm = {
     my_amount_override: '',
     contribution_pattern: '',
 };
+type SubscriptionFormState = typeof emptyForm;
+
+// Sdílený formulář pro vytvoření (karta nahoře) i inline editaci v kartě
+// konkrétního předplatného.
+function SubscriptionForm({ title, form, setForm, saving, isEdit, hasError, onSubmit, onCancel }: {
+    title: string;
+    form: SubscriptionFormState;
+    setForm: (f: SubscriptionFormState) => void;
+    saving: boolean;
+    isEdit: boolean;
+    hasError: boolean;
+    onSubmit: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <>
+            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{title}</h3>
+            <div className="loan-form-grid">
+                <label className="loan-field">
+                    <span>Název</span>
+                    <input className="input" placeholder="Netflix" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                </label>
+                <label className="loan-field">
+                    <span>Text pro párování plateb</span>
+                    <input className="input" placeholder="netflix" value={form.merchant_pattern} onChange={e => setForm({ ...form, merchant_pattern: e.target.value })} />
+                </label>
+                <label className="loan-field">
+                    <span>Částka (Kč)</span>
+                    <input className="input" type="number" placeholder="269" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+                </label>
+                <label className="loan-field">
+                    <span>Perioda</span>
+                    <select className="input" value={form.period} onChange={e => setForm({ ...form, period: e.target.value as Subscription['period'] })}>
+                        <option value="monthly">Měsíčně</option>
+                        <option value="quarterly">Čtvrtletně</option>
+                        <option value="yearly">Ročně</option>
+                    </select>
+                </label>
+                <label className="loan-field">
+                    <span>Kategorie (nepovinné)</span>
+                    <input className="input" placeholder="Entertainment" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} />
+                </label>
+                <label className="loan-field">
+                    <span>Poznámka (nepovinné)</span>
+                    <input className="input" placeholder="Sdílené s rodinou…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
+                </label>
+                <label className="loan-field">
+                    <span>Kolik z toho platím já (%)</span>
+                    <input
+                        className="input" type="number" min={0} max={100} placeholder="100"
+                        value={form.my_percentage}
+                        disabled={!!form.my_amount_override.trim()}
+                        onChange={e => setForm({ ...form, my_percentage: e.target.value })}
+                    />
+                </label>
+                <label className="loan-field">
+                    <span>Nebo moje částka přímo (Kč, nepovinné)</span>
+                    <input
+                        className="input" type="number" placeholder="např. platím jen půlku"
+                        value={form.my_amount_override}
+                        onChange={e => setForm({ ...form, my_amount_override: e.target.value })}
+                    />
+                </label>
+                <label className="loan-field">
+                    <span>Vzor příchozího příspěvku (nepovinné)</span>
+                    <input
+                        className="input" placeholder="např. jméno / IBAN sestry"
+                        value={form.contribution_pattern}
+                        onChange={e => setForm({ ...form, contribution_pattern: e.target.value })}
+                    />
+                </label>
+            </div>
+            <p className="text-tertiary" style={{ fontSize: 12, marginTop: 8 }}>
+                U sdíleného předplatného (např. s partnerkou nebo rodinou) nastav, kolik z celkové částky reálně platíš ty — buď procentem, nebo přímou částkou (ta má přednost).
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
+                <button className="btn btn-primary" onClick={onSubmit} disabled={saving}>
+                    {saving ? 'Ukládám…' : isEdit ? 'Uložit změny' : 'Vytvořit'}
+                </button>
+                <button className="btn" onClick={onCancel}>Zrušit</button>
+            </div>
+            {hasError && (
+                <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>Nepodařilo se uložit předplatné.</p>
+            )}
+        </>
+    );
+}
 
 export default function SubscriptionsPage() {
     const queryClient = useQueryClient();
@@ -86,7 +173,10 @@ export default function SubscriptionsPage() {
 
     const saving = createMutation.isPending || updateMutation.isPending;
 
+    // Editace se rozbalí přímo v kartě daného předplatného — horní formulář
+    // slouží jen pro nové předplatné.
     const startEdit = (sub: Subscription) => {
+        setShowForm(false);
         setEditingId(sub.id);
         setForm({
             name: sub.name,
@@ -99,8 +189,6 @@ export default function SubscriptionsPage() {
             my_amount_override: sub.my_amount_override != null ? String(sub.my_amount_override) : '',
             contribution_pattern: sub.contribution_pattern ?? '',
         });
-        setShowForm(true);
-        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const submit = () => {
@@ -154,7 +242,7 @@ export default function SubscriptionsPage() {
                         >
                             {detecting ? 'Hledám…' : <>{LineIcons.search} Najít v historii</>}
                         </button>
-                        <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
+                        <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : (setEditingId(null), setForm(emptyForm), setShowForm(true)))}>
                             {showForm ? 'Zrušit' : '+ Přidat ručně'}
                         </button>
                     </div>
@@ -225,77 +313,19 @@ export default function SubscriptionsPage() {
                     </GlassCard>
                 )}
 
-                {/* Add / edit form */}
+                {/* Add form (create only — editace se rozbaluje v kartě předplatného) */}
                 {showForm && (
                     <GlassCard>
-                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{editingId != null ? 'Upravit předplatné' : 'Nové předplatné'}</h3>
-                        <div className="loan-form-grid">
-                            <label className="loan-field">
-                                <span>Název</span>
-                                <input className="input" placeholder="Netflix" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Text pro párování plateb</span>
-                                <input className="input" placeholder="netflix" value={form.merchant_pattern} onChange={e => setForm({ ...form, merchant_pattern: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Částka (Kč)</span>
-                                <input className="input" type="number" placeholder="269" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Perioda</span>
-                                <select className="input" value={form.period} onChange={e => setForm({ ...form, period: e.target.value as Subscription['period'] })}>
-                                    <option value="monthly">Měsíčně</option>
-                                    <option value="quarterly">Čtvrtletně</option>
-                                    <option value="yearly">Ročně</option>
-                                </select>
-                            </label>
-                            <label className="loan-field">
-                                <span>Kategorie (nepovinné)</span>
-                                <input className="input" placeholder="Entertainment" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Poznámka (nepovinné)</span>
-                                <input className="input" placeholder="Sdílené s rodinou…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Kolik z toho platím já (%)</span>
-                                <input
-                                    className="input" type="number" min={0} max={100} placeholder="100"
-                                    value={form.my_percentage}
-                                    disabled={!!form.my_amount_override.trim()}
-                                    onChange={e => setForm({ ...form, my_percentage: e.target.value })}
-                                />
-                            </label>
-                            <label className="loan-field">
-                                <span>Nebo moje částka přímo (Kč, nepovinné)</span>
-                                <input
-                                    className="input" type="number" placeholder="např. platím jen půlku"
-                                    value={form.my_amount_override}
-                                    onChange={e => setForm({ ...form, my_amount_override: e.target.value })}
-                                />
-                            </label>
-                            <label className="loan-field">
-                                <span>Vzor příchozího příspěvku (nepovinné)</span>
-                                <input
-                                    className="input" placeholder="např. jméno / IBAN sestry"
-                                    value={form.contribution_pattern}
-                                    onChange={e => setForm({ ...form, contribution_pattern: e.target.value })}
-                                />
-                            </label>
-                        </div>
-                        <p className="text-tertiary" style={{ fontSize: 12, marginTop: 8 }}>
-                            U sdíleného předplatného (např. s partnerkou nebo rodinou) nastav, kolik z celkové částky reálně platíš ty — buď procentem, nebo přímou částkou (ta má přednost).
-                        </p>
-                        <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
-                            <button className="btn btn-primary" onClick={submit} disabled={saving}>
-                                {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit'}
-                            </button>
-                            <button className="btn" onClick={closeForm}>Zrušit</button>
-                        </div>
-                        {(createMutation.isError || updateMutation.isError) && (
-                            <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>Nepodařilo se uložit předplatné.</p>
-                        )}
+                        <SubscriptionForm
+                            title="Nové předplatné"
+                            form={form}
+                            setForm={setForm}
+                            saving={saving}
+                            isEdit={false}
+                            hasError={createMutation.isError}
+                            onSubmit={submit}
+                            onCancel={closeForm}
+                        />
                     </GlassCard>
                 )}
 
@@ -310,7 +340,20 @@ export default function SubscriptionsPage() {
                     </GlassCard>
                 ) : (
                     <div className="subs-grid">
-                        {subs.map(sub => (
+                        {subs.map(sub => editingId === sub.id ? (
+                            <GlassCard key={sub.id} className="subs-card-editing">
+                                <SubscriptionForm
+                                    title={`Upravit předplatné — ${sub.name}`}
+                                    form={form}
+                                    setForm={setForm}
+                                    saving={saving}
+                                    isEdit
+                                    hasError={updateMutation.isError}
+                                    onSubmit={submit}
+                                    onCancel={closeForm}
+                                />
+                            </GlassCard>
+                        ) : (
                             <SubscriptionCard
                                 key={sub.id}
                                 sub={sub}
