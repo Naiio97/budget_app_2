@@ -24,6 +24,8 @@ const PRECACHE_ASSETS = [
     '/manifest.json',
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png',
+    '/icons/icon-32x32.png',
+    '/icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
