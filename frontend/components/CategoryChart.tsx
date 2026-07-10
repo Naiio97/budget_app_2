@@ -92,6 +92,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
                     <div style={{
                         width: 32, height: 32, borderRadius: 8, flexShrink: 0,
                         background: getColor(name) + '22',
+                        color: getColor(name),
                         display: 'grid', placeItems: 'center', fontSize: 14,
                     }}>
                         {getIcon(name)}
