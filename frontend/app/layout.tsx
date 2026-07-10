@@ -1,5 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+// Variabilní Inter (latin-ext kvůli češtině) — self-hostovaný přes next/font,
+// takže se nic nestahuje z Googlu za běhu. Fallback stack zůstává v globals.css.
+const inter = Inter({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-inter",
+});
 import { AccountsProvider } from "@/contexts/AccountsContext";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import Providers from "./providers";
@@ -63,7 +72,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="cs" data-mode="dark">
+    <html lang="cs" data-mode="dark" className={inter.variable}>
       <body>
         <ServiceWorkerRegister />
         <Providers>
