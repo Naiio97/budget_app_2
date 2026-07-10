@@ -460,7 +460,7 @@ async def get_monthly_budget(
         is_closed=budget.is_closed,
         total_income=total_income,
         total_expenses=total_expenses,
-        remaining=total_income - total_expenses - budget.investment_amount,
+        remaining=total_income - total_expenses - budget.investment_amount - budget.surplus_to_savings,
         expenses=expense_rows
     )
 
@@ -1351,7 +1351,7 @@ async def get_annual_overview(
                 "expenses": month_expenses,
                 "investments": budget.investment_amount,
                 "savings": budget.surplus_to_savings,
-                "remaining": month_income - month_expenses - budget.investment_amount
+                "remaining": month_income - month_expenses - budget.investment_amount - budget.surplus_to_savings
             })
 
             total_income += month_income
