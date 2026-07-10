@@ -321,7 +321,9 @@ export default function RozpocetPage() {
     const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
     const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
     const daysRemaining = isCurrentMonth ? Math.max(daysInMonth - now.getDate(), 0) : 0;
-    const budgetLimit = totalIncome || Math.max(totalExpenses + remaining, totalExpenses);
+    // Limit na útratu = příjmy minus to, co jde stranou na investice/spoření —
+    // odvozeno z `remaining` (ten už obojí odečítá), aby zůstal jeden zdroj pravdy.
+    const budgetLimit = Math.max(totalExpenses + remaining, totalExpenses);
     const budgetSpentPct = budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0;
     const dailyPace = daysRemaining > 0 ? Math.round(Math.max(remaining, 0) / daysRemaining) : Math.max(remaining, 0);
     const monthSubLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} · ${isCurrentMonth ? `zbývá ${daysRemaining} dní do konce měsíce` : 'historický měsíc'}`;
@@ -836,13 +838,15 @@ export default function RozpocetPage() {
         let runNet = 0;
         const cumNet = annualData.months.map(m => { runNet += m.income - m.expenses; return runNet; });
         const cumMax = Math.max(...cumNet, 0); const cumMin = Math.min(...cumNet, 0); const cumRange = cumMax - cumMin || 1;
-        const mwn = activeMonths.map(m => ({ ...m, net: m.income - m.expenses, sr: m.income > 0 ? (m.investments / m.income) * 100 : 0 }));
+        // Spořicí sazba = investice + spořicí účet (stejně jako v měsíčním pohledu) —
+        // dřív počítalo jen investice, takže spoření se do trendu vůbec nepropsalo.
+        const mwn = activeMonths.map(m => ({ ...m, net: m.income - m.expenses, sr: m.income > 0 ? ((m.investments + m.savings) / m.income) * 100 : 0 }));
         const best = mwn.length ? mwn.reduce((a, b) => a.net > b.net ? a : b) : null;
         const worst = mwn.length ? mwn.reduce((a, b) => a.net < b.net ? a : b) : null;
-        const avgSR = annualData.totals.income > 0 ? (annualData.totals.investments / annualData.totals.income) * 100 : 0;
+        const avgSR = annualData.totals.income > 0 ? ((annualData.totals.investments + annualData.totals.savings) / annualData.totals.income) * 100 : 0;
         const sparkW = 280; const sparkH = 44;
-        const maxSR = Math.max(...annualData.months.map(m => m.income > 0 ? (m.investments / m.income) * 100 : 0), 10);
-        const pts = annualData.months.map((m, i) => ({ x: (i / 11) * sparkW, y: sparkH - ((m.income > 0 ? (m.investments / m.income) * 100 : 0) / maxSR) * sparkH, ok: m.income > 0 }));
+        const maxSR = Math.max(...annualData.months.map(m => m.income > 0 ? ((m.investments + m.savings) / m.income) * 100 : 0), 10);
+        const pts = annualData.months.map((m, i) => ({ x: (i / 11) * sparkW, y: sparkH - ((m.income > 0 ? ((m.investments + m.savings) / m.income) * 100 : 0) / maxSR) * sparkH, ok: m.income > 0 }));
         const sparkPath = pts.filter(p => p.ok).map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
         return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>

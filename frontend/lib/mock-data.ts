@@ -447,7 +447,7 @@ export const MOCK_MONTHLY_BUDGET = {
     is_closed: false,
     total_income: 73000,
     total_expenses: 42000,
-    remaining: 21000,
+    remaining: 16000, // 73000 - 42000 - investment_amount(10000) - surplus_to_savings(5000)
     expenses: [
         { id: 1, name: 'Nájem + Služby', amount: 18000, my_percentage: 50, my_amount: 9000, my_amount_override: null, is_paid: true, is_auto_paid: true, matched_transaction_id: 'txn-1', recurring_expense_id: 1, due_day: 15 },
         { id: 2, name: 'Internet', amount: 599, my_percentage: 100, my_amount: 599, my_amount_override: null, is_paid: true, is_auto_paid: true, matched_transaction_id: 'txn-2', recurring_expense_id: 2, due_day: 5 },
@@ -476,7 +476,7 @@ const buildMonthsForYear = (year: number) => {
             month: m,
             year_month: `${year}-${String(m).padStart(2, '0')}`,
             income, expenses, investments, savings,
-            remaining: income - expenses - investments,
+            remaining: income - expenses - investments - savings,
         });
     }
     return months;
