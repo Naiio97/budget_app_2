@@ -10,7 +10,12 @@ import CashflowCard from '@/components/CashflowCard';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { getLineIcon } from '@/lib/line-icons';
-import { apiFetch, getCashflowCurrent, Cashflow } from '@/lib/api';
+import {
+    apiFetch, getCashflowCurrent, Cashflow,
+    getSalaryConfig, saveSalaryConfig, getSalaryEstimate,
+    uploadSalaryTimesheet, acceptSalaryEstimate,
+    SalaryConfig, SalaryEstimate,
+} from '@/lib/api';
 
 interface MonthlyExpense {
     id: number; name: string; amount: number;
@@ -94,6 +99,14 @@ export default function RozpocetPage() {
     const [editingDueDays, setEditingDueDays] = useState<Record<number, string>>({});
     const [expandedExpenseId, setExpandedExpenseId] = useState<number | null>(null);
 
+    // Odhad výplaty
+    const [salaryCfgEdit, setSalaryCfgEdit] = useState<Record<string, string>>({});
+    const [salaryBonus, setSalaryBonus] = useState('');
+    const [salaryFile, setSalaryFile] = useState<File | null>(null);
+    const [salaryUploading, setSalaryUploading] = useState(false);
+    const [salaryError, setSalaryError] = useState<string | null>(null);
+    const [salaryReceiptOpen, setSalaryReceiptOpen] = useState(false);
+
     const autoSyncedMonths = useRef<Set<string>>(new Set());
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
@@ -125,6 +138,19 @@ export default function RozpocetPage() {
     const { data: annualData } = useQuery<AnnualData>({
         queryKey: queryKeys.annualOverview(selectedYear),
         queryFn: () => apiFetch(`/annual-overview/${selectedYear}`).then(r => r.json()),
+    });
+
+    const { data: salaryConfig } = useQuery<SalaryConfig>({
+        queryKey: queryKeys.salaryConfig,
+        queryFn: getSalaryConfig,
+        enabled: viewMode === 'month',
+        staleTime: 5 * 60 * 1000,
+    });
+
+    const { data: salaryEstimate } = useQuery<SalaryEstimate | null>({
+        queryKey: queryKeys.salaryEstimate(yearMonth),
+        queryFn: () => getSalaryEstimate(yearMonth),
+        enabled: viewMode === 'month',
     });
 
     const { data: prevYearData } = useQuery<AnnualData>({
@@ -393,6 +419,7 @@ export default function RozpocetPage() {
                 </div>
                 <div className="card-body budget-plan-body">
                     {renderIncome()}
+                    {renderSalaryEstimate()}
                     {renderSurplus()}
                 </div>
             </div>
@@ -640,6 +667,148 @@ export default function RozpocetPage() {
             })()}
         </div>
     );
+
+    // ── odhad výplaty ────────────────────────────────────────────
+
+    const commitSalaryConfig = async () => {
+        const merged = {
+            base_monthly: parseFloat(salaryCfgEdit['base_monthly'] ?? String(salaryConfig?.base_monthly ?? '')) || null,
+            prumer: parseFloat(salaryCfgEdit['prumer'] ?? String(salaryConfig?.prumer ?? '')) || null,
+            prumer_quarter: (salaryCfgEdit['prumer_quarter'] ?? salaryConfig?.prumer_quarter ?? '').trim() || null,
+        };
+        if (merged.base_monthly === null || merged.prumer === null || !merged.prumer_quarter) return;
+        await saveSalaryConfig(merged);
+        queryClient.invalidateQueries({ queryKey: queryKeys.salaryConfig });
+    };
+
+    const computeSalaryEstimate = async () => {
+        if (!salaryFile) return;
+        setSalaryUploading(true);
+        setSalaryError(null);
+        try {
+            const est = await uploadSalaryTimesheet(yearMonth, salaryFile, parseFloat(salaryBonus) || 0);
+            queryClient.setQueryData(queryKeys.salaryEstimate(yearMonth), est);
+            setSalaryReceiptOpen(true);
+        } catch (e) {
+            setSalaryError(e instanceof Error ? e.message : 'Nahrání timesheetu selhalo');
+        } finally {
+            setSalaryUploading(false);
+        }
+    };
+
+    const acceptEstimateAsIncome = async () => {
+        await acceptSalaryEstimate(yearMonth);
+        await refreshBudget();
+        queryClient.invalidateQueries({ queryKey: queryKeys.salaryEstimate(yearMonth) });
+    };
+
+    const salaryCfgField = (field: 'base_monthly' | 'prumer' | 'prumer_quarter', label: string, numeric: boolean) => (
+        <div className="plan-row" key={field}>
+            <span className="plan-label">{label}</span>
+            <span className="plan-row-spacer" />
+            <input type={numeric ? 'number' : 'text'} className="plan-input plan-amount" placeholder={numeric ? '0' : 'RRRR-Q1'}
+                value={salaryCfgEdit[field] ?? (salaryConfig?.[field] == null ? '' : String(salaryConfig[field]))}
+                onChange={(e) => setSalaryCfgEdit(p => ({ ...p, [field]: e.target.value }))}
+                onBlur={commitSalaryConfig}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            />
+        </div>
+    );
+
+    const renderSalaryEstimate = () => {
+        const b = salaryEstimate?.breakdown;
+        const receiptLines: Array<[string, string, number]> = b ? [
+            ['Základní mzda', `${Math.round(b.zakladni_hodiny)} h × ${b.hodinova_sazba.toFixed(2)}`, b.zakladni_mzda],
+            ['Přesčas všední', '25 %', b.priplatek_prescas_vsedni],
+            ['Přesčas SO/NE', '50 %', b.priplatek_prescas_vikend],
+            ['Příplatek SO/NE', '50 %', b.priplatek_so_ne],
+            ['Práce ve svátek', '100 %', b.priplatek_svatek],
+            ['Noční', '10 %', b.priplatek_noc],
+            ['Pohotovost', `${Math.round(b.pohotovost_placena_h)} h · 10 %`, b.priplatek_pohotovost],
+            ['Dovolená', 'průměr', b.nahrada_dovolena],
+            ['Překážky', 'průměr', b.nahrada_prekazky],
+            ['Pracovní volno', 'základ', b.nahrada_prac_volno],
+            ['Roční bonus', '', b.bonus],
+        ].filter((l): l is [string, string, number] => Math.abs(l[2] as number) > 0.5) : [];
+
+        return (
+            <section className="budget-plan-section">
+                <div className="budget-plan-section-head">
+                    <h3>{getLineIcon('income', 16)} Odhad výplaty</h3>
+                    {salaryEstimate?.is_accepted && <span className="muted small">Přijato ✓</span>}
+                </div>
+                <div className="plan-rows">
+                    {salaryCfgField('base_monthly', 'Měsíční mzda', true)}
+                    {salaryCfgField('prumer', 'Průměr náhrady (Kč/h)', true)}
+                    {salaryCfgField('prumer_quarter', 'Kvartál průměru', false)}
+                </div>
+                <div className="plan-rows">
+                    <div className="plan-row">
+                        <input type="file" accept=".xlsx" className="plan-input" style={{ fontSize: 12 }}
+                            onChange={(e) => setSalaryFile(e.target.files?.[0] ?? null)} />
+                        <input type="number" className="plan-input plan-amount" placeholder="Bonus"
+                            value={salaryBonus} onChange={(e) => setSalaryBonus(e.target.value)} />
+                    </div>
+                    <button className="btn btn-primary btn-sm" disabled={!salaryFile || salaryUploading} onClick={computeSalaryEstimate}>
+                        {salaryUploading ? 'Počítám…' : 'Spočítat'}
+                    </button>
+                    {salaryError && <div style={{ color: 'var(--neg)', fontSize: 12 }}>{salaryError}</div>}
+                </div>
+                {salaryEstimate && b && (
+                    <div className="plan-rows" style={{ gap: 12 }}>
+                        {salaryEstimate.prumer_stale && (
+                            <div style={{ color: 'var(--warn)', fontSize: 12 }}>
+                                Průměr náhrady je z jiného kvartálu ({salaryConfig?.prumer_quarter}) — po první pásce kvartálu ho aktualizuj.
+                            </div>
+                        )}
+                        <div style={{ padding: '12px 14px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                            <button type="button" onClick={() => setSalaryReceiptOpen(o => !o)}
+                                style={{ all: 'unset', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: 13 }}>
+                                <span style={{ color: 'var(--text-2)' }}>Na účet ({salaryEstimate.fond_days} prac. dní)</span>
+                                <span style={{ fontWeight: 600 }}>{formatCurrency(salaryEstimate.net_to_account)} {salaryReceiptOpen ? '▾' : '▸'}</span>
+                            </button>
+                            {salaryReceiptOpen && (
+                                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                                    {receiptLines.map(([name, meta, val]) => (
+                                        <div key={name} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span style={{ color: 'var(--text-2)' }}>{name}{meta ? <span style={{ color: 'var(--text-3)', marginLeft: 6, fontSize: 11 }}>{meta}</span> : null}</span>
+                                            <span className="num">{formatCurrency(val)}</span>
+                                        </div>
+                                    ))}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '0.5px solid var(--border)', paddingTop: 6, marginTop: 4, fontWeight: 600 }}>
+                                        <span>Hrubá mzda</span><span className="num">{formatCurrency(b.hruba_mzda)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--neg)' }}>
+                                        <span>Sociální 7,1 %</span><span className="num">−{formatCurrency(b.socialni)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--neg)' }}>
+                                        <span>Zdravotní 4,5 %</span><span className="num">−{formatCurrency(b.zdravotni)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--neg)' }}>
+                                        <span>Záloha daně 15 % − sleva</span><span className="num">−{formatCurrency(b.dan)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, borderTop: '0.5px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+                                        <span>Čistá mzda</span><span className="num">{formatCurrency(b.cista_mzda)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--neg)' }}>
+                                        <span>Stravenky {b.hours?.worked_days ?? ''} × 105,75</span><span className="num">−{formatCurrency(b.stravenky)}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--pos)', borderTop: '0.5px solid var(--border-strong)', paddingTop: 6, marginTop: 4 }}>
+                                        <span>Na účet</span><span className="num">{formatCurrency(salaryEstimate.net_to_account)}</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        {!salaryEstimate.is_accepted && (
+                            <button className="btn btn-primary btn-sm" onClick={acceptEstimateAsIncome}>
+                                Přijmout jako příjem
+                            </button>
+                        )}
+                    </div>
+                )}
+            </section>
+        );
+    };
 
     const renderIncome = () => (
         <section className="budget-plan-section">

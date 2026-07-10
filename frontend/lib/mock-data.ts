@@ -7,7 +7,8 @@ import {
     ManualInvestmentAccount,
     Loan, LoanPayment, LoansSummary,
     Subscription, SubscriptionsSummary, DetectedSubscription,
-    SpendingWrapped
+    SpendingWrapped,
+    SalaryConfig, SalaryEstimate
 } from './api';
 
 const currentYearMonth = () => new Date().toISOString().slice(0, 7);
@@ -242,6 +243,57 @@ export const MOCK_LOANS: Loan[] = [
         current_payment_id: null, current_due_date: null, current_paid: false,
     },
 ];
+
+// Vymyšlená demo čísla (repo je veřejné — žádná reálná mzda)
+export const MOCK_SALARY_CONFIG: SalaryConfig = {
+    base_monthly: 45000,
+    prumer: 250,
+    prumer_quarter: '2026-Q3',
+};
+
+export const MOCK_SALARY_ESTIMATE: SalaryEstimate = {
+    year_month: currentYearMonth(),
+    source_filename: 'timesheet_demo.xlsx',
+    fond_days: 22,
+    salary_used: 45000,
+    prumer_used: 250,
+    bonus: 0,
+    gross_pay: 47177,
+    net_pay: 37195,
+    net_to_account: 34974,
+    breakdown: {
+        fond_hodin: 176,
+        hodinova_sazba: 255.68,
+        zakladni_hodiny: 172,
+        zakladni_mzda: 43977,
+        priplatek_prescas_vsedni: 250,
+        priplatek_prescas_vikend: 0,
+        priplatek_so_ne: 0,
+        priplatek_svatek: 0,
+        priplatek_noc: 0,
+        pohotovost_placena_h: 38,
+        priplatek_pohotovost: 950,
+        nahrada_dovolena: 2000,
+        nahrada_prekazky: 0,
+        nahrada_prac_volno: 0,
+        bonus: 0,
+        hruba_mzda: 47177,
+        zaklad_dane: 47200,
+        socialni: 3350,
+        zdravotni: 2123,
+        dan: 4510,
+        cista_mzda: 37195,
+        stravenky: 2221,
+        na_ucet: 34974,
+        hours: {
+            dov_h: 8, prek_h: 0, volno_h: 0, pres_wd: 4, pres_we: 0,
+            svatek_h: 0, noc_h: 0, pohot_h: 40, pohot_overlap_h: 2,
+            worked_days: 21, fond_days: 22, total_hours: 220,
+        },
+    },
+    is_accepted: false,
+    prumer_stale: false,
+};
 
 export const MOCK_LOANS_SUMMARY: LoansSummary = {
     active_loans: 2,
@@ -752,6 +804,9 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/sync/status')) return MOCK_SYNC_STATUS;
     if (path.startsWith('/sync/history')) return MOCK_SYNC_HISTORY;
     if (path.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 };
+    if (path.startsWith('/settings/salary-config')) return MOCK_SALARY_CONFIG;
+    if (path === '/salary-estimate' || path === '/salary-estimate/') return [MOCK_SALARY_ESTIMATE];
+    if (path.startsWith('/salary-estimate/')) return MOCK_SALARY_ESTIMATE;
     if (path.startsWith('/settings/api-keys')) return MOCK_API_KEYS;
     if (path.startsWith('/settings/category-rules')) return MOCK_CATEGORY_RULES;
     if (path.startsWith('/settings/family-accounts')) return MOCK_FAMILY_ACCOUNTS;

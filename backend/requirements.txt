@@ -17,3 +17,6 @@ email-validator>=2.0.0
 pywebpush
 # Strukturované JSON logy (LOG_FORMAT=json) — pro Log Analytics / budoucí ELK
 python-json-logger>=3.0.0
+# Odhad výplaty: čtení nahraného .xlsx timesheetu + multipart upload (UploadFile/Form)
+openpyxl
+python-multipart

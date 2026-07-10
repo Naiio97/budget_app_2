@@ -347,6 +347,50 @@ async def delete_family_account(
     return {"status": "deleted"}
 
 
+# ============== Salary Config (odhad výplaty) ==============
+
+class SalaryConfigRequest(BaseModel):
+    base_monthly: float
+    prumer: float
+    prumer_quarter: str  # "2026-Q3" — pro detekci zastaralého průměru
+
+
+class SalaryConfigResponse(BaseModel):
+    base_monthly: Optional[float] = None
+    prumer: Optional[float] = None
+    prumer_quarter: Optional[str] = None
+
+
+@router.get("/salary-config", response_model=SalaryConfigResponse)
+async def get_salary_config(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Konfigurace pro odhad výplaty (základní mzda + kvartální průměr náhrady)"""
+    base = await get_setting(db, current_user.id, "salary_base_monthly")
+    prumer = await get_setting(db, current_user.id, "salary_prumer")
+    quarter = await get_setting(db, current_user.id, "salary_prumer_quarter")
+    return SalaryConfigResponse(
+        base_monthly=float(base) if base else None,
+        prumer=float(prumer) if prumer else None,
+        prumer_quarter=quarter,
+    )
+
+
+@router.post("/salary-config")
+async def save_salary_config(
+    request: SalaryConfigRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Uložit konfiguraci pro odhad výplaty"""
+    await set_setting(db, current_user.id, "salary_base_monthly", str(request.base_monthly))
+    await set_setting(db, current_user.id, "salary_prumer", str(request.prumer))
+    await set_setting(db, current_user.id, "salary_prumer_quarter", request.prumer_quarter.strip())
+    await db.commit()
+    return {"status": "saved"}
+
+
 # ============== My Account Patterns (Internal Transfers) ==============
 
 class MyAccountPatternRequest(BaseModel):

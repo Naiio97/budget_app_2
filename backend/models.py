@@ -517,3 +517,33 @@ class ShareRuleModel(Base):
     match_count = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class SalaryEstimateModel(Base):
+    """Odhad výplaty spočtený z nahraného timesheetu (services/salary_calculator).
+
+    breakdown_json drží celý rozpad (TimesheetHours + SalaryBreakdown) jako JSON
+    blob — plochá jednorázová struktura k zobrazení, ne řádky k dotazování
+    (stejný přístup jako SyncStatusModel.details_json / TransactionModel.raw_json).
+    """
+    __tablename__ = "salary_estimates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    year_month = Column(String, nullable=False)  # "2026-07"
+    source_filename = Column(String, nullable=True)
+    fond_days = Column(Integer, nullable=False)
+    salary_used = Column(Float, nullable=False)
+    prumer_used = Column(Float, nullable=False)
+    bonus = Column(Float, nullable=False, default=0.0)
+    gross_pay = Column(Float, nullable=False)
+    net_pay = Column(Float, nullable=False)
+    net_to_account = Column(Float, nullable=False)
+    breakdown_json = Column(Text, nullable=False)
+    is_accepted = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "year_month", name="uq_salary_estimates_user_year_month"),
+    )
+
