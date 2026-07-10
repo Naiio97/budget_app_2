@@ -25,6 +25,7 @@ export const queryKeys = {
   familyAccounts: ['family-accounts'] as const,
   apiKeys: ['api-keys'] as const,
   syncStatus: ['sync-status'] as const,
+  syncHistory: ['sync-history'] as const,
   pies: ['pies'] as const,
   manualInvestments: ['manual-investments'] as const,
   manualInvestment: (id: number) => ['manual-investment', id] as const,

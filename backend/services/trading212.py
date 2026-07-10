@@ -7,6 +7,10 @@ settings = get_settings()
 # Use live or demo based on API key
 BASE_URL = "https://live.trading212.com/api/v0"
 
+# Delší timeout než httpx default (5 s) — stejný důvod jako u GoCardless,
+# pomalá odpověď shazovala sync prázdným ReadTimeoutem.
+_HTTP_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+
 
 async def get_trading212_api_key():
     """Get Trading 212 API key from database or fallback to .env"""
@@ -29,7 +33,7 @@ class Trading212Service:
         if not api_key:
             raise Exception("Trading 212 API key not configured")
         
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
             response = await client.request(
                 method,
                 f"{BASE_URL}{path}",

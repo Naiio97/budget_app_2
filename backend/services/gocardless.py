@@ -13,6 +13,57 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://bankaccountdata.gocardless.com/api/v2"
 
+# GoCardless přeposílá dotazy do banky — /transactions/ běžně trvá přes 5 s
+# (httpx default), což shazovalo sync prázdnými ReadTimeouty. Neretryujeme:
+# opakování by mohlo spálit další pokus z denního limitu banky (4/den).
+_HTTP_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
+
+
+class GoCardlessAPIError(Exception):
+    """Chyba GoCardless API včetně detailu z JSON těla odpovědi.
+
+    Samotné raise_for_status() tělo zahodí, jenže právě v něm GoCardless
+    říká PROČ: kdy se resetuje rate limit, že vypršel souhlas (EUA) apod.
+    Bez toho jsou produkční logy k ničemu."""
+
+    def __init__(self, status_code: int, summary: str = "", detail: str = "", path: str = ""):
+        self.status_code = status_code
+        self.summary = summary
+        self.detail = detail
+        self.path = path
+        msg = f"GoCardless HTTP {status_code} ({path})"
+        if summary:
+            msg += f": {summary}"
+        if detail and detail != summary:
+            msg += f" — {detail}"
+        super().__init__(msg)
+
+
+def _raise_for_status_with_body(response: httpx.Response, path: str) -> None:
+    """Jako raise_for_status(), ale s summary/detail z JSON těla v chybě."""
+    if response.status_code < 400:
+        return
+    summary = detail = ""
+    try:
+        body = response.json()
+        if isinstance(body, dict):
+            summary = str(body.get("summary") or "")
+            detail = str(body.get("detail") or "")
+    except Exception:
+        detail = (response.text or "")[:300]
+    error = GoCardlessAPIError(response.status_code, summary, detail, path)
+    logger.error(
+        "GC API error: %s", error,
+        extra={
+            "event": "gocardless.error",
+            "status_code": response.status_code,
+            "gc_path": path,
+            "gc_summary": summary,
+            "gc_detail": detail,
+        },
+    )
+    raise error
+
 # Keys used to persist token data in the settings table
 _KEY_ACCESS_TOKEN = "gocardless_access_token"
 _KEY_ACCESS_EXPIRES = "gocardless_access_expires"   # ISO-8601 UTC datetime string
@@ -140,22 +191,22 @@ class GoCardlessService:
         if not secret_id or not secret_key:
             raise Exception("GoCardless credentials not configured")
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
             response = await client.post(
                 f"{BASE_URL}/token/new/",
                 json={"secret_id": secret_id, "secret_key": secret_key},
             )
-            response.raise_for_status()
+            _raise_for_status_with_body(response, "/token/new/")
             self._store_token_response(response.json())
 
     async def _refresh_access_token(self):
         """Call /token/refresh/ using the stored refresh token."""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
             response = await client.post(
                 f"{BASE_URL}/token/refresh/",
                 json={"refresh": self.refresh_token},
             )
-            response.raise_for_status()
+            _raise_for_status_with_body(response, "/token/refresh/")
             data = response.json()
             # Refresh endpoint only returns a new access token (no new refresh)
             self.access_token = data["access"]
@@ -196,14 +247,14 @@ class GoCardlessService:
     async def _request(self, method: str, path: str, **kwargs) -> dict:
         """Central HTTP method for all GoCardless API calls."""
         token = await self.get_access_token()
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
             response = await client.request(
                 method,
                 f"{BASE_URL}{path}",
                 headers={"Authorization": f"Bearer {token}"},
                 **kwargs,
             )
-            response.raise_for_status()
+            _raise_for_status_with_body(response, path)
             return response.json()
 
     def clear_token(self):

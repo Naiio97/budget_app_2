@@ -1,17 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime, timedelta
 import asyncio
+import httpx
 import json
 import logging
+import re
+import time
 
 from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, SyncStatusModel, CategoryRuleModel, SettingsModel, PortfolioSnapshotModel, UserModel, ShareRuleModel
 from services.share_rules import match_share_rule, compute_my_share
-from services.gocardless import gocardless_service, select_balance
+from services.gocardless import gocardless_service, select_balance, GoCardlessAPIError
 from services.push import send_push_to_user
 from services.timefmt import utc_iso
 from services.trading212 import trading212_service
@@ -26,6 +29,50 @@ from services.categorization import (
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+def _humanize_retry_seconds(text: str) -> str | None:
+    """„Please try again in 17388 seconds" → „za ~4 h 50 min (cca v 18:30)"."""
+    m = re.search(r"(\d+)\s*seconds", text)
+    if not m:
+        return None
+    secs = int(m.group(1))
+    if secs < 90:
+        wait = f"{secs} s"
+    else:
+        total_min = (secs + 59) // 60
+        h, mins = divmod(total_min, 60)
+        wait = f"{h} h {mins} min" if h and mins else (f"{h} h" if h else f"{mins} min")
+    try:
+        from zoneinfo import ZoneInfo
+        at = (datetime.now(ZoneInfo("Europe/Prague")) + timedelta(seconds=secs)).strftime("%H:%M")
+        return f"za ~{wait} (cca v {at})"
+    except Exception:
+        # bez tzdata (minimální image) aspoň délka čekání
+        return f"za ~{wait}"
+
+
+def _friendly_sync_error(e: Exception) -> str:
+    """Přeloží technickou chybu na hlášku, ze které jde poznat CO udělat.
+    Technický detail zůstává za pomlčkou pro diagnostiku."""
+    if isinstance(e, GoCardlessAPIError):
+        extra = e.detail or e.summary
+        if e.status_code == 429:
+            human = _humanize_retry_seconds(extra or "")
+            if human:
+                return f"Denní limit synchronizací banky vyčerpán (4/den) — další sync {human}."
+            return f"Denní limit synchronizací banky vyčerpán (4/den). — {extra}"
+        if e.status_code in (401, 403):
+            return f"Banka odmítla přístup — nejspíš vypršel souhlas, obnov připojení v Nastavení. — {extra}"
+        if e.status_code >= 500:
+            return f"Výpadek GoCardless/banky (HTTP {e.status_code}), zkus to později. — {extra}"
+    if isinstance(e, httpx.TimeoutException):
+        return "Banka/GoCardless neodpověděla včas (timeout) — zkus sync za chvíli."
+    if isinstance(e, httpx.TransportError):
+        return f"Síťová chyba při volání banky ({type(e).__name__}) — zkus sync za chvíli."
+    # httpx výjimky mívají prázdný str() — bez fallbacku by v historii
+    # zůstala prázdná hláška (přesně to se dělo s timeouty).
+    return str(e).strip() or f"{type(e).__name__} (bez podrobností)"
 
 
 async def get_family_account_pattern(db: AsyncSession, user_id: int) -> str | None:
@@ -490,6 +537,10 @@ async def sync_all_data(
     accounts_synced = 0
     transactions_synced = 0
     failed_accounts: list[str] = []
+    # Per-účtový průběh běhu — ukládá se do sync_status.details_json, aby i na
+    # produkci šlo zpětně říct, co přesně se při kterém syncu stalo.
+    account_results: list[dict] = []
+    run_t0 = time.monotonic()
 
     # Preload all category rules ONCE so categorization during the sync respects user choices
     # (e.g. "billa → Supermarkets") without N+1 DB roundtrips.
@@ -545,6 +596,7 @@ async def sync_all_data(
                     logger.warning(f"Failed to refresh consent expirations: {e}")
 
             for account in bank_accounts:
+                acc_t0 = time.monotonic()
                 try:
                     balances, clean_transactions = await asyncio.gather(
                         gocardless_service.get_account_balances(account.id),
@@ -630,22 +682,37 @@ async def sync_all_data(
                     
                     accounts_synced += 1
                     account.last_sync_error = None
+                    account_results.append({
+                        "account_id": account.id,
+                        "name": account.name,
+                        "status": "ok",
+                        "transactions": len(rows_to_upsert),
+                        "duration_ms": int((time.monotonic() - acc_t0) * 1000),
+                    })
 
                 except Exception as inner_e:
-                    error_msg = f"Failed to sync account {account.id}: {str(inner_e)}"
-                    logger.error(error_msg)
-                    account.last_sync_error = str(inner_e)[:500]
+                    friendly = _friendly_sync_error(inner_e)
+                    logger.error("Sync účtu %s (%s) selhal: %s", account.name, account.id, inner_e)
+                    account.last_sync_error = friendly[:500]
                     failed_accounts.append(account.name)
-                    sync_status.error_message = (sync_status.error_message or "") + error_msg + "; "
+                    account_results.append({
+                        "account_id": account.id,
+                        "name": account.name,
+                        "status": "error",
+                        "error": friendly[:500],
+                        "duration_ms": int((time.monotonic() - acc_t0) * 1000),
+                    })
+                    sync_status.error_message = (sync_status.error_message or "") + f"{account.name}: {friendly}; "
                     continue
                     
         except Exception as e:
             logger.warning(f"GoCardless sync skipped: {e}")
-            sync_status.error_message = (sync_status.error_message or "") + f"GoCardless Error: {str(e)}; "
-            if "429" in str(e):
-                 raise e
+            sync_status.error_message = (sync_status.error_message or "") + f"GoCardless: {_friendly_sync_error(e)}; "
+            if (isinstance(e, GoCardlessAPIError) and e.status_code == 429) or "429" in str(e):
+                raise e
         
         # Sync Trading 212
+        t212_t0 = time.monotonic()
         try:
             cash = await trading212_service.get_account_info()
             portfolio = await trading212_service.get_portfolio()
@@ -882,17 +949,51 @@ async def sync_all_data(
                 )
                 await db.execute(stmt)
                 transactions_synced += len(div_rows)
-                
+
+            account_results.append({
+                "account_id": t212_account_id,
+                "name": "Trading 212",
+                "status": "ok",
+                "transactions": len(order_rows) + len(div_rows),
+                "duration_ms": int((time.monotonic() - t212_t0) * 1000),
+            })
+
         except Exception as e:
+            friendly = _friendly_sync_error(e)
             logger.error(f"Trading 212 sync error: {e}")
-            sync_status.error_message = (sync_status.error_message or "") + f"Trading 212 Error: {str(e)}; "
+            account_results.append({
+                "account_id": "trading212",
+                "name": "Trading 212",
+                "status": "error",
+                "error": friendly[:500],
+                "duration_ms": int((time.monotonic() - t212_t0) * 1000),
+            })
+            sync_status.error_message = (sync_status.error_message or "") + f"Trading 212: {friendly}; "
         
         sync_status.status = "completed"
         sync_status.completed_at = datetime.utcnow()
         sync_status.accounts_synced = accounts_synced
         sync_status.transactions_synced = transactions_synced
-        
+        sync_status.details_json = json.dumps({"accounts": account_results})
+
         await db.commit()
+
+        # Jednořádkový souhrn běhu — dohledatelný textem ("SYNC done") i podle
+        # JSON polí (event=sync.done) v Log Analytics / Kibaně.
+        logger.info(
+            "SYNC done user=%s status=completed accounts_ok=%d failed=%s tx=%d duration=%.1fs",
+            current_user.id, accounts_synced, failed_accounts or "[]",
+            transactions_synced, time.monotonic() - run_t0,
+            extra={
+                "event": "sync.done",
+                "user_id": current_user.id,
+                "sync_result": "completed",
+                "accounts_ok": accounts_synced,
+                "failed_accounts": failed_accounts,
+                "transactions": transactions_synced,
+                "duration_s": round(time.monotonic() - run_t0, 1),
+            },
+        )
 
         transfer_result = await detect_and_mark_transfers(db, current_user.id)
 
@@ -915,6 +1016,18 @@ async def sync_all_data(
 
     except Exception as e:
         await db.rollback()
+        friendly = _friendly_sync_error(e)
+        logger.error(
+            "SYNC done user=%s status=failed error=%s duration=%.1fs",
+            current_user.id, e, time.monotonic() - run_t0,
+            extra={
+                "event": "sync.done",
+                "user_id": current_user.id,
+                "sync_result": "failed",
+                "error": str(e),
+                "duration_s": round(time.monotonic() - run_t0, 1),
+            },
+        )
 
         result = await db.execute(
             select(SyncStatusModel)
@@ -925,11 +1038,12 @@ async def sync_all_data(
 
         if sync_status:
             sync_status.status = "failed"
-            sync_status.error_message = str(e)
+            sync_status.error_message = friendly
             sync_status.completed_at = datetime.utcnow()
+            sync_status.details_json = json.dumps({"accounts": account_results})
             await db.commit()
 
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=friendly)
 
 
 @router.get("/status")
@@ -975,6 +1089,45 @@ async def get_sync_status(
         "error": sync_status.error_message,
         "syncs_today": syncs_today,
     }
+
+
+@router.get("/history")
+async def get_sync_history(
+    limit: int = Query(10, ge=1, le=50),
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Posledních N běhů synchronizace včetně per-účtových výsledků — hlavní
+    okno do toho, co se dělo na produkci, bez lezení do Azure logů."""
+    result = await db.execute(
+        select(SyncStatusModel)
+        .where(SyncStatusModel.user_id == current_user.id)
+        .order_by(SyncStatusModel.id.desc())
+        .limit(limit)
+    )
+    runs = []
+    for run in result.scalars():
+        accounts = []
+        if run.details_json:
+            try:
+                accounts = (json.loads(run.details_json) or {}).get("accounts", [])
+            except Exception:
+                accounts = []
+        duration_s = None
+        if run.completed_at and run.started_at:
+            duration_s = round((run.completed_at - run.started_at).total_seconds(), 1)
+        runs.append({
+            "id": run.id,
+            "started_at": utc_iso(run.started_at),
+            "completed_at": utc_iso(run.completed_at),
+            "duration_s": duration_s,
+            "status": run.status,
+            "accounts_synced": run.accounts_synced,
+            "transactions_synced": run.transactions_synced,
+            "error": run.error_message,
+            "accounts": accounts,
+        })
+    return {"runs": runs}
 
 
 @router.post("/detect-transfers")

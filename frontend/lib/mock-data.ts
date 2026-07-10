@@ -385,6 +385,41 @@ export const MOCK_SYNC_STATUS: SyncStatus = {
     syncs_today: 1,
 };
 
+export const MOCK_SYNC_HISTORY = {
+    runs: [
+        {
+            id: 3,
+            started_at: new Date(Date.now() - 30 * 60000).toISOString(),
+            completed_at: new Date(Date.now() - 30 * 60000 + 8200).toISOString(),
+            duration_s: 8.2,
+            status: 'completed',
+            accounts_synced: 3,
+            transactions_synced: 156,
+            error: null,
+            accounts: [
+                { account_id: 'acc-1', name: 'Běžný účet', status: 'ok', transactions: 120, duration_ms: 3100 },
+                { account_id: 'acc-2', name: 'Spořicí účet', status: 'ok', transactions: 12, duration_ms: 1900 },
+                { account_id: 'trading212', name: 'Trading 212', status: 'ok', transactions: 24, duration_ms: 3200 },
+            ],
+        },
+        {
+            id: 2,
+            started_at: new Date(Date.now() - 26 * 3600000).toISOString(),
+            completed_at: new Date(Date.now() - 26 * 3600000 + 5400).toISOString(),
+            duration_s: 5.4,
+            status: 'completed',
+            accounts_synced: 2,
+            transactions_synced: 96,
+            error: 'Spořicí účet: Banka odmítla přístup — nejspíš vypršel souhlas, obnov připojení v Nastavení. — EUA has expired; ',
+            accounts: [
+                { account_id: 'acc-1', name: 'Běžný účet', status: 'ok', transactions: 84, duration_ms: 2800 },
+                { account_id: 'acc-2', name: 'Spořicí účet', status: 'error', error: 'Banka odmítla přístup — nejspíš vypršel souhlas, obnov připojení v Nastavení. — EUA has expired', duration_ms: 700 },
+                { account_id: 'trading212', name: 'Trading 212', status: 'ok', transactions: 12, duration_ms: 1900 },
+            ],
+        },
+    ],
+};
+
 // === Demo fixtures added for full page coverage ===
 
 export const MOCK_CATEGORIES = [
@@ -715,6 +750,7 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/budgets/goals')) return MOCK_GOALS;
     if (path.startsWith('/budgets/')) return MOCK_BUDGETS;
     if (path.startsWith('/sync/status')) return MOCK_SYNC_STATUS;
+    if (path.startsWith('/sync/history')) return MOCK_SYNC_HISTORY;
     if (path.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 };
     if (path.startsWith('/settings/api-keys')) return MOCK_API_KEYS;
     if (path.startsWith('/settings/category-rules')) return MOCK_CATEGORY_RULES;
