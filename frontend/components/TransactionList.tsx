@@ -28,6 +28,12 @@ const FALLBACK_ICONS: Record<string, string> = {
     'Family Transfer': Icons.category.familyTransfer,
 };
 
+// Barvy pro kategorie mimo DB — stejná šedá jako v CategoryChart
+const FALLBACK_COLORS: Record<string, string> = {
+    'Internal Transfer': '#6b7280',
+    'Family Transfer': '#6b7280',
+};
+
 export default function TransactionList({ transactions: initialTransactions, showAccount = false, onCategoryChange }: TransactionListProps) {
     const [transactions, setTransactions] = useState(initialTransactions);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -91,6 +97,15 @@ export default function TransactionList({ transactions: initialTransactions, sho
             acc[cat.name] = cat.icon;
             return acc;
         }, { ...FALLBACK_ICONS } as Record<string, string>),
+        [categories]
+    );
+
+    // Barva kategorie (hex z DB) — decentní podbarvení ikony jako v CategoryChart
+    const categoryColors: Record<string, string> = useMemo(() =>
+        categories.reduce((acc, cat) => {
+            if (cat.color) acc[cat.name] = cat.color;
+            return acc;
+        }, { ...FALLBACK_COLORS } as Record<string, string>),
         [categories]
     );
 
@@ -402,9 +417,20 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     <button onClick={() => setSelectedTx(null)} className="btn btn-icon btn-ghost tx-modal-close"
                         aria-label="Zavřít">{getLineIcon('close', 16)}</button>
 
-                    <div style={{ fontSize: '2.8rem', lineHeight: 1, marginBottom: 10 }}>
-                        {getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 40)}
-                    </div>
+                    {(() => {
+                        const catColor = categoryColors[modalTx.category || 'Other'];
+                        return (
+                            <div style={{
+                                width: 64, height: 64, borderRadius: 18, margin: '0 auto 10px',
+                                display: 'grid', placeItems: 'center',
+                                fontSize: '1.8rem', lineHeight: 1,
+                                background: catColor ? catColor + '22' : 'var(--surface-sunken)',
+                                color: catColor || undefined,
+                            }}>
+                                {getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 32)}
+                            </div>
+                        );
+                    })()}
                     <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 4, fontWeight: 500 }}>
                         {getDisplayName(modalTx)}
                     </div>
@@ -435,7 +461,15 @@ export default function TransactionList({ transactions: initialTransactions, sho
                             <dd style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 {updatingId === modalTx.id
                                     ? <span style={{ color: 'var(--text-3)' }}>Ukládám…</span>
-                                    : <span className="chip chip-accent">{getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 13)} {modalTx.category || 'Other'}</span>
+                                    : (() => {
+                                        const catColor = categoryColors[modalTx.category || 'Other'];
+                                        return (
+                                            <span className={`chip ${catColor ? '' : 'chip-accent'}`}
+                                                style={catColor ? { background: catColor + '22', color: catColor } : undefined}>
+                                                {getCategoryIcon(categoryIcons[modalTx.category || 'Other'], 13)} {modalTx.category || 'Other'}
+                                            </span>
+                                        );
+                                    })()
                                 }
                                 <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
                             </dd>
@@ -451,7 +485,10 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                     <button key={cat.name}
                                         onClick={() => { handleCategorySelect(modalTx.id, cat.name); setModalPickingCategory(false); }}
                                         className={`chip ${modalTx.category === cat.name ? 'chip-accent' : ''}`}
-                                        style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        style={{
+                                            cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4,
+                                            ...(modalTx.category !== cat.name && cat.color ? { background: cat.color + '22', color: cat.color } : {}),
+                                        }}>
                                         {getCategoryIcon(cat.icon, 13)} {cat.name}
                                     </button>
                                 ))}
@@ -859,6 +896,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                         {dayTxs.map((tx) => {
                             const isExcluded = tx.is_excluded || tx.transaction_type !== 'normal';
                             const catIcon = getCategoryIcon(categoryIcons[tx.category || 'Other'], 18);
+                            const catColor = categoryColors[tx.category || 'Other'];
                             return (
                                 <div
                                     key={tx.id}
@@ -869,12 +907,15 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                         cursor: 'pointer',
                                     }}
                                 >
-                                    <div className="transaction-icon" style={{ position: 'relative' }}>
+                                    <div className="transaction-icon" style={{
+                                        position: 'relative',
+                                        ...(catColor ? { background: catColor + '22', color: catColor } : {}),
+                                    }}>
                                         {catIcon}
                                         {isExcluded && (
                                             <span style={{
                                                 position: 'absolute', bottom: '-4px', right: '-4px',
-                                                fontSize: '0.6rem',
+                                                fontSize: '0.6rem', color: 'var(--text)',
                                                 background: tx.transaction_type === 'internal_transfer'
                                                     ? 'rgba(45,212,191,0.3)' : 'rgba(168,85,247,0.3)',
                                                 borderRadius: '50%', width: '14px', height: '14px',
