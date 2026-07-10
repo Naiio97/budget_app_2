@@ -1,6 +1,9 @@
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1
+# Produkční kontejnery logují strukturovaný JSON (Log Analytics / budoucí ELK).
+# Lokální vývoj běží mimo Docker s LOG_FORMAT=text (default v config.py).
+ENV LOG_FORMAT=json
 
 # 1. Vytvoření systémového uživatele a skupiny (bezpečnostní standard)
 RUN addgroup --system appuser && adduser --system --group appuser

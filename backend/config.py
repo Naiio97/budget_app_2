@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     trading212_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
 
+    # Úroveň logování (DEBUG/INFO/WARNING…) — na Azure jde přepnout env
+    # proměnnou LOG_LEVEL bez nové image, jen novou revizí Container App.
+    log_level: str = "INFO"
+    # "json" = strukturované logy (produkce — Log Analytics / budoucí ELK filtruje
+    # podle polí), "text" = čitelný formát pro lokální vývoj. Dockerfile nastavuje
+    # LOG_FORMAT=json, takže produkce loguje JSON automaticky.
+    log_format: str = "text"
+
     # Auth (shared HS256 secret with frontend Auth.js)
     # Empty string means /auth/* endpoints will reject — set in .env before enabling auth.
     auth_secret: str = ""

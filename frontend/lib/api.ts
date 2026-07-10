@@ -406,6 +406,32 @@ export async function getSyncStatus(): Promise<SyncStatus> {
     return fetchApi<SyncStatus>('/sync/status');
 }
 
+// Historie synchronizací — per-účtové výsledky každého běhu (viz /sync/history)
+export interface SyncRunAccount {
+    account_id?: string;
+    name: string;
+    status: 'ok' | 'error';
+    transactions?: number;
+    error?: string;
+    duration_ms?: number;
+}
+
+export interface SyncRun {
+    id: number;
+    started_at: string | null;
+    completed_at: string | null;
+    duration_s: number | null;
+    status: 'running' | 'completed' | 'failed';
+    accounts_synced: number;
+    transactions_synced: number;
+    error: string | null;
+    accounts: SyncRunAccount[];
+}
+
+export async function getSyncHistory(limit = 10): Promise<{ runs: SyncRun[] }> {
+    return fetchApi<{ runs: SyncRun[] }>(`/sync/history?limit=${limit}`);
+}
+
 // API Keys management
 export interface ApiKeysResponse {
     gocardless_secret_id: string | null;

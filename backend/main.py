@@ -13,16 +13,55 @@ from routers import accounts, transactions, dashboard, sync, settings, investmen
 from auth import limiter
 from database import get_db
 
-# Centrální konfigurace logování — 12-Factor: logy jdou striktně na stdout (event stream)
+settings_config = get_settings()
+
+# Centrální konfigurace logování — 12-Factor: logy jdou striktně na stdout (event stream).
+# Úroveň řídí LOG_LEVEL, formát LOG_FORMAT (json = produkce, text = lokální vývoj).
+# JSON logy nesou i pole z `extra={...}` (event, user_id, duration_s…), takže se
+# v Log Analytics / Kibaně filtruje podle polí místo grepování textu.
+class _ColorFormatter(logging.Formatter):
+    """Barevný level pro lokální vývoj (jen když je stdout terminál)."""
+    _COLORS = {
+        "DEBUG": "\x1b[36m", "INFO": "\x1b[32m", "WARNING": "\x1b[33m",
+        "ERROR": "\x1b[31m", "CRITICAL": "\x1b[1;41m",
+    }
+    _RESET = "\x1b[0m"
+
+    def format(self, record):
+        color = self._COLORS.get(record.levelname)
+        if color:
+            record = logging.makeLogRecord(record.__dict__)
+            record.levelname = f"{color}{record.levelname}{self._RESET}"
+        return super().format(record)
+
+
+_log_handler = logging.StreamHandler(sys.stdout)
+if settings_config.log_format.lower() == "json":
+    from pythonjsonlogger.json import JsonFormatter
+    _log_handler.setFormatter(JsonFormatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s",
+        rename_fields={"asctime": "timestamp", "levelname": "level", "name": "logger"},
+        datefmt="%Y-%m-%dT%H:%M:%S%z",
+        json_ensure_ascii=False,
+    ))
+    # Jednotný JSON i pro uvicorn (včetně access logu) — jen v produkci.
+    # Lokálně si uvicorn nechává vlastní barevný výstup.
+    for _name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        _uv_logger = logging.getLogger(_name)
+        _uv_logger.handlers.clear()
+        _uv_logger.propagate = True
+else:
+    formatter_cls = _ColorFormatter if sys.stdout.isatty() else logging.Formatter
+    _log_handler.setFormatter(formatter_cls(
+        '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    ))
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    level=getattr(logging, settings_config.log_level.upper(), logging.INFO),
+    handlers=[_log_handler],
 )
 
 logger = logging.getLogger(__name__)
-settings_config = get_settings()
 
 
 @asynccontextmanager

@@ -202,6 +202,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             console.error('Sync failed:', error);
             alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
         } finally {
+            // I selhaný běh se zapisuje do historie — obnovit vždy
+            queryClient.invalidateQueries({ queryKey: queryKeys.syncHistory });
             setIsSyncing(false);
         }
     };

@@ -95,6 +95,9 @@ class SyncStatusModel(Base):
     error_message = Column(Text, nullable=True)
     accounts_synced = Column(Integer, default=0)
     transactions_synced = Column(Integer, default=0)
+    # Per-účtové výsledky běhu (JSON: {"accounts": [{name, status, error, ...}]})
+    # — zdroj pro /sync/history, ať jde na produkci zpětně dohledat, co se stalo.
+    details_json = Column(Text, nullable=True)
 
 
 class SettingsModel(Base):
