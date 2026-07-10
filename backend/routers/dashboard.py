@@ -405,7 +405,7 @@ async def get_net_worth_history(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get net worth history (bank + investments) for chart"""
+    """Get net worth history (bank + investments + manual accounts) for chart"""
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
 
@@ -417,8 +417,38 @@ async def get_net_worth_history(
     )
     accounts = acc_result.scalars().all()
 
-    current_bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank")
-    current_investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment")
+    # Manuální účty nemají transakce, takže se nedají rekonstruovat zpětně —
+    # jejich aktuální zůstatek (jen moje peníze, bez cizích obálek) se přičítá
+    # jako konstanta, aby Banka a Celkem seděly s hlavním dashboardem.
+    man_result = await db.execute(
+        select(ManualAccountModel)
+        .options(selectinload(ManualAccountModel.items))
+        .where(
+            ManualAccountModel.user_id == current_user.id,
+            ManualAccountModel.is_visible == True,
+        )
+    )
+    manual_balance = 0
+    for macc in man_result.scalars().all():
+        borrowed = sum(item.amount for item in macc.items if not getattr(item, 'is_mine', True))
+        manual_balance += macc.balance - borrowed
+
+    # Totéž pro manuální investiční účty — dashboard je počítá do investic.
+    inv_result = await db.execute(
+        select(ManualInvestmentAccountModel)
+        .options(selectinload(ManualInvestmentAccountModel.positions))
+        .where(
+            ManualInvestmentAccountModel.user_id == current_user.id,
+            ManualInvestmentAccountModel.is_visible == True,
+        )
+    )
+    manual_investment_balance = sum(
+        sum(p.current_value for p in acc.positions)
+        for acc in inv_result.scalars().all()
+    )
+
+    current_bank_balance = sum(acc.balance for acc in accounts if acc.type == "bank") + manual_balance
+    current_investment_balance = sum(acc.balance for acc in accounts if acc.type == "investment") + manual_investment_balance
 
     result = await db.execute(
         select(TransactionModel).where(
