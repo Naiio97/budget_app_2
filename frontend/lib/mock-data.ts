@@ -251,8 +251,15 @@ export const MOCK_SALARY_CONFIG: SalaryConfig = {
     prumer_quarter: '2026-Q3',
 };
 
+const prevYearMonth = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 7);
+};
+
 export const MOCK_SALARY_ESTIMATE: SalaryEstimate = {
-    year_month: currentYearMonth(),
+    year_month: prevYearMonth(),
+    payout_month: currentYearMonth(),
     source_filename: 'timesheet_demo.xlsx',
     fond_days: 22,
     salary_used: 45000,

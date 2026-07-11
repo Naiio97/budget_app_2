@@ -110,6 +110,11 @@ export default function RozpocetPage() {
 
     const autoSyncedMonths = useRef<Set<string>>(new Set());
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    // Výplata za měsíc M chodí na účet v M+1 — karta odhadu na stránce měsíce M
+    // proto pracuje s timesheetem za M-1 (stejně jako synced příjem „Výplata")
+    const salaryWorkDate = new Date(selectedYear, selectedMonth - 2, 1);
+    const salaryWorkMonth = `${salaryWorkDate.getFullYear()}-${String(salaryWorkDate.getMonth() + 1).padStart(2, '0')}`;
+    const salaryWorkMonthName = MONTH_NAMES[salaryWorkDate.getMonth()];
 
     useQuery<RecurringExpense[]>({
         queryKey: queryKeys.recurringExpenses,
@@ -149,8 +154,8 @@ export default function RozpocetPage() {
     });
 
     const { data: salaryEstimate } = useQuery<SalaryEstimate | null>({
-        queryKey: queryKeys.salaryEstimate(yearMonth),
-        queryFn: () => getSalaryEstimate(yearMonth),
+        queryKey: queryKeys.salaryEstimate(salaryWorkMonth),
+        queryFn: () => getSalaryEstimate(salaryWorkMonth),
         enabled: viewMode === 'month',
     });
 
@@ -688,13 +693,13 @@ export default function RozpocetPage() {
         setSalaryUploading(true);
         setSalaryError(null);
         try {
-            // Timesheet od zaměstnavatele má v názvu RRRRMM — když nesedí se
-            // zvoleným měsícem, spočítal by se proti špatnému fondu prac. dnů
+            // Timesheet od zaměstnavatele má v názvu RRRRMM — pro rozpočet
+            // měsíce M patří timesheet za M-1 (výplata chodí měsíc pozadu)
             const m = salaryFile.name.match(/(20\d{2})(0[1-9]|1[0-2])/);
             if (m) {
                 const fileYm = `${m[1]}-${m[2]}`;
-                if (fileYm !== yearMonth) {
-                    setSalaryError(`Soubor vypadá jako timesheet pro ${fileYm}, ale máš zvolený měsíc ${yearMonth}. Přepni měsíc v navigaci nahoře.`);
+                if (fileYm !== salaryWorkMonth) {
+                    setSalaryError(`Soubor je timesheet za ${fileYm} — ta výplata patří do rozpočtu následujícího měsíce. Přepni měsíc v navigaci nahoře.`);
                     return;
                 }
             }
@@ -704,8 +709,8 @@ export default function RozpocetPage() {
                 setSalaryError('Vyplň nejdřív měsíční mzdu a průměr náhrady.');
                 return;
             }
-            const est = await uploadSalaryTimesheet(yearMonth, salaryFile, parseFloat(salaryBonus) || 0);
-            queryClient.setQueryData(queryKeys.salaryEstimate(yearMonth), est);
+            const est = await uploadSalaryTimesheet(salaryWorkMonth, salaryFile, parseFloat(salaryBonus) || 0);
+            queryClient.setQueryData(queryKeys.salaryEstimate(salaryWorkMonth), est);
             setSalaryReceiptOpen(true);
         } catch (e) {
             setSalaryError(e instanceof Error ? e.message : 'Nahrání timesheetu selhalo');
@@ -715,9 +720,12 @@ export default function RozpocetPage() {
     };
 
     const acceptEstimateAsIncome = async () => {
-        await acceptSalaryEstimate(yearMonth);
+        // Odhad za M-1 se zapíše jako příjem do zobrazeného měsíce M (backend
+        // cílí payout_month = work month + 1) — refreshBudget() invaliduje
+        // právě zobrazený rozpočet
+        await acceptSalaryEstimate(salaryWorkMonth);
         await refreshBudget();
-        queryClient.invalidateQueries({ queryKey: queryKeys.salaryEstimate(yearMonth) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.salaryEstimate(salaryWorkMonth) });
     };
 
     const salaryCfgField = (field: 'base_monthly' | 'prumer' | 'prumer_quarter', label: string, numeric: boolean) => (
@@ -752,7 +760,7 @@ export default function RozpocetPage() {
         return (
             <section className="budget-plan-section">
                 <div className="budget-plan-section-head">
-                    <h3>{getLineIcon('income', 16)} Odhad výplaty</h3>
+                    <h3>{getLineIcon('income', 16)} Odhad výplaty <span className="muted small" style={{ fontWeight: 400 }}>za {salaryWorkMonthName.toLowerCase()}</span></h3>
                     {salaryEstimate?.is_accepted && <span className="muted small">Přijato ✓</span>}
                 </div>
                 <div className="plan-rows">

@@ -1167,6 +1167,7 @@ export interface SalaryEstimate {
     breakdown: SalaryBreakdown;
     is_accepted: boolean;
     prumer_stale: boolean;
+    payout_month: string; // měsíc, kdy výplata přijde na účet (year_month + 1)
 }
 
 export async function getSalaryConfig(): Promise<SalaryConfig> {

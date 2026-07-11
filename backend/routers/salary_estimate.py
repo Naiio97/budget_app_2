@@ -46,12 +46,21 @@ class SalaryEstimateResponse(BaseModel):
     breakdown: dict
     is_accepted: bool
     prumer_stale: bool
+    payout_month: str  # měsíc, ve kterém výplata přijde na účet (year_month + 1)
 
 
 def _quarter_of(year_month: str) -> str:
     """"2026-07" → "2026-Q3"."""
     year, month = year_month.split("-")
     return f"{year}-Q{(int(month) - 1) // 3 + 1}"
+
+
+def _next_month(year_month: str) -> str:
+    """Výplatní měsíc: mzda za měsíc M chodí na účet v měsíci M+1."""
+    year, month = (int(x) for x in year_month.split("-"))
+    if month == 12:
+        return f"{year + 1}-01"
+    return f"{year}-{month + 1:02d}"
 
 
 def _validate_year_month(year_month: str) -> None:
@@ -76,6 +85,7 @@ def _build_response(estimate: SalaryEstimateModel, prumer_quarter: Optional[str]
             prumer_quarter is not None
             and _quarter_of(estimate.year_month) != prumer_quarter
         ),
+        payout_month=_next_month(estimate.year_month),
     )
 
 
@@ -190,20 +200,23 @@ async def accept_salary_estimate(
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Přijmout odhad jako řádek příjmu „Výplata" v měsíčním rozpočtu"""
+    """Přijmout odhad jako řádek příjmu „Výplata" — do rozpočtu VÝPLATNÍHO
+    měsíce (year_month + 1), protože mzda za měsíc M chodí na účet v M+1.
+    Stejná konvence jako sync-income: rozpočet měsíce M má příjem došlý v M."""
     estimate = await _get_estimate(db, current_user.id, year_month)
     if not estimate:
         raise HTTPException(status_code=404, detail="Pro tento měsíc žádný odhad není.")
 
+    payout_month = _next_month(year_month)
     budget_result = await db.execute(
         select(MonthlyBudgetModel).where(
             MonthlyBudgetModel.user_id == current_user.id,
-            MonthlyBudgetModel.year_month == year_month,
+            MonthlyBudgetModel.year_month == payout_month,
         )
     )
     budget = budget_result.scalar_one_or_none()
     if not budget:
-        budget = MonthlyBudgetModel(user_id=current_user.id, year_month=year_month)
+        budget = MonthlyBudgetModel(user_id=current_user.id, year_month=payout_month)
         db.add(budget)
         await db.commit()
         await db.refresh(budget)
@@ -229,7 +242,7 @@ async def accept_salary_estimate(
     estimate.is_accepted = True
     await db.commit()
 
-    return {"status": "accepted", "amount": estimate.net_to_account}
+    return {"status": "accepted", "amount": estimate.net_to_account, "payout_month": payout_month}
 
 
 @router.delete("/{year_month}")
