@@ -20,3 +20,5 @@ python-json-logger>=3.0.0
 # Odhad výplaty: čtení nahraného .xlsx timesheetu + multipart upload (UploadFile/Form)
 openpyxl
 python-multipart
+# Odhad výplaty: čtení nahrané výplatnice (PDF) pro kalibraci a porovnání
+pypdf

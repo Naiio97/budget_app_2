@@ -24,7 +24,8 @@ from models import (
     SalaryEstimateModel,
     UserModel,
 )
-from routers.settings import get_setting
+from routers.settings import get_setting, set_setting
+from services.payslip_parser import parse_payslip
 from services.salary_calculator import calculate_salary
 from services.timesheet_parser import compute_fond_days, parse_timesheet
 
@@ -47,6 +48,13 @@ class SalaryEstimateResponse(BaseModel):
     is_accepted: bool
     prumer_stale: bool
     payout_month: str  # měsíc, ve kterém výplata přijde na účet (year_month + 1)
+    # Zpětná vazba z reálné výplatnice (null, dokud nebyla nahraná)
+    actual_net_to_account: Optional[float] = None
+    actual: Optional[dict] = None
+
+
+class SalaryPayslipResponse(SalaryEstimateResponse):
+    config_updated: dict  # {"prumer": bool, "base": bool} — co se zkalibrovalo
 
 
 def _quarter_of(year_month: str) -> str:
@@ -86,6 +94,8 @@ def _build_response(estimate: SalaryEstimateModel, prumer_quarter: Optional[str]
             and _quarter_of(estimate.year_month) != prumer_quarter
         ),
         payout_month=_next_month(estimate.year_month),
+        actual_net_to_account=estimate.actual_net_to_account,
+        actual=json.loads(estimate.actual_json) if estimate.actual_json else None,
     )
 
 
@@ -192,6 +202,81 @@ async def upload_salary_timesheet(
     await db.commit()
     await db.refresh(estimate)
     return _build_response(estimate, prumer_quarter)
+
+
+@router.post("/{year_month}/payslip", response_model=SalaryPayslipResponse)
+async def upload_salary_payslip(
+    year_month: str,
+    file: UploadFile = File(...),
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Nahrát reálnou výplatnici (PDF) — uloží skutečnost k odhadu a zkalibruje
+    konfiguraci (kvartální průměr náhrad, základní mzda) pro další měsíce."""
+    _validate_year_month(year_month)
+
+    estimate = await _get_estimate(db, current_user.id, year_month)
+    if not estimate:
+        raise HTTPException(
+            status_code=404,
+            detail="Pro tento měsíc není odhad — nahraj nejdřív timesheet.",
+        )
+
+    file_bytes = await file.read()
+    try:
+        data = await asyncio.to_thread(parse_payslip, file_bytes)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF se nepodařilo přečíst — je to výplatnice?",
+        )
+    if data.na_ucet is None:
+        raise HTTPException(
+            status_code=400,
+            detail="V PDF jsem nenašel řádek 'Mzda na účet' — je to výplatnice?",
+        )
+    if data.year_month and data.year_month != year_month:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Výplatnice je za {data.year_month}, ale odhad je za {year_month}.",
+        )
+
+    estimate.actual_net_to_account = data.na_ucet
+    estimate.actual_json = json.dumps({
+        "na_ucet": data.na_ucet,
+        "base_monthly": data.base_monthly,
+        "prumer": data.prumer,
+        "srazky": data.srazky,
+        "delta": round(data.na_ucet - estimate.net_to_account, 2),
+        "source_filename": file.filename,
+    })
+    estimate.updated_at = datetime.utcnow()
+
+    # Kalibrace konfigurace: pásku bereme jako zdroj pravdy, ale jen když
+    # není starší než už uložený kvartál (zpětné nahrání historie nesmí
+    # přepsat novější průměr). "YYYY-QN" se dá porovnávat lexikograficky.
+    config_updated = {"prumer": False, "base": False}
+    paska_quarter = _quarter_of(year_month)
+    stored_quarter = await get_setting(db, current_user.id, "salary_prumer_quarter")
+    if stored_quarter is None or paska_quarter >= stored_quarter:
+        if data.prumer is not None:
+            stored_prumer = await get_setting(db, current_user.id, "salary_prumer")
+            if stored_prumer is None or float(stored_prumer) != data.prumer or stored_quarter != paska_quarter:
+                await set_setting(db, current_user.id, "salary_prumer", str(data.prumer))
+                await set_setting(db, current_user.id, "salary_prumer_quarter", paska_quarter)
+                config_updated["prumer"] = True
+        if data.base_monthly is not None:
+            stored_base = await get_setting(db, current_user.id, "salary_base_monthly")
+            if stored_base is None or float(stored_base) != data.base_monthly:
+                await set_setting(db, current_user.id, "salary_base_monthly", str(data.base_monthly))
+                config_updated["base"] = True
+
+    await db.commit()
+    await db.refresh(estimate)
+
+    prumer_quarter = await get_setting(db, current_user.id, "salary_prumer_quarter")
+    base_response = _build_response(estimate, prumer_quarter)
+    return SalaryPayslipResponse(**base_response.model_dump(), config_updated=config_updated)
 
 
 @router.post("/{year_month}/accept")

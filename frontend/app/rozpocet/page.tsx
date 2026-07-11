@@ -13,7 +13,7 @@ import { getLineIcon } from '@/lib/line-icons';
 import {
     apiFetch, getCashflowCurrent, Cashflow,
     getSalaryConfig, saveSalaryConfig, getSalaryEstimate,
-    uploadSalaryTimesheet, acceptSalaryEstimate,
+    uploadSalaryTimesheet, uploadSalaryPayslip, acceptSalaryEstimate,
     SalaryConfig, SalaryEstimate,
 } from '@/lib/api';
 
@@ -106,7 +106,10 @@ export default function RozpocetPage() {
     const [salaryUploading, setSalaryUploading] = useState(false);
     const [salaryError, setSalaryError] = useState<string | null>(null);
     const [salaryReceiptOpen, setSalaryReceiptOpen] = useState(false);
+    const [salaryInfo, setSalaryInfo] = useState<string | null>(null);
+    const [salaryPayslipUploading, setSalaryPayslipUploading] = useState(false);
     const salaryFileRef = useRef<HTMLInputElement>(null);
+    const salaryPayslipRef = useRef<HTMLInputElement>(null);
 
     const autoSyncedMonths = useRef<Set<string>>(new Set());
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -719,6 +722,27 @@ export default function RozpocetPage() {
         }
     };
 
+    const uploadPayslip = async (file: File) => {
+        setSalaryPayslipUploading(true);
+        setSalaryError(null);
+        setSalaryInfo(null);
+        try {
+            const result = await uploadSalaryPayslip(salaryWorkMonth, file);
+            queryClient.setQueryData(queryKeys.salaryEstimate(salaryWorkMonth), result);
+            if (result.config_updated.prumer || result.config_updated.base) {
+                queryClient.invalidateQueries({ queryKey: queryKeys.salaryConfig });
+                const parts = [];
+                if (result.config_updated.prumer) parts.push(`průměr náhrady → ${result.actual?.prumer}`);
+                if (result.config_updated.base) parts.push(`základní mzda → ${result.actual?.base_monthly}`);
+                setSalaryInfo(`Konfigurace zkalibrována z výplatnice: ${parts.join(', ')}.`);
+            }
+        } catch (e) {
+            setSalaryError(e instanceof Error ? e.message : 'Nahrání výplatnice selhalo');
+        } finally {
+            setSalaryPayslipUploading(false);
+        }
+    };
+
     const acceptEstimateAsIncome = async () => {
         // Odhad za M-1 se zapíše jako příjem do zobrazeného měsíce M (backend
         // cílí payout_month = work month + 1) — refreshBudget() invaliduje
@@ -785,8 +809,18 @@ export default function RozpocetPage() {
                         <button className="btn btn-primary btn-sm" disabled={!salaryFile || salaryUploading} onClick={computeSalaryEstimate}>
                             {salaryUploading ? 'Počítám…' : 'Spočítat'}
                         </button>
+                        {salaryEstimate && (
+                            <>
+                                <input ref={salaryPayslipRef} type="file" accept=".pdf" style={{ display: 'none' }}
+                                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPayslip(f); e.target.value = ''; }} />
+                                <button className="btn btn-sm" disabled={salaryPayslipUploading} onClick={() => salaryPayslipRef.current?.click()}>
+                                    {salaryPayslipUploading ? 'Čtu…' : 'Výplatnice (PDF)'}
+                                </button>
+                            </>
+                        )}
                     </div>
                     {salaryError && <div style={{ color: 'var(--neg)', fontSize: 12 }}>{salaryError}</div>}
+                    {salaryInfo && <div style={{ color: 'var(--pos)', fontSize: 12 }}>{salaryInfo}</div>}
                 </div>
                 {salaryEstimate && b && (
                     <div className="plan-rows" style={{ gap: 12 }}>
@@ -801,6 +835,17 @@ export default function RozpocetPage() {
                                 <span style={{ color: 'var(--text-2)' }}>Na účet ({salaryEstimate.fond_days} prac. dní)</span>
                                 <span style={{ fontWeight: 600 }}>{formatCurrency(salaryEstimate.net_to_account)} {salaryReceiptOpen ? '▾' : '▸'}</span>
                             </button>
+                            {salaryEstimate.actual_net_to_account !== null && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, paddingTop: 6, borderTop: '0.5px solid var(--border)' }}>
+                                    <span style={{ color: 'var(--text-2)' }}>Realita (výplatnice)</span>
+                                    <span>
+                                        <span className="num" style={{ fontWeight: 600 }}>{formatCurrency(salaryEstimate.actual_net_to_account)}</span>
+                                        <span className="num" style={{ marginLeft: 8, color: Math.abs(salaryEstimate.actual?.delta ?? 0) < 100 ? 'var(--pos)' : 'var(--warn)' }}>
+                                            Δ {(salaryEstimate.actual?.delta ?? 0) >= 0 ? '+' : ''}{formatCurrency(salaryEstimate.actual?.delta ?? 0)}
+                                        </span>
+                                    </span>
+                                </div>
+                            )}
                             {salaryReceiptOpen && (
                                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12 }}>
                                     {receiptLines.map(([name, meta, val]) => (

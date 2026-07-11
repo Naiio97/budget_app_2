@@ -300,6 +300,8 @@ export const MOCK_SALARY_ESTIMATE: SalaryEstimate = {
     },
     is_accepted: false,
     prumer_stale: false,
+    actual_net_to_account: null,
+    actual: null,
 };
 
 export const MOCK_LOANS_SUMMARY: LoansSummary = {

@@ -540,6 +540,10 @@ class SalaryEstimateModel(Base):
     net_to_account = Column(Float, nullable=False)
     breakdown_json = Column(Text, nullable=False)
     is_accepted = Column(Boolean, default=False)
+    # Zpětná vazba z reálné výplatnice (PDF): skutečná částka na účet
+    # + parsované údaje pásky (kalibrace průměru/mzdy, sledování přesnosti)
+    actual_net_to_account = Column(Float, nullable=True)
+    actual_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

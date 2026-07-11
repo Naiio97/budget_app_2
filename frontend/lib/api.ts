@@ -1168,7 +1168,21 @@ export interface SalaryEstimate {
     is_accepted: boolean;
     prumer_stale: boolean;
     payout_month: string; // měsíc, kdy výplata přijde na účet (year_month + 1)
+    // Zpětná vazba z reálné výplatnice (null, dokud nebyla nahraná)
+    actual_net_to_account: number | null;
+    actual: {
+        na_ucet: number;
+        base_monthly: number | null;
+        prumer: number | null;
+        srazky: Record<string, number>;
+        delta: number;
+        source_filename?: string;
+    } | null;
 }
+
+export type SalaryPayslipResult = SalaryEstimate & {
+    config_updated: { prumer: boolean; base: boolean };
+};
 
 export async function getSalaryConfig(): Promise<SalaryConfig> {
     return fetchApi<SalaryConfig>('/settings/salary-config');
@@ -1205,6 +1219,26 @@ export async function uploadSalaryTimesheet(yearMonth: string, file: File, bonus
         const detail = await r.json().then((b) => b?.detail).catch(() => null);
         // FastAPI validační chyby (422) mají detail jako pole objektů — ukázat jen stringy
         throw new Error(typeof detail === 'string' ? detail : 'Nahrání timesheetu selhalo');
+    }
+    return r.json();
+}
+
+export async function uploadSalaryPayslip(yearMonth: string, file: File): Promise<SalaryPayslipResult> {
+    if (isDemoMode()) {
+        await new Promise((r) => setTimeout(r, 300));
+        return {
+            ...MOCK_SALARY_ESTIMATE,
+            actual_net_to_account: MOCK_SALARY_ESTIMATE.net_to_account,
+            actual: { na_ucet: MOCK_SALARY_ESTIMATE.net_to_account, base_monthly: 45000, prumer: 250, srazky: {}, delta: 0 },
+            config_updated: { prumer: false, base: false },
+        };
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const r = await apiMutate(`/salary-estimate/${yearMonth}/payslip`, { method: 'POST', body: formData });
+    if (!r.ok) {
+        const detail = await r.json().then((b) => b?.detail).catch(() => null);
+        throw new Error(typeof detail === 'string' ? detail : 'Nahrání výplatnice selhalo');
     }
     return r.json();
 }
