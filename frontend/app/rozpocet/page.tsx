@@ -688,6 +688,16 @@ export default function RozpocetPage() {
         setSalaryUploading(true);
         setSalaryError(null);
         try {
+            // Timesheet od zaměstnavatele má v názvu RRRRMM — když nesedí se
+            // zvoleným měsícem, spočítal by se proti špatnému fondu prac. dnů
+            const m = salaryFile.name.match(/(20\d{2})(0[1-9]|1[0-2])/);
+            if (m) {
+                const fileYm = `${m[1]}-${m[2]}`;
+                if (fileYm !== yearMonth) {
+                    setSalaryError(`Soubor vypadá jako timesheet pro ${fileYm}, ale máš zvolený měsíc ${yearMonth}. Přepni měsíc v navigaci nahoře.`);
+                    return;
+                }
+            }
             // Konfigurace se uloží vždy před výpočtem — blur eventy nejsou spolehlivé
             const configOk = await commitSalaryConfig();
             if (!configOk) {
