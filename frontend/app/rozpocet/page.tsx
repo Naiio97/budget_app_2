@@ -106,6 +106,7 @@ export default function RozpocetPage() {
     const [salaryUploading, setSalaryUploading] = useState(false);
     const [salaryError, setSalaryError] = useState<string | null>(null);
     const [salaryReceiptOpen, setSalaryReceiptOpen] = useState(false);
+    const salaryFileRef = useRef<HTMLInputElement>(null);
 
     const autoSyncedMonths = useRef<Set<string>>(new Set());
     const yearMonth = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -670,15 +671,16 @@ export default function RozpocetPage() {
 
     // ── odhad výplaty ────────────────────────────────────────────
 
-    const commitSalaryConfig = async () => {
-        const merged = {
-            base_monthly: parseFloat(salaryCfgEdit['base_monthly'] ?? String(salaryConfig?.base_monthly ?? '')) || null,
-            prumer: parseFloat(salaryCfgEdit['prumer'] ?? String(salaryConfig?.prumer ?? '')) || null,
-            prumer_quarter: (salaryCfgEdit['prumer_quarter'] ?? salaryConfig?.prumer_quarter ?? '').trim() || null,
-        };
-        if (merged.base_monthly === null || merged.prumer === null || !merged.prumer_quarter) return;
-        await saveSalaryConfig(merged);
+    // Uloží konfiguraci, pokud jsou vyplněná povinná pole (kvartál je volitelný).
+    // Vrací false, když mzda/průměr chybí — volající zobrazí hlášku.
+    const commitSalaryConfig = async (): Promise<boolean> => {
+        const base = parseFloat(salaryCfgEdit['base_monthly'] ?? String(salaryConfig?.base_monthly ?? ''));
+        const prumer = parseFloat(salaryCfgEdit['prumer'] ?? String(salaryConfig?.prumer ?? ''));
+        const quarter = (salaryCfgEdit['prumer_quarter'] ?? salaryConfig?.prumer_quarter ?? '').trim();
+        if (!Number.isFinite(base) || !Number.isFinite(prumer)) return false;
+        await saveSalaryConfig({ base_monthly: base, prumer, prumer_quarter: quarter || null });
         queryClient.invalidateQueries({ queryKey: queryKeys.salaryConfig });
+        return true;
     };
 
     const computeSalaryEstimate = async () => {
@@ -686,6 +688,12 @@ export default function RozpocetPage() {
         setSalaryUploading(true);
         setSalaryError(null);
         try {
+            // Konfigurace se uloží vždy před výpočtem — blur eventy nejsou spolehlivé
+            const configOk = await commitSalaryConfig();
+            if (!configOk) {
+                setSalaryError('Vyplň nejdřív měsíční mzdu a průměr náhrady.');
+                return;
+            }
             const est = await uploadSalaryTimesheet(yearMonth, salaryFile, parseFloat(salaryBonus) || 0);
             queryClient.setQueryData(queryKeys.salaryEstimate(yearMonth), est);
             setSalaryReceiptOpen(true);
@@ -744,14 +752,22 @@ export default function RozpocetPage() {
                 </div>
                 <div className="plan-rows">
                     <div className="plan-row">
-                        <input type="file" accept=".xlsx" className="plan-input" style={{ fontSize: 12 }}
-                            onChange={(e) => setSalaryFile(e.target.files?.[0] ?? null)} />
-                        <input type="number" className="plan-input plan-amount" placeholder="Bonus"
+                        <span className="plan-label">Roční bonus (Kč)</span>
+                        <span className="plan-row-spacer" />
+                        <input type="number" className="plan-input plan-amount" placeholder="0"
                             value={salaryBonus} onChange={(e) => setSalaryBonus(e.target.value)} />
                     </div>
-                    <button className="btn btn-primary btn-sm" disabled={!salaryFile || salaryUploading} onClick={computeSalaryEstimate}>
-                        {salaryUploading ? 'Počítám…' : 'Spočítat'}
-                    </button>
+                    <input ref={salaryFileRef} type="file" accept=".xlsx" style={{ display: 'none' }}
+                        onChange={(e) => { setSalaryFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button className="btn btn-sm" onClick={() => salaryFileRef.current?.click()}
+                            style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {salaryFile ? salaryFile.name : 'Nahrát timesheet (.xlsx)'}
+                        </button>
+                        <button className="btn btn-primary btn-sm" disabled={!salaryFile || salaryUploading} onClick={computeSalaryEstimate}>
+                            {salaryUploading ? 'Počítám…' : 'Spočítat'}
+                        </button>
+                    </div>
                     {salaryError && <div style={{ color: 'var(--neg)', fontSize: 12 }}>{salaryError}</div>}
                 </div>
                 {salaryEstimate && b && (

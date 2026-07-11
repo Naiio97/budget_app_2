@@ -1202,7 +1202,8 @@ export async function uploadSalaryTimesheet(yearMonth: string, file: File, bonus
     const r = await apiMutate(`/salary-estimate/${yearMonth}`, { method: 'POST', body: formData });
     if (!r.ok) {
         const detail = await r.json().then((b) => b?.detail).catch(() => null);
-        throw new Error(detail || 'Nahrání timesheetu selhalo');
+        // FastAPI validační chyby (422) mají detail jako pole objektů — ukázat jen stringy
+        throw new Error(typeof detail === 'string' ? detail : 'Nahrání timesheetu selhalo');
     }
     return r.json();
 }

@@ -352,7 +352,9 @@ async def delete_family_account(
 class SalaryConfigRequest(BaseModel):
     base_monthly: float
     prumer: float
-    prumer_quarter: str  # "2026-Q3" — pro detekci zastaralého průměru
+    # "2026-Q3" — pro detekci zastaralého průměru; volitelné, bez něj se
+    # jen nezobrazuje warning o zastaralém průměru
+    prumer_quarter: Optional[str] = None
 
 
 class SalaryConfigResponse(BaseModel):
@@ -386,7 +388,8 @@ async def save_salary_config(
     """Uložit konfiguraci pro odhad výplaty"""
     await set_setting(db, current_user.id, "salary_base_monthly", str(request.base_monthly))
     await set_setting(db, current_user.id, "salary_prumer", str(request.prumer))
-    await set_setting(db, current_user.id, "salary_prumer_quarter", request.prumer_quarter.strip())
+    if request.prumer_quarter and request.prumer_quarter.strip():
+        await set_setting(db, current_user.id, "salary_prumer_quarter", request.prumer_quarter.strip())
     await db.commit()
     return {"status": "saved"}
 

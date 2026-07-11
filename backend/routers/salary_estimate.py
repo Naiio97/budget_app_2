@@ -4,6 +4,7 @@ Upload → parse (services/timesheet_parser) → výpočet (services/salary_calc
 → upsert do salary_estimates. Accept zapíše čistou částku na účet jako řádek
 příjmu „Výplata" do měsíčního rozpočtu (zrcadlí sync-income v monthly_budget.py).
 """
+import asyncio
 import json
 import re
 from dataclasses import asdict
@@ -139,7 +140,8 @@ async def upload_salary_timesheet(
 
     file_bytes = await file.read()
     try:
-        hours = parse_timesheet(file_bytes)
+        # openpyxl parse je synchronní CPU práce — nesmí blokovat event loop
+        hours = await asyncio.to_thread(parse_timesheet, file_bytes)
     except Exception:
         raise HTTPException(
             status_code=400,
