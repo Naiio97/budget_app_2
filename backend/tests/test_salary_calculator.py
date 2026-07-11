@@ -49,12 +49,13 @@ def test_baseline_month_every_field_hand_computed():
     # 37750+150+200+200+1600+40+120+1600+800+500
     assert r.hruba_mzda == pytest.approx(42960.0)
     assert r.zaklad_dane == pytest.approx(43000.0)                       # ceil na stovky
-    assert r.socialni == pytest.approx(42960 * 0.071)                    # 3050.16
-    assert r.zdravotni == pytest.approx(42960 * 0.045)                   # 1933.20
+    # SZ/ZP a stravenky se zaokrouhlují nahoru na celé Kč (jako na pásce)
+    assert r.socialni == 3051                                            # ceil(42960 × 0.071 = 3050.16)
+    assert r.zdravotni == 1934                                           # ceil(42960 × 0.045 = 1933.20)
     assert r.dan == pytest.approx(43000 * 0.15 - 2570)                   # 3880
-    assert r.cista_mzda == pytest.approx(42960 - 3050.16 - 1933.20 - 3880)  # 34096.64
-    assert r.stravenky == pytest.approx(18 * STRAVENKA_DEN)              # 1903.50
-    assert r.na_ucet == pytest.approx(34096.64 - 1903.50)                # 32193.14
+    assert r.cista_mzda == pytest.approx(42960 - 3051 - 1934 - 3880)     # 34095
+    assert r.stravenky == 1904                                           # ceil(18 × 105.75 = 1903.50)
+    assert r.na_ucet == pytest.approx(34095 - 1904)                      # 32191
 
 
 def test_bonus_flows_into_hruba_and_downstream():

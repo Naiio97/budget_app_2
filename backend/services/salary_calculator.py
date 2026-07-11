@@ -15,6 +15,12 @@ DAN_SAZBA = 0.15
 SLEVA_POPLATNIK = 2570.0
 STRAVENKA_DEN = 235 * 0.45  # 105.75 Kč/den, platí od 2026
 
+
+def _kc(x: float) -> float:
+    """Zaokrouhlení na celé Kč (half-up) — účtárna zaokrouhluje každou
+    příjmovou položku pásky zvlášť (ověřeno proti pásce 2026-06)."""
+    return math.floor(x + 0.5)
+
 PRIPLATEK_PRESCAS_VSEDNI = 0.25
 PRIPLATEK_PRESCAS_VIKEND = 0.50
 PRIPLATEK_SO_NE = 0.50
@@ -74,36 +80,38 @@ def calculate_salary(
         + hours.pres_wd
         + hours.pres_we
     )
-    zakladni_mzda = zakladni_hodiny * hodinova_sazba
+    zakladni_mzda = _kc(zakladni_hodiny * hodinova_sazba)
 
-    p_pres_wd = hours.pres_wd * prumer * PRIPLATEK_PRESCAS_VSEDNI
-    p_pres_we = hours.pres_we * prumer * PRIPLATEK_PRESCAS_VIKEND
+    p_pres_wd = _kc(hours.pres_wd * prumer * PRIPLATEK_PRESCAS_VSEDNI)
+    p_pres_we = _kc(hours.pres_we * prumer * PRIPLATEK_PRESCAS_VIKEND)
     # Víkendový přesčas dostává přesčasový i víkendový příplatek z týchž hodin
     # (§114 + §118 ZP — nároky se sčítají). Záměrné, ověřené proti páskám.
-    p_so_ne = hours.pres_we * prumer * PRIPLATEK_SO_NE
-    p_svatek = hours.svatek_h * prumer * PRIPLATEK_SVATEK
-    p_noc = hours.noc_h * prumer * PRIPLATEK_NOC
+    p_so_ne = _kc(hours.pres_we * prumer * PRIPLATEK_SO_NE)
+    p_svatek = _kc(hours.svatek_h * prumer * PRIPLATEK_SVATEK)
+    p_noc = _kc(hours.noc_h * prumer * PRIPLATEK_NOC)
 
     pohotovost_placena_h = max(0.0, hours.pohot_h - hours.pohot_overlap_h)
-    p_pohot = pohotovost_placena_h * prumer * SAZBA_POHOTOVOST
+    p_pohot = _kc(pohotovost_placena_h * prumer * SAZBA_POHOTOVOST)
 
-    n_dovolena = hours.dov_h * prumer * NAHRADA_DOVOLENA
-    n_prekazky = hours.prek_h * prumer
-    n_prac_volno = hours.volno_h * hodinova_sazba
+    n_dovolena = _kc(hours.dov_h * prumer * NAHRADA_DOVOLENA)
+    n_prekazky = _kc(hours.prek_h * prumer)
+    n_prac_volno = _kc(hours.volno_h * hodinova_sazba)
 
     hruba_mzda = (
         zakladni_mzda + p_pres_wd + p_pres_we + p_so_ne + p_svatek + p_noc
         + p_pohot + n_dovolena + n_prekazky + n_prac_volno + bonus
     )
 
-    socialni = hruba_mzda * SZ_ZAMESTNANEC
-    zdravotni = hruba_mzda * ZP_ZAMESTNANEC
+    # SZ/ZP a stravenky účtárna zaokrouhluje nahoru na celé Kč (páska 2026-06:
+    # 5 292,4 → 5 293; 3 354,3 → 3 355; 2 220,75 → 2 221)
+    socialni = math.ceil(hruba_mzda * SZ_ZAMESTNANEC)
+    zdravotni = math.ceil(hruba_mzda * ZP_ZAMESTNANEC)
 
     zaklad_dane = math.ceil(hruba_mzda / 100.0) * 100.0
     dan = zaklad_dane * DAN_SAZBA - SLEVA_POPLATNIK
 
     cista_mzda = hruba_mzda - socialni - zdravotni - dan
-    stravenky = hours.worked_days * STRAVENKA_DEN
+    stravenky = math.ceil(hours.worked_days * STRAVENKA_DEN)
     na_ucet = cista_mzda - stravenky
 
     return SalaryBreakdown(
