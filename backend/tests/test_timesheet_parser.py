@@ -194,14 +194,47 @@ def test_dovolena_one_day_is_eight_hours():
     assert r.total_hours == pytest.approx(8.0)
 
 
-def test_svatek_hours_parsed_and_preserved():
+def test_nominal_svatek_is_calendar_holiday_not_work():
+    # Samotný řádek „Svátek" = kalendářní volno; u měsíční mzdy zůstává
+    # v základu a neplatí se nic navíc (ověřeno proti pásce 2026-04)
     data = build_timesheet([
         ("9. úterý", "8:00 - 16:00", None, "Svátek", "8:00"),
     ])
     r = parse_timesheet(data)
-    assert r.svatek_h == pytest.approx(8.0)  # nesmí být vynulováno
+    assert r.svatek_h == 0.0
     assert r.dov_h == 0.0
     assert r.pres_wd == 0.0
+    assert r.worked_days == 0
+
+
+def test_overtime_on_holiday_reclassified_to_svatek():
+    # Přesčas v den se řádkem „Svátek" = práce ve svátek: 100% příplatek,
+    # nejde do přesčasových sazeb; noční průnik platí dál (páska 2026-05)
+    data = build_timesheet([
+        ("9. pátek", "8:30 - 17:00", None, "Svátek", "8:00"),
+        (None, "18:00 - 24:00", None, "Pohotovost - Víkend / Svátek", "6:00"),
+        (None, "22:00 - 23:00", None, "Přesčas", "1:00"),
+    ])
+    r = parse_timesheet(data)
+    assert r.svatek_h == pytest.approx(1.0)
+    assert r.pres_wd == 0.0
+    assert r.pres_we == 0.0
+    assert r.noc_h == pytest.approx(1.0)
+    assert r.pohot_h == pytest.approx(6.0)
+    assert r.pohot_overlap_h == pytest.approx(1.0)
+
+
+def test_pohotovost_vikend_svatek_category_does_not_mark_holiday():
+    # Regresní pojistka: „Svátek" v názvu kategorie pohotovosti
+    # („Pohotovost - Víkend / Svátek") NEznačí svátek — víkendový přesčas
+    # musí zůstat klasifikovaný jako pres_we
+    data = build_timesheet([
+        ("10. sobota", "0:00 - 24:00", None, "Pohotovost - Víkend / Svátek", "24:00"),
+        (None, "10:00 - 12:00", None, "Přesčas", "2:00"),
+    ])
+    r = parse_timesheet(data)
+    assert r.svatek_h == 0.0
+    assert r.pres_we == pytest.approx(2.0)
 
 
 def test_prekazky_via_navsteva_lekare():

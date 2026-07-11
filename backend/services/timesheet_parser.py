@@ -127,6 +127,16 @@ def parse_timesheet(file_bytes: bytes) -> TimesheetHours:
 
     for day in days:
         weekend = day["dayname"] in WEEKEND_DAYNAMES
+        # Řádek „Svátek" znamená kalendářní svátek (volno): nominální hodiny
+        # se neplatí zvlášť — u měsíční mzdy zůstávají v základu. Skutečná
+        # práce v takový den (přesčasové řádky) dostává 100% příplatek
+        # z průměru místo přesčasových sazeb (ověřeno proti páskám 04-06/2026).
+        # Pozor: „Svátek" se vyskytuje i v názvu kategorie pohotovosti
+        # („Pohotovost - Víkend / Svátek") — svátek značí jen samostatný řádek
+        is_holiday = any(
+            len(r) > 3 and r[3] is not None and str(r[3]).strip().startswith("Svátek")
+            for r in day["rows"]
+        )
         pohot_ranges: list[tuple[float, float]] = []
         overtime_ranges: list[tuple[float, float]] = []
         day_work_h = 0.0
@@ -146,11 +156,15 @@ def parse_timesheet(file_bytes: bytes) -> TimesheetHours:
                 if rng:
                     pohot_ranges.append(rng)
             elif "Přesčas" in stav:
-                if weekend:
+                if is_holiday:
+                    result.svatek_h += hours
+                elif weekend:
                     result.pres_we += hours
                 else:
                     result.pres_wd += hours
                 day_other_h += hours
+                # Noční příplatek i překryv s pohotovostí platí i pro práci
+                # ve svátek (páska 2026-05: noc 7 h a pohotovost 111 h včetně 8.5.)
                 if rng:
                     overtime_ranges.append(rng)
                     result.noc_h += night_overlap(rng)
@@ -158,8 +172,8 @@ def parse_timesheet(file_bytes: bytes) -> TimesheetHours:
                 result.dov_h += hours
                 day_other_h += hours
             elif "Svátek" in stav:
-                result.svatek_h += hours
-                day_other_h += hours
+                # nominální svátek (volno) — nic se neplatí zvlášť
+                pass
             elif "lékař" in stav or "Lékař" in stav or "Překážk" in stav:
                 result.prek_h += hours
                 day_other_h += hours
