@@ -57,6 +57,10 @@ function TransactionsPageContent() {
     const [selectedAccount, setSelectedAccount] = useState<string>(initialAccount);
     const [selectedMonth, setSelectedMonth] = useState<string>('');
     const [amountType, setAmountType] = useState<string>('');
+    const [minAmount, setMinAmount] = useState('');
+    const [maxAmount, setMaxAmount] = useState('');
+    const [debouncedMinAmount, setDebouncedMinAmount] = useState('');
+    const [debouncedMaxAmount, setDebouncedMaxAmount] = useState('');
     const [selectedTag, setSelectedTag] = useState<string>('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState<number>(20);
@@ -90,6 +94,16 @@ function TransactionsPageContent() {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedMinAmount(minAmount);
+            setDebouncedMaxAmount(maxAmount);
+            setPage(1);
+            setMobileVisible(10);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [minAmount, maxAmount]);
+
     const resetFilters = () => {
         setPage(1);
         setMobileVisible(10);
@@ -115,6 +129,8 @@ function TransactionsPageContent() {
         date_from,
         date_to,
         amount_type: amountType || undefined,
+        min_amount: debouncedMinAmount !== '' ? Math.max(0, Number(debouncedMinAmount)) : undefined,
+        max_amount: debouncedMaxAmount !== '' ? Math.max(0, Number(debouncedMaxAmount)) : undefined,
         tag_id: selectedTag ? Number(selectedTag) : undefined,
     };
 
@@ -294,6 +310,26 @@ function TransactionsPageContent() {
                                 />
                             </div>
                         )}
+                        <input
+                            type="number"
+                            className="input"
+                            min={0}
+                            inputMode="decimal"
+                            placeholder="Od (Kč)"
+                            value={minAmount}
+                            onChange={e => setMinAmount(e.target.value)}
+                            style={{ flex: '0 1 110px' }}
+                        />
+                        <input
+                            type="number"
+                            className="input"
+                            min={0}
+                            inputMode="decimal"
+                            placeholder="Do (Kč)"
+                            value={maxAmount}
+                            onChange={e => setMaxAmount(e.target.value)}
+                            style={{ flex: '0 1 110px' }}
+                        />
                     </div>
                 </div>
 

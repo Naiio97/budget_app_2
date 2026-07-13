@@ -120,7 +120,7 @@ export default function CashflowCard({ data }: { data: Cashflow }) {
                                 fontSize={10}
                                 axisLine={false}
                                 tickLine={false}
-                                height={14}
+                                height={20}
                             />
                             <YAxis hide domain={yDomain} />
                             {showZeroLine && (

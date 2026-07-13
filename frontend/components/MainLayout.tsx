@@ -196,6 +196,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             queryClient.invalidateQueries({ queryKey: queryKeys.dividends });
             queryClient.invalidateQueries({ queryKey: ['portfolio-history'] });
             queryClient.invalidateQueries({ queryKey: ['transactions'] });
+            queryClient.invalidateQueries({ queryKey: ['budget-transactions'] });
             queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
             queryClient.invalidateQueries({ queryKey: queryKeys.pies });
         } catch (error) {
