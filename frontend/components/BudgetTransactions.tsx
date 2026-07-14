@@ -55,7 +55,7 @@ export default function BudgetTransactions({ budget }: { budget: Budget }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ background: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)', overflow: 'hidden' }}>
+            <div className="card-body-nopad">
                 <TransactionList transactions={data.items} showAccount onCategoryChange={handleCategoryChange} />
             </div>
             {data.total > data.items.length && (
