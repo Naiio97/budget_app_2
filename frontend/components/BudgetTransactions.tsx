@@ -55,7 +55,13 @@ export default function BudgetTransactions({ budget }: { budget: Budget }) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div className="card-body-nopad">
+            {/* Nahoře rovná linka navazující na oddělovače transakcí, zaoblené jen spodní rohy */}
+            <div className="card-body-nopad" style={{
+                background: 'var(--surface)',
+                border: '0.5px solid var(--border)',
+                borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+                overflow: 'hidden',
+            }}>
                 <TransactionList transactions={data.items} showAccount onCategoryChange={handleCategoryChange} />
             </div>
             {data.total > data.items.length && (
