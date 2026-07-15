@@ -91,11 +91,19 @@ async def get_transactions(
         search_term = f"%{search}%"
         # Match against description, raw_json (covers counterparty name/IBAN from bank),
         # and account name. Lets users find e.g. "PPF" by counterparty rather than only description.
-        conditions.append(or_(
+        search_conditions = [
             TransactionModel.description.ilike(search_term),
-            TransactionModel.raw_json.ilike(search_term),
             AccountModel.name.ilike(search_term),
-        ))
+        ]
+        try:
+            # Číselný dotaz = hledání podle částky. raw_json u něj vynecháváme —
+            # číslice matchují interní ID banky (entryReference, transaction hash)
+            # a vracejí nesouvisející transakce.
+            search_amount = float(search.replace(",", ".").replace(" ", ""))
+            search_conditions.append(func.abs(TransactionModel.amount) == search_amount)
+        except ValueError:
+            search_conditions.append(TransactionModel.raw_json.ilike(search_term))
+        conditions.append(or_(*search_conditions))
     if amount_type == "income":
         conditions.append(TransactionModel.amount > 0)
     elif amount_type == "expense":
