@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import BudgetBurndown, { BudgetPaceLabel } from '@/components/BudgetBurndown';
+import BudgetTransactions from '@/components/BudgetTransactions';
 import {
     Budget, SavingsGoal, BudgetCategoryOption,
     getBudgets, createBudget, deleteBudget, getBudgetCategoryOptions,
@@ -34,6 +35,13 @@ export default function BudgetsPage() {
     const [newGoal, setNewGoal] = useState({ name: '', target_amount: '', deadline: '' });
     const [addAmountGoalId, setAddAmountGoalId] = useState<number | null>(null);
     const [addAmount, setAddAmount] = useState('');
+    const [expandedBudgets, setExpandedBudgets] = useState<Set<number>>(new Set());
+
+    const toggleExpanded = (id: number) => setExpandedBudgets(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
 
     const { data: budgets = [] } = useQuery<Budget[]>({ queryKey: queryKeys.budgets, queryFn: getBudgets });
     const { data: goals = [] } = useQuery<SavingsGoal[]>({ queryKey: queryKeys.goals, queryFn: getGoals });
@@ -224,6 +232,10 @@ export default function BudgetsPage() {
                                         </div>
                                     </div>
                                     <BudgetBurndown budget={budget} />
+                                    <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => toggleExpanded(budget.id)}>
+                                        {expandedBudgets.has(budget.id) ? '▴ Skrýt transakce' : '▾ Transakce'}
+                                    </button>
+                                    {expandedBudgets.has(budget.id) && <BudgetTransactions budget={budget} />}
                                 </div>
                             ))
                         )}

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, func
 from auth import get_current_user
 from database import get_db
 from models import TransactionModel, AccountModel, CategoryRuleModel, ContactModel, UserModel, TagModel, TransactionTagModel
@@ -59,10 +59,13 @@ async def get_transactions(
     limit: int = Query(20, ge=1, le=1000),
     search: Optional[str] = None,
     category: Optional[str] = None,
+    categories: Optional[List[str]] = Query(None, description="transactions in any of these categories (repeat param)"),
     account_id: Optional[str] = None,
     date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
     amount_type: Optional[str] = Query(None, description="income, expense, or all"),
+    min_amount: Optional[float] = Query(None, ge=0, description="minimum absolute amount"),
+    max_amount: Optional[float] = Query(None, ge=0, description="maximum absolute amount"),
     tag_id: Optional[int] = Query(None, description="only transactions carrying this tag"),
     current_user: UserModel = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
@@ -82,19 +85,33 @@ async def get_transactions(
         conditions.append(TransactionModel.account_id == account_id)
     if category:
         conditions.append(TransactionModel.category == category)
+    if categories:
+        conditions.append(TransactionModel.category.in_(categories))
     if search:
         search_term = f"%{search}%"
         # Match against description, raw_json (covers counterparty name/IBAN from bank),
         # and account name. Lets users find e.g. "PPF" by counterparty rather than only description.
-        conditions.append(or_(
+        search_conditions = [
             TransactionModel.description.ilike(search_term),
-            TransactionModel.raw_json.ilike(search_term),
             AccountModel.name.ilike(search_term),
-        ))
+        ]
+        try:
+            # Číselný dotaz = hledání podle částky. raw_json u něj vynecháváme —
+            # číslice matchují interní ID banky (entryReference, transaction hash)
+            # a vracejí nesouvisející transakce.
+            search_amount = float(search.replace(",", ".").replace(" ", ""))
+            search_conditions.append(func.abs(TransactionModel.amount) == search_amount)
+        except ValueError:
+            search_conditions.append(TransactionModel.raw_json.ilike(search_term))
+        conditions.append(or_(*search_conditions))
     if amount_type == "income":
         conditions.append(TransactionModel.amount > 0)
     elif amount_type == "expense":
         conditions.append(TransactionModel.amount < 0)
+    if min_amount is not None:
+        conditions.append(func.abs(TransactionModel.amount) >= min_amount)
+    if max_amount is not None:
+        conditions.append(func.abs(TransactionModel.amount) <= max_amount)
     if tag_id is not None:
         conditions.append(
             select(TransactionTagModel.tag_id)
@@ -108,7 +125,6 @@ async def get_transactions(
     query = query.where(and_(*conditions))
     
     # Count total
-    from sqlalchemy import func
     count_query = select(func.count()).select_from(query.subquery())
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0

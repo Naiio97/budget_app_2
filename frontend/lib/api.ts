@@ -226,10 +226,13 @@ export async function getTransactions(params?: {
     limit?: number;
     search?: string;
     category?: string;
+    categories?: string[];
     account_id?: string;
     date_from?: string;
     date_to?: string;
     amount_type?: string;
+    min_amount?: number;
+    max_amount?: number;
     tag_id?: number;
 }): Promise<PaginatedResponse<Transaction>> {
     const searchParams = new URLSearchParams();
@@ -237,10 +240,13 @@ export async function getTransactions(params?: {
     if (params?.limit) searchParams.set('limit', params.limit.toString());
     if (params?.search) searchParams.set('search', params.search);
     if (params?.category) searchParams.set('category', params.category);
+    if (params?.categories) params.categories.forEach(c => searchParams.append('categories', c));
     if (params?.account_id) searchParams.set('account_id', params.account_id);
     if (params?.date_from) searchParams.set('date_from', params.date_from);
     if (params?.date_to) searchParams.set('date_to', params.date_to);
     if (params?.amount_type) searchParams.set('amount_type', params.amount_type);
+    if (params?.min_amount != null) searchParams.set('min_amount', params.min_amount.toString());
+    if (params?.max_amount != null) searchParams.set('max_amount', params.max_amount.toString());
     if (params?.tag_id) searchParams.set('tag_id', params.tag_id.toString());
 
     const query = searchParams.toString();

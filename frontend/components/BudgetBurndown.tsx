@@ -51,7 +51,7 @@ export default function BudgetBurndown({ budget }: { budget: Budget }) {
     const gradientId = `budget-burndown-${budget.id}`;
 
     return (
-        <div style={{ height: 96, marginLeft: -4, marginRight: -4 }}>
+        <div style={{ height: 102, marginLeft: -4, marginRight: -4 }}>
             <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={data} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
                     <defs>
@@ -68,7 +68,7 @@ export default function BudgetBurndown({ budget }: { budget: Budget }) {
                         fontSize={10}
                         axisLine={false}
                         tickLine={false}
-                        height={14}
+                        height={20}
                     />
                     <YAxis hide domain={[0, yMax]} />
                     <ReferenceLine

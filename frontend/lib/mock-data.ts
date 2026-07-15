@@ -783,14 +783,28 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         const [pathOnly, queryString] = path.split('?');
         const rest = pathOnly.slice('/transactions/'.length);
         if (!rest) {
-            // Respektuj search + limit, ať demo režim předvede i globální
-            // hledání (Cmd+K) místo vracení všeho
+            // Respektuj search + limit + kategorie + částku + typ + rozsah dat,
+            // ať demo režim předvede i globální hledání (Cmd+K) a filtry
+            // (včetně rozbaleného seznamu transakcí u rozpočtu) místo vracení všeho
             const params = new URLSearchParams(queryString ?? '');
             const search = (params.get('search') ?? '').toLowerCase();
             const limit = Number(params.get('limit')) || MOCK_TRANSACTIONS.items.length;
-            const filtered = search
+            const cats = params.getAll('categories');
+            const minAmount = params.get('min_amount');
+            const maxAmount = params.get('max_amount');
+            const amountType = params.get('amount_type');
+            const dateFrom = params.get('date_from');
+            const dateTo = params.get('date_to');
+            let filtered = search
                 ? MOCK_TRANSACTIONS.items.filter(t => t.description.toLowerCase().includes(search))
                 : MOCK_TRANSACTIONS.items;
+            if (cats.length) filtered = filtered.filter(t => t.category != null && cats.includes(t.category));
+            if (minAmount !== null) filtered = filtered.filter(t => Math.abs(t.amount) >= Number(minAmount));
+            if (maxAmount !== null) filtered = filtered.filter(t => Math.abs(t.amount) <= Number(maxAmount));
+            if (amountType === 'income') filtered = filtered.filter(t => t.amount > 0);
+            else if (amountType === 'expense') filtered = filtered.filter(t => t.amount < 0);
+            if (dateFrom) filtered = filtered.filter(t => t.date >= dateFrom);
+            if (dateTo) filtered = filtered.filter(t => t.date <= dateTo);
             return {
                 ...MOCK_TRANSACTIONS,
                 items: filtered.slice(0, limit),

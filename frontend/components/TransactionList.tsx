@@ -144,9 +144,12 @@ export default function TransactionList({ transactions: initialTransactions, sho
             .finally(() => setDetailLoading(false));
     }, [selectedTx]);
 
-    // Update local state when props change
+    // Update local state when props change. If the open transaction dropped out
+    // of the new list (e.g. recategorized out of a filtered view), close the
+    // modal instead of showing it frozen on stale data.
     useEffect(() => {
         setTransactions(initialTransactions);
+        setSelectedTx(prev => (prev && !initialTransactions.some(t => t.id === prev.id)) ? null : prev);
     }, [initialTransactions]);
 
     // Group transactions by date, sorted newest first

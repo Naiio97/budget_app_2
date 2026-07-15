@@ -49,12 +49,14 @@ export const metadata: Metadata = {
       { url: "/splash/apple-splash-1320x2868.png", media: "(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" },
     ],
   },
+  // ?v=2 obchází cache prohlížečů — ikony se změnily, ale URL zůstala stejná,
+  // takže záložka jinak drží starou faviconu klidně týdny.
   icons: {
     icon: [
-      { url: "/icons/icon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-32x32.png?v=2", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192x192.png?v=2", sizes: "192x192", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png",
+    apple: "/icons/apple-touch-icon.png?v=2",
   },
   // Next 16 generuje z appleWebApp.capable jen nový `mobile-web-app-capable`
   // (Chrome ten apple-prefixovaný označil za zastaralý), jenže iOS Safari
