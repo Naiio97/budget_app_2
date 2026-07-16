@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
 
 from auth import get_current_user
 from database import get_db
