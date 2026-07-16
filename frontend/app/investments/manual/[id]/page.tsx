@@ -11,10 +11,7 @@ import {
     createManualInvestmentPosition,
     updateManualInvestmentPosition,
     deleteManualInvestmentPosition,
-    updateManualInvestment,
-    deleteManualInvestment,
     ManualInvestmentPosition,
-    ManualInvestmentAccount,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
@@ -86,8 +83,6 @@ export default function ManualInvestmentDetailPage() {
     const [addForm, setAddForm] = useState<PositionForm>(emptyForm);
     const [editingId, setEditingId] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<PositionForm>(emptyForm);
-    const [editingName, setEditingName] = useState(false);
-    const [nameInput, setNameInput] = useState('');
 
     // Per-position color overrides (localStorage). Map position id → hex color.
     const [colorVersion, setColorVersion] = useState(0);
@@ -169,20 +164,6 @@ export default function ManualInvestmentDetailPage() {
     const deleteMutation = useMutation({
         mutationFn: (posId: number) => deleteManualInvestmentPosition(id, posId),
         onSuccess: () => invalidate(),
-    });
-
-    const renameMutation = useMutation({
-        mutationFn: (name: string) => updateManualInvestment(id, { name }),
-        onSuccess: () => { invalidate(); setEditingName(false); },
-    });
-
-    const deleteAccountMutation = useMutation({
-        mutationFn: () => deleteManualInvestment(id),
-        onSuccess: () => {
-            qc.setQueryData<ManualInvestmentAccount[]>(queryKeys.manualInvestments, (old = []) => old.filter(a => a.id !== id));
-            qc.invalidateQueries({ queryKey: queryKeys.dashboard });
-            router.push('/investments');
-        },
     });
 
     const fmt = (v: number, cur = 'CZK') => new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: cur, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v);
