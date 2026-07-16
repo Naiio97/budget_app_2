@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { getLineIcon } from '@/lib/line-icons';
 import { getCategoryIcon as rawCategoryIcon } from '@/lib/category-icons';
 
 function progressColor(pct: number): string {
@@ -201,7 +202,7 @@ export default function BudgetsPage() {
                             <p style={{ color: 'var(--text-3)', fontSize: 14 }}>Zatím žádné rozpočty. Přidejte první!</p>
                         ) : (
                             budgets.map(budget => (
-                                <div key={budget.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
+                                <div key={budget.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 'var(--spacing-md)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                                         <span style={{ fontWeight: 600, fontSize: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{iconFor(budget.categories[0] ?? budget.category)} {budget.name}</span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -232,10 +233,14 @@ export default function BudgetsPage() {
                                         </div>
                                     </div>
                                     <BudgetBurndown budget={budget} />
-                                    <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => toggleExpanded(budget.id)}>
-                                        {expandedBudgets.has(budget.id) ? '▴ Skrýt transakce' : '▾ Transakce'}
-                                    </button>
                                     {expandedBudgets.has(budget.id) && <BudgetTransactions budget={budget} />}
+                                    <button type="button"
+                                        className={`budget-tx-toggle ${expandedBudgets.has(budget.id) ? 'open' : ''}`}
+                                        onClick={() => toggleExpanded(budget.id)}
+                                        aria-expanded={expandedBudgets.has(budget.id)}>
+                                        {expandedBudgets.has(budget.id) ? 'Skrýt transakce' : 'Transakce'}
+                                        {getLineIcon('chevronDown', 13)}
+                                    </button>
                                 </div>
                             ))
                         )}
@@ -270,7 +275,7 @@ export default function BudgetsPage() {
                                 <div key={goal.id} style={{
                                     display: 'flex', flexDirection: 'column', gap: 8,
                                     padding: 'var(--spacing-md)',
-                                    background: goal.is_completed ? 'color-mix(in srgb, var(--pos) 6%, var(--surface-sunken))' : 'var(--surface-sunken)',
+                                    background: goal.is_completed ? 'color-mix(in srgb, var(--pos) 6%, transparent)' : 'transparent',
                                     borderRadius: 'var(--radius-md)',
                                     border: goal.is_completed ? '0.5px solid color-mix(in srgb, var(--pos) 30%, transparent)' : '0.5px solid var(--border)',
                                 }}>
