@@ -1,4 +1,4 @@
-import {
+import type {
     Account, Transaction, DashboardData,
     NetWorthHistory, SyncStatus, ApiKeysResponse,
     InvestmentPortfolio, Budget,

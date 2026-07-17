@@ -35,8 +35,9 @@ Next.js 16 (App Router) ← REST → FastAPI (Python 3.11) ← asyncpg → Postg
 
 **Frontend** (`frontend/`):
 - App Router pages under `app/` — routes: `/`, `/accounts/[id]`, `/budgets`, `/investments`, `/transactions`, `/reports`, `/rozpocet`, `/settings`, `/manual-account/[id]`
+- Page-specific components live next to their page (e.g. `app/settings/*.tsx`, `app/rozpocet/*.tsx`); cross-page components in `components/`
 - TanStack React Query for all server state (30s stale, 5min cache)
-- `lib/api.ts` — central API client; respects `NEXT_PUBLIC_USE_MOCKS=true` to return mock data
+- `lib/api/` — API client split by domain (core = `apiFetch` chokepoint + demo-mode synthesis, then accounts, transactions, budgets, …); `lib/api.ts` is a barrel re-export so everything imports from `@/lib/api`
 - `contexts/AccountsContext.tsx` — shared account list state
 - PWA with Service Worker (`public/sw.js`)
 
@@ -45,8 +46,8 @@ Next.js 16 (App Router) ← REST → FastAPI (Python 3.11) ← asyncpg → Postg
 - `config.py` — Pydantic `Settings` singleton (LRU-cached), reads `.env`
 - `database.py` — async SQLAlchemy engine + session factory
 - `models.py` — all SQLAlchemy ORM models
-- `routers/` — one file per domain: accounts, transactions, dashboard, sync, investments, budgets, categories, manual_accounts, contacts, settings, loans, subscriptions
-- `services/` — GoCardless, Trading212, and exchange rate API clients
+- `routers/` — one file per domain: accounts, transactions, dashboard, sync, investments, budgets, monthly_budget, recurring_expenses, categories, manual_accounts, contacts, settings, loans, subscriptions, tags, notifications, cashflow, salary_estimate
+- `services/` — GoCardless, Trading212, exchange rates, categorization, transfer detection (`transfers.py`), push notifications
 
 **Database models** (all in `models.py`): `accounts`, `transactions`, `sync_status`, `settings`, `budgets`, `savings_goals`, `categories`, `monthly_budgets`, `monthly_income_items`, `monthly_expenses`, `category_rules`, `manual_accounts`, `manual_account_items`, `contacts`, `portfolio_snapshots`, `recurring_expenses`, `loans`, `loan_payments`, `subscriptions`
 
