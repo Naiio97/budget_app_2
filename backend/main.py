@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from config import get_settings
-from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, categories, manual_accounts, contacts, manual_investments, auth, loans, subscriptions, tags, notifications, cashflow, salary_estimate
+from routers import accounts, transactions, dashboard, sync, settings, investments, budgets, monthly_budget, recurring_expenses, categories, manual_accounts, contacts, manual_investments, auth, loans, subscriptions, tags, notifications, cashflow, salary_estimate
 from auth import limiter
 from database import get_db
 
@@ -105,6 +105,7 @@ app.include_router(settings.router, prefix="/settings", tags=["Settings"])
 app.include_router(investments.router, prefix="/investments", tags=["Investments"])
 app.include_router(budgets.router, prefix="/budgets", tags=["Budgets"])
 app.include_router(monthly_budget.router)
+app.include_router(recurring_expenses.router)
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(manual_accounts.router, prefix="/manual-accounts", tags=["Manual Accounts"])
 app.include_router(contacts.router, prefix="/contacts", tags=["Contacts"])
