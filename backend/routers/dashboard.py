@@ -8,7 +8,7 @@ from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
 from services.exchange_rates import get_exchange_rate
-from services.timefmt import utc_iso
+from services.timefmt import utc_iso, utcnow
 from routers.contacts import normalize_iban
 import json
 
@@ -574,7 +574,7 @@ def build_wrapped(
     top_month = max(monthly_list, key=lambda m: m["expenses"]) if expenses_total > 0 else None
 
     # Dny bez utrácení jen za už proběhlou část roku
-    now = datetime.utcnow()
+    now = utcnow()
     year_start = datetime(year, 1, 1)
     year_end = min(datetime(year, 12, 31), now) if year == now.year else datetime(year, 12, 31)
     days_elapsed = max(0, (year_end - year_start).days + 1)
@@ -622,7 +622,7 @@ async def get_spending_wrapped(
         (int(y) for (y,) in years_result.all() if y and y.isdigit()), reverse=True
     )
     if year is None:
-        year = available_years[0] if available_years else datetime.utcnow().year
+        year = available_years[0] if available_years else utcnow().year
 
     income_cat_result = await db.execute(
         select(CategoryModel.name).where(

@@ -17,7 +17,7 @@ from services.share_rules import match_share_rule, compute_my_share
 from services.transfers import detect_and_mark_transfers
 from services.gocardless import gocardless_service, select_balance, GoCardlessAPIError
 from services.push import send_push_to_user
-from services.timefmt import utc_iso
+from services.timefmt import utc_iso, utcnow
 from services.trading212 import trading212_service
 from services.exchange_rates import get_exchange_rate
 from services.categorization import (
@@ -105,7 +105,7 @@ async def recategorize_transactions(
         if tx.raw_json:
             try:
                 raw_data = json.loads(tx.raw_json)
-            except:
+            except Exception:
                 raw_data = {"remittanceInformationUnstructured": tx.description}
         else:
             raw_data = {"remittanceInformationUnstructured": tx.description}
@@ -144,7 +144,7 @@ async def notify_after_sync(db: AsyncSession, user_id: int, failed_accounts: lis
 
     # Souhlasy končící do 7 dnů (nebo už vypršelé) — jednou denně by stačilo,
     # ale sync běží max 4×/den, takže duplicity jsou snesitelné.
-    week_ahead = datetime.utcnow() + timedelta(days=7)
+    week_ahead = utcnow() + timedelta(days=7)
     result = await db.execute(
         select(AccountModel).where(
             AccountModel.user_id == user_id,
@@ -154,8 +154,8 @@ async def notify_after_sync(db: AsyncSession, user_id: int, failed_accounts: lis
         )
     )
     for account in result.scalars():
-        expired = account.consent_expires_at <= datetime.utcnow()
-        days_left = max(0, (account.consent_expires_at - datetime.utcnow()).days)
+        expired = account.consent_expires_at <= utcnow()
+        days_left = max(0, (account.consent_expires_at - utcnow()).days)
         await send_push_to_user(
             db, user_id,
             title="Souhlas banky " + ("vypršel" if expired else "brzy vyprší"),
@@ -177,7 +177,7 @@ async def sync_all_data(
 
     sync_status = SyncStatusModel(
         user_id=current_user.id,
-        started_at=datetime.utcnow(),
+        started_at=utcnow(),
         status="running"
     )
     db.add(sync_status)
@@ -267,7 +267,7 @@ async def sync_all_data(
                             
                             account.balance = amount
                             account.currency = currency
-                            account.last_synced = datetime.utcnow()
+                            account.last_synced = utcnow()
                         
                     rows_to_upsert = []
                     for tx_data in clean_transactions:
@@ -463,7 +463,7 @@ async def sync_all_data(
             if t212_account:
                 t212_account.balance = float(czk_total_value)
                 t212_account.currency = target_currency
-                t212_account.last_synced = datetime.utcnow()
+                t212_account.last_synced = utcnow()
                 t212_account.details_json = details_payload
             else:
                 t212_account = AccountModel(
@@ -475,14 +475,14 @@ async def sync_all_data(
                     currency=target_currency,
                     institution="Trading 212",
                     details_json=details_payload,
-                    last_synced=datetime.utcnow()
+                    last_synced=utcnow()
                 )
                 db.add(t212_account)
             t212_account_id = t212_account.id
 
             # Save daily portfolio snapshot (upsert by user + date)
             try:
-                today = datetime.utcnow().strftime("%Y-%m-%d")
+                today = utcnow().strftime("%Y-%m-%d")
                 snapshot_stmt = pg_insert(PortfolioSnapshotModel).values({
                     "user_id": current_user.id,
                     "snapshot_date": today,
@@ -621,7 +621,7 @@ async def sync_all_data(
             sync_status.error_message = (sync_status.error_message or "") + f"Trading 212: {friendly}; "
         
         sync_status.status = "completed"
-        sync_status.completed_at = datetime.utcnow()
+        sync_status.completed_at = utcnow()
         sync_status.accounts_synced = accounts_synced
         sync_status.transactions_synced = transactions_synced
         sync_status.details_json = json.dumps({"accounts": account_results})
@@ -689,7 +689,7 @@ async def sync_all_data(
         if sync_status:
             sync_status.status = "failed"
             sync_status.error_message = friendly
-            sync_status.completed_at = datetime.utcnow()
+            sync_status.completed_at = utcnow()
             sync_status.details_json = json.dumps({"accounts": account_results})
             await db.commit()
 
@@ -712,7 +712,7 @@ async def get_sync_status(
     sync_status = result.scalar_one_or_none()
 
     # Count successful syncs today (UTC date)
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     count_result = await db.execute(
         select(func.count()).select_from(SyncStatusModel).where(
             SyncStatusModel.user_id == current_user.id,

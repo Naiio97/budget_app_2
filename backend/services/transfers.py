@@ -112,7 +112,7 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
                     acc_ids.update(extract_account_number(account_info["bban"]))
                 my_account_identifiers.update(acc_ids)
                 own_ids_by_account[acc.id] = acc_ids
-            except:
+            except Exception:
                 pass
     
     # Build mapping: account identifier -> ManualAccountModel for balance tracking

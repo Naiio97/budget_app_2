@@ -3,12 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
 import json
 
 from auth import get_current_user
 from database import get_db
 from models import BudgetModel, SavingsGoalModel, TransactionModel, UserModel, AccountModel
+from services.timefmt import utcnow
 
 router = APIRouter()
 
@@ -99,7 +99,7 @@ class GoalResponse(BaseModel):
 
 def get_current_month_range():
     """Get start and end date of current month in YYYY-MM-DD format"""
-    now = datetime.utcnow()
+    now = utcnow()
     start = now.replace(day=1).strftime("%Y-%m-%d")
     if now.month == 12:
         end = now.replace(year=now.year + 1, month=1, day=1)
@@ -177,7 +177,7 @@ async def get_daily_spending_by_category(
 
 def days_in_current_month() -> int:
     import calendar
-    now = datetime.utcnow()
+    now = utcnow()
     return calendar.monthrange(now.year, now.month)[1]
 
 
@@ -225,7 +225,7 @@ async def get_budgets(
     daily_by_category = await get_daily_spending_by_category(
         db, current_user.id, list(all_categories)
     )
-    now = datetime.utcnow()
+    now = utcnow()
     days_elapsed = now.day
     days_in_month = days_in_current_month()
 

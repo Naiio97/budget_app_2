@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from services.gocardless import gocardless_service, select_balance
-from services.timefmt import utc_iso
+from services.timefmt import utc_iso, utcnow
 from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, UserModel
@@ -133,7 +133,7 @@ async def bank_callback(
         if existing_acc:
             existing_acc.balance = balance
             existing_acc.currency = currency
-            existing_acc.last_synced = datetime.utcnow()
+            existing_acc.last_synced = utcnow()
             existing_acc.details_json = json.dumps(details_dict)
             if consent_expires_at:
                 existing_acc.consent_expires_at = consent_expires_at
@@ -147,7 +147,7 @@ async def bank_callback(
                 currency=currency,
                 institution=requisition.institution_id,
                 details_json=json.dumps(details_dict),
-                last_synced=datetime.utcnow(),
+                last_synced=utcnow(),
                 consent_expires_at=consent_expires_at
             )
             db.add(new_account)

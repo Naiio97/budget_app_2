@@ -8,7 +8,6 @@ import asyncio
 import json
 import re
 from dataclasses import asdict
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -28,6 +27,7 @@ from routers.settings import get_setting, set_setting
 from services.payslip_parser import parse_payslip
 from services.salary_calculator import calculate_salary
 from services.timesheet_parser import compute_fond_days, parse_timesheet
+from services.timefmt import utcnow
 
 router = APIRouter()
 
@@ -197,7 +197,7 @@ async def upload_salary_timesheet(
     estimate.net_to_account = breakdown.na_ucet
     estimate.breakdown_json = json.dumps(breakdown_payload)
     estimate.is_accepted = False
-    estimate.updated_at = datetime.utcnow()
+    estimate.updated_at = utcnow()
 
     await db.commit()
     await db.refresh(estimate)
@@ -250,7 +250,7 @@ async def upload_salary_payslip(
         "delta": round(data.na_ucet - estimate.net_to_account, 2),
         "source_filename": file.filename,
     })
-    estimate.updated_at = datetime.utcnow()
+    estimate.updated_at = utcnow()
 
     # Kalibrace konfigurace: pásku bereme jako zdroj pravdy, ale jen když
     # není starší než už uložený kvartál (zpětné nahrání historie nesmí

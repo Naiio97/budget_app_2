@@ -81,16 +81,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS for frontend
-# Seznam povolených URL (tvůj nový frontend)
-origins = [
-    "https://budget-frontend.redfield-d4fd3af1.westeurope.azurecontainerapps.io",
-    "http://localhost:3000", # Pro tvůj lokální vývoj
-]
-
+# CORS — povolené originy řídí config (env CORS_ORIGINS), viz config.py
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings_config.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
