@@ -96,12 +96,6 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
     return res;
 }
 
-// Compat shim — older callers still pass a custom demoResponse; route through
-// apiFetch which now handles demo synthesis itself.
-async function apiMutate(path: string, init: RequestInit): Promise<Response> {
-    return apiFetch(path, init);
-}
-
 export interface Account {
     id: string;
     name: string;
@@ -177,24 +171,6 @@ export interface DashboardData {
     accounts: Account[];
 }
 
-export interface BalanceHistory {
-    history: Array<{ date: string; balance: number }>;
-}
-
-export interface Portfolio {
-    total_value: number;
-    total_profit: number;
-    positions: Array<{
-        ticker: string;
-        quantity: number;
-        average_price: number;
-        current_price: number;
-        value: number;
-        profit: number;
-        profit_percent: number;
-    }>;
-}
-
 async function fetchApi<T>(endpoint: string): Promise<T> {
     const response = await apiFetch(endpoint);
 
@@ -207,10 +183,6 @@ async function fetchApi<T>(endpoint: string): Promise<T> {
 
 export async function getDashboard(includeHidden = false): Promise<DashboardData> {
     return fetchApi<DashboardData>(`/dashboard/${includeHidden ? '?include_hidden=true' : ''}`);
-}
-
-export async function getAccounts(): Promise<Account[]> {
-    return fetchApi<Account[]>('/accounts/');
 }
 
 export interface PaginatedResponse<T> {
@@ -260,7 +232,7 @@ export async function getTags(): Promise<{ tags: Tag[] }> {
 }
 
 export async function createTag(name: string, color?: string): Promise<Tag> {
-    const response = await apiMutate('/tags/', {
+    const response = await apiFetch('/tags/', {
         method: 'POST',
         body: JSON.stringify({ name, color }),
     });
@@ -268,16 +240,8 @@ export async function createTag(name: string, color?: string): Promise<Tag> {
     return response.json();
 }
 
-export async function updateTag(id: number, name: string, color?: string): Promise<void> {
-    const response = await apiMutate(`/tags/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ name, color }),
-    });
-    if (!response.ok) throw new Error('Failed to update tag');
-}
-
 export async function deleteTag(id: number): Promise<void> {
-    const response = await apiMutate(`/tags/${id}`, { method: 'DELETE' });
+    const response = await apiFetch(`/tags/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete tag');
 }
 
@@ -286,7 +250,7 @@ export async function getTagSummary(id: number): Promise<TagSummary> {
 }
 
 export async function setTransactionTags(transactionId: string, tagIds: number[]): Promise<{ id: string; tags: Tag[] }> {
-    const response = await apiMutate(`/transactions/${transactionId}/tags`, {
+    const response = await apiFetch(`/transactions/${transactionId}/tags`, {
         method: 'PUT',
         body: JSON.stringify({ tag_ids: tagIds }),
     });
@@ -302,7 +266,7 @@ export async function getVapidPublicKey(): Promise<string> {
 }
 
 export async function subscribePush(subscription: PushSubscriptionJSON): Promise<void> {
-    const response = await apiMutate('/notifications/subscribe', {
+    const response = await apiFetch('/notifications/subscribe', {
         method: 'POST',
         body: JSON.stringify(subscription),
     });
@@ -310,7 +274,7 @@ export async function subscribePush(subscription: PushSubscriptionJSON): Promise
 }
 
 export async function unsubscribePush(endpoint: string): Promise<void> {
-    const response = await apiMutate('/notifications/unsubscribe', {
+    const response = await apiFetch('/notifications/unsubscribe', {
         method: 'POST',
         body: JSON.stringify({ endpoint }),
     });
@@ -318,17 +282,9 @@ export async function unsubscribePush(endpoint: string): Promise<void> {
 }
 
 export async function sendTestPush(): Promise<{ sent: number }> {
-    const response = await apiMutate('/notifications/test', { method: 'POST' });
+    const response = await apiFetch('/notifications/test', { method: 'POST' });
     if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || 'Failed to send test notification');
     return response.json();
-}
-
-export async function getBalanceHistory(days: number = 30): Promise<BalanceHistory> {
-    return fetchApi<BalanceHistory>(`/dashboard/balance-history?days=${days}`);
-}
-
-export async function getPortfolio(): Promise<Portfolio> {
-    return fetchApi<Portfolio>('/dashboard/portfolio');
 }
 
 // Net Worth History
@@ -352,7 +308,7 @@ export async function getInstitutions(country: string = 'CZ'): Promise<{ institu
 }
 
 export async function connectBank(institutionId: string, redirectUrl: string): Promise<{ link: string; requisition_id: string }> {
-    const response = await apiMutate(`/accounts/connect/bank`, {
+    const response = await apiFetch(`/accounts/connect/bank`, {
         method: 'POST',
         body: JSON.stringify({ institution_id: institutionId, redirect_url: redirectUrl }),
     });
@@ -362,7 +318,7 @@ export async function connectBank(institutionId: string, redirectUrl: string): P
 }
 
 export async function updateAccount(id: string, data: { name?: string; is_visible?: boolean }): Promise<{ status: string; id: string }> {
-    const response = await apiMutate(`/accounts/${id}`, {
+    const response = await apiFetch(`/accounts/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
     });
@@ -372,7 +328,7 @@ export async function updateAccount(id: string, data: { name?: string; is_visibl
 }
 
 export async function deleteAccount(id: string): Promise<{ status: string; id: string }> {
-    const response = await apiMutate(`/accounts/${id}`, {
+    const response = await apiFetch(`/accounts/${id}`, {
         method: 'DELETE',
     });
 
@@ -460,7 +416,7 @@ export async function getApiKeys(): Promise<ApiKeysResponse> {
 }
 
 export async function saveApiKeys(keys: ApiKeysRequest): Promise<{ status: string; updated_keys: string[] }> {
-    const response = await apiMutate(`/settings/api-keys`, {
+    const response = await apiFetch(`/settings/api-keys`, {
         method: 'POST',
         body: JSON.stringify(keys),
     });
@@ -636,7 +592,7 @@ export interface TransactionShareResult extends TransactionShare {
 }
 
 export async function updateTransactionShare(id: string, share: TransactionShare): Promise<TransactionShareResult> {
-    const response = await apiMutate(`/transactions/${id}/share`, {
+    const response = await apiFetch(`/transactions/${id}/share`, {
         method: 'PATCH',
         body: JSON.stringify(share),
     });
@@ -648,7 +604,7 @@ export async function updateTransactionShare(id: string, share: TransactionShare
 }
 
 export async function setTransactionExcluded(id: string, excluded: boolean): Promise<{ id: string; user_excluded: boolean; is_excluded: boolean }> {
-    const response = await apiMutate(`/transactions/${id}/exclude`, {
+    const response = await apiFetch(`/transactions/${id}/exclude`, {
         method: 'PATCH',
         body: JSON.stringify({ excluded }),
     });
@@ -711,7 +667,7 @@ export async function createShareRule(rule: {
     note?: string | null;
     apply_retroactively?: boolean;
 }): Promise<{ rule: ShareRule; applied_to: number }> {
-    const response = await apiMutate(`/settings/share-rules`, {
+    const response = await apiFetch(`/settings/share-rules`, {
         method: 'POST',
         body: JSON.stringify(rule),
     });
@@ -723,7 +679,7 @@ export async function createShareRule(rule: {
 }
 
 export async function deleteShareRule(id: number): Promise<void> {
-    const response = await apiMutate(`/settings/share-rules/${id}`, { method: 'DELETE' });
+    const response = await apiFetch(`/settings/share-rules/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete share rule');
 }
 
@@ -737,19 +693,11 @@ export interface Contact {
 }
 
 export async function saveContact(iban: string, name: string, note?: string): Promise<Contact> {
-    const response = await apiMutate(`/contacts/${encodeURIComponent(iban)}`, {
+    const response = await apiFetch(`/contacts/${encodeURIComponent(iban)}`, {
         method: 'PUT',
         body: JSON.stringify({ name, note: note ?? null }),
     });
     if (!response.ok) throw new Error('Failed to save contact');
-    return response.json();
-}
-
-export async function deleteContact(iban: string): Promise<{ deleted: string }> {
-    const response = await apiMutate(`/contacts/${encodeURIComponent(iban)}`, {
-        method: 'DELETE',
-    });
-    if (!response.ok) throw new Error('Failed to delete contact');
     return response.json();
 }
 
@@ -813,21 +761,6 @@ export interface Budget {
     daily_cumulative: DailySpendingPoint[];
 }
 
-export interface BudgetOverview {
-    month: string;
-    month_name: string;
-    total_budget: number;
-    total_spent: number;
-    total_percentage: number;
-    categories: Array<{
-        category: string;
-        amount: number;
-        spent: number;
-        percentage: number;
-    }>;
-    categories_count: number;
-}
-
 export interface SavingsGoal {
     id: number;
     name: string;
@@ -843,12 +776,8 @@ export async function getBudgets(): Promise<Budget[]> {
     return fetchApi<Budget[]>('/budgets/');
 }
 
-export async function getBudgetOverview(): Promise<BudgetOverview> {
-    return fetchApi<BudgetOverview>('/budgets/overview');
-}
-
 export async function createBudget(data: { name?: string; categories: string[]; amount: number }): Promise<Budget> {
-    const response = await apiMutate(`/budgets/`, {
+    const response = await apiFetch(`/budgets/`, {
         method: 'POST',
         body: JSON.stringify(data),
     });
@@ -872,7 +801,7 @@ export async function getBudgetCategoryOptions(): Promise<BudgetCategoryOption[]
 }
 
 export async function updateBudget(id: number, data: { category?: string; amount?: number; is_active?: boolean }): Promise<Budget> {
-    const response = await apiMutate(`/budgets/${id}`, {
+    const response = await apiFetch(`/budgets/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
     });
@@ -881,7 +810,7 @@ export async function updateBudget(id: number, data: { category?: string; amount
 }
 
 export async function deleteBudget(id: number): Promise<{ status: string; id: number }> {
-    const response = await apiMutate(`/budgets/${id}`, {
+    const response = await apiFetch(`/budgets/${id}`, {
         method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to delete budget');
@@ -893,7 +822,7 @@ export async function getGoals(): Promise<SavingsGoal[]> {
 }
 
 export async function createGoal(data: { name: string; target_amount: number; deadline?: string }): Promise<SavingsGoal> {
-    const response = await apiMutate(`/budgets/goals`, {
+    const response = await apiFetch(`/budgets/goals`, {
         method: 'POST',
         body: JSON.stringify(data),
     });
@@ -902,7 +831,7 @@ export async function createGoal(data: { name: string; target_amount: number; de
 }
 
 export async function updateGoal(id: number, data: { name?: string; target_amount?: number; current_amount?: number; add_amount?: number; deadline?: string; is_completed?: boolean }): Promise<SavingsGoal> {
-    const response = await apiMutate(`/budgets/goals/${id}`, {
+    const response = await apiFetch(`/budgets/goals/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
     });
@@ -911,7 +840,7 @@ export async function updateGoal(id: number, data: { name?: string; target_amoun
 }
 
 export async function deleteGoal(id: number): Promise<{ status: string; id: number }> {
-    const response = await apiMutate(`/budgets/goals/${id}`, {
+    const response = await apiFetch(`/budgets/goals/${id}`, {
         method: 'DELETE',
     });
     if (!response.ok) throw new Error('Failed to delete goal');
@@ -964,7 +893,7 @@ export async function getManualInvestment(id: number): Promise<ManualInvestmentA
 }
 
 export async function createManualInvestment(data: { name: string; currency?: string; note?: string }): Promise<ManualInvestmentAccount> {
-    const r = await apiMutate(`/manual-investments/`, {
+    const r = await apiFetch(`/manual-investments/`, {
         method: 'POST',
         body: JSON.stringify(data),
     });
@@ -973,7 +902,7 @@ export async function createManualInvestment(data: { name: string; currency?: st
 }
 
 export async function updateManualInvestment(id: number, data: { name?: string; currency?: string; note?: string; is_visible?: boolean }): Promise<ManualInvestmentAccount> {
-    const r = await apiMutate(`/manual-investments/${id}`, {
+    const r = await apiFetch(`/manual-investments/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
     });
@@ -982,7 +911,7 @@ export async function updateManualInvestment(id: number, data: { name?: string; 
 }
 
 export async function deleteManualInvestment(id: number): Promise<void> {
-    const r = await apiMutate(`/manual-investments/${id}`, { method: 'DELETE' });
+    const r = await apiFetch(`/manual-investments/${id}`, { method: 'DELETE' });
     if (!r.ok) throw new Error('Failed to delete manual investment');
 }
 
@@ -993,7 +922,7 @@ export async function getManualInvestmentHistory(id: number): Promise<ManualInve
 }
 
 export async function createManualInvestmentPosition(accountId: number, data: { name: string; quantity?: number | null; avg_buy_price?: number | null; current_value: number; currency?: string; note?: string | null }): Promise<ManualInvestmentPosition> {
-    const r = await apiMutate(`/manual-investments/${accountId}/positions`, {
+    const r = await apiFetch(`/manual-investments/${accountId}/positions`, {
         method: 'POST',
         body: JSON.stringify(data),
     });
@@ -1002,7 +931,7 @@ export async function createManualInvestmentPosition(accountId: number, data: { 
 }
 
 export async function updateManualInvestmentPosition(accountId: number, positionId: number, data: { name?: string; quantity?: number | null; avg_buy_price?: number | null; current_value?: number; currency?: string; note?: string | null }): Promise<ManualInvestmentPosition> {
-    const r = await apiMutate(`/manual-investments/${accountId}/positions/${positionId}`, {
+    const r = await apiFetch(`/manual-investments/${accountId}/positions/${positionId}`, {
         method: 'PUT',
         body: JSON.stringify(data),
     });
@@ -1011,7 +940,7 @@ export async function updateManualInvestmentPosition(accountId: number, position
 }
 
 export async function deleteManualInvestmentPosition(accountId: number, positionId: number): Promise<void> {
-    const r = await apiMutate(`/manual-investments/${accountId}/positions/${positionId}`, { method: 'DELETE' });
+    const r = await apiFetch(`/manual-investments/${accountId}/positions/${positionId}`, { method: 'DELETE' });
     if (!r.ok) throw new Error('Failed to delete position');
 }
 
@@ -1086,25 +1015,25 @@ export async function getLoanSchedule(id: number): Promise<LoanPayment[]> {
 }
 
 export async function createLoan(data: LoanCreateInput): Promise<Loan> {
-    const r = await apiMutate('/loans/', { method: 'POST', body: JSON.stringify(data) });
+    const r = await apiFetch('/loans/', { method: 'POST', body: JSON.stringify(data) });
     if (!r.ok) throw new Error('Failed to create loan');
     return r.json();
 }
 
 export async function updateLoan(id: number, data: Partial<LoanCreateInput> & { is_active?: boolean }): Promise<Loan> {
-    const r = await apiMutate(`/loans/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    const r = await apiFetch(`/loans/${id}`, { method: 'PUT', body: JSON.stringify(data) });
     if (!r.ok) throw new Error('Failed to update loan');
     return r.json();
 }
 
 export async function deleteLoan(id: number): Promise<{ status: string; id: number }> {
-    const r = await apiMutate(`/loans/${id}`, { method: 'DELETE' });
+    const r = await apiFetch(`/loans/${id}`, { method: 'DELETE' });
     if (!r.ok) throw new Error('Failed to delete loan');
     return r.json();
 }
 
 export async function toggleLoanPayment(loanId: number, paymentId: number, isPaid: boolean): Promise<LoanPayment> {
-    const r = await apiMutate(`/loans/${loanId}/payments/${paymentId}`, {
+    const r = await apiFetch(`/loans/${loanId}/payments/${paymentId}`, {
         method: 'PATCH',
         body: JSON.stringify({ is_paid: isPaid }),
     });
@@ -1195,12 +1124,8 @@ export async function getSalaryConfig(): Promise<SalaryConfig> {
 }
 
 export async function saveSalaryConfig(data: SalaryConfig): Promise<void> {
-    const r = await apiMutate('/settings/salary-config', { method: 'POST', body: JSON.stringify(data) });
+    const r = await apiFetch('/settings/salary-config', { method: 'POST', body: JSON.stringify(data) });
     if (!r.ok) throw new Error('Failed to save salary config');
-}
-
-export async function getSalaryEstimates(): Promise<SalaryEstimate[]> {
-    return fetchApi<SalaryEstimate[]>('/salary-estimate/');
 }
 
 export async function getSalaryEstimate(yearMonth: string): Promise<SalaryEstimate | null> {
@@ -1220,7 +1145,7 @@ export async function uploadSalaryTimesheet(yearMonth: string, file: File, bonus
     const formData = new FormData();
     formData.append('file', file);
     formData.append('bonus', String(bonus));
-    const r = await apiMutate(`/salary-estimate/${yearMonth}`, { method: 'POST', body: formData });
+    const r = await apiFetch(`/salary-estimate/${yearMonth}`, { method: 'POST', body: formData });
     if (!r.ok) {
         const detail = await r.json().then((b) => b?.detail).catch(() => null);
         // FastAPI validační chyby (422) mají detail jako pole objektů — ukázat jen stringy
@@ -1241,7 +1166,7 @@ export async function uploadSalaryPayslip(yearMonth: string, file: File): Promis
     }
     const formData = new FormData();
     formData.append('file', file);
-    const r = await apiMutate(`/salary-estimate/${yearMonth}/payslip`, { method: 'POST', body: formData });
+    const r = await apiFetch(`/salary-estimate/${yearMonth}/payslip`, { method: 'POST', body: formData });
     if (!r.ok) {
         const detail = await r.json().then((b) => b?.detail).catch(() => null);
         throw new Error(typeof detail === 'string' ? detail : 'Nahrání výplatnice selhalo');
@@ -1250,13 +1175,8 @@ export async function uploadSalaryPayslip(yearMonth: string, file: File): Promis
 }
 
 export async function acceptSalaryEstimate(yearMonth: string): Promise<void> {
-    const r = await apiMutate(`/salary-estimate/${yearMonth}/accept`, { method: 'POST' });
+    const r = await apiFetch(`/salary-estimate/${yearMonth}/accept`, { method: 'POST' });
     if (!r.ok) throw new Error('Failed to accept salary estimate');
-}
-
-export async function deleteSalaryEstimate(yearMonth: string): Promise<void> {
-    const r = await apiMutate(`/salary-estimate/${yearMonth}`, { method: 'DELETE' });
-    if (!r.ok) throw new Error('Failed to delete salary estimate');
 }
 
 // === Subscriptions ===
@@ -1343,19 +1263,19 @@ export async function detectSubscriptions(): Promise<DetectedSubscription[]> {
 }
 
 export async function createSubscription(data: SubscriptionCreateInput): Promise<Subscription> {
-    const r = await apiMutate('/subscriptions/', { method: 'POST', body: JSON.stringify(data) });
+    const r = await apiFetch('/subscriptions/', { method: 'POST', body: JSON.stringify(data) });
     if (!r.ok) throw new Error('Failed to create subscription');
     return r.json();
 }
 
 export async function updateSubscription(id: number, data: Partial<SubscriptionCreateInput> & { is_active?: boolean }): Promise<Subscription> {
-    const r = await apiMutate(`/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+    const r = await apiFetch(`/subscriptions/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
     if (!r.ok) throw new Error('Failed to update subscription');
     return r.json();
 }
 
 export async function deleteSubscription(id: number): Promise<{ status: string; id: number }> {
-    const r = await apiMutate(`/subscriptions/${id}`, { method: 'DELETE' });
+    const r = await apiFetch(`/subscriptions/${id}`, { method: 'DELETE' });
     if (!r.ok) throw new Error('Failed to delete subscription');
     return r.json();
 }

@@ -10,8 +10,6 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 ARG NEXT_PUBLIC_BUILD_SHA=dev
 ENV NEXT_PUBLIC_BUILD_SHA=$NEXT_PUBLIC_BUILD_SHA
-ARG NEXT_PUBLIC_BUILD_TIME
-ENV NEXT_PUBLIC_BUILD_TIME=$NEXT_PUBLIC_BUILD_TIME
 
 # Stamp the SW cache name with the build SHA so a new deploy invalidates
 # all cached assets (icons, logos, precache) for returning clients.

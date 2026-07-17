@@ -39,8 +39,6 @@ export default function ManualAccountDetailPage() {
     // Editované částky žijí jako string a parsují se až při uložení — number
     // state s Number(e.target.value) vrací po smazání pole otravnou nulu.
     const [balance, setBalance] = useState('');
-    const [editingName, setEditingName] = useState(false);
-    const [accountName, setAccountName] = useState('');
     const [showAddEnvelope, setShowAddEnvelope] = useState(false);
     const [newEnvelope, setNewEnvelope] = useState({ name: '', amount: '', is_mine: false, note: '' });
     const [editingEnvelope, setEditingEnvelope] = useState<number | null>(null);

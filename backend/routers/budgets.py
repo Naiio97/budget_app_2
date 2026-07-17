@@ -392,54 +392,6 @@ async def delete_budget(
     return {"status": "deleted", "id": budget_id}
 
 
-@router.get("/overview")
-async def get_budget_overview(
-    current_user: UserModel = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Get budget overview for current month (for dashboard widget)"""
-    result = await db.execute(
-        select(BudgetModel).where(
-            BudgetModel.user_id == current_user.id,
-            BudgetModel.is_active == True,
-        )
-    )
-    budgets = result.scalars().all()
-
-    total_budget = 0
-    total_spent = 0
-    categories = []
-
-    for budget in budgets:
-        cats = budget_category_list(budget)
-        spent = await get_category_spending(db, current_user.id, cats)
-        percentage = (spent / budget.amount * 100) if budget.amount > 0 else 0
-
-        total_budget += budget.amount
-        total_spent += spent
-
-        categories.append({
-            "category": budget_display_name(budget),
-            "amount": budget.amount,
-            "spent": spent,
-            "percentage": round(percentage, 1)
-        })
-
-    categories.sort(key=lambda x: x["percentage"], reverse=True)
-
-    now = datetime.utcnow()
-
-    return {
-        "month": now.strftime("%Y-%m"),
-        "month_name": now.strftime("%B %Y"),
-        "total_budget": total_budget,
-        "total_spent": total_spent,
-        "total_percentage": round((total_spent / total_budget * 100) if total_budget > 0 else 0, 1),
-        "categories": categories[:5],
-        "categories_count": len(categories)
-    }
-
-
 # === Savings Goals Endpoints ===
 
 @router.get("/goals", response_model=List[GoalResponse])

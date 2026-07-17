@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from datetime import datetime, timedelta
 import asyncio
@@ -121,7 +121,6 @@ async def detect_and_mark_transfers(db: AsyncSession, user_id: int):
     """Detect and mark internal transfers based on creditor/debtor account matching.
     Also updates manual account balances when transfers to/from manual accounts are detected."""
     from models import ManualAccountModel
-    import re
 
     def extract_account_number(value: str) -> set:
         """Extract account number from IBAN, BBAN or plain account number"""

@@ -6,8 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from auth import get_current_user
 from database import get_db
-from models import AccountModel, TransactionModel, SyncStatusModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, ManualInvestmentPositionModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
-from services.trading212 import trading212_service
+from models import AccountModel, TransactionModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
 from services.exchange_rates import get_exchange_rate
 from services.timefmt import utc_iso
 from routers.contacts import normalize_iban
@@ -302,101 +301,6 @@ async def get_dashboard(
         "recent_transactions": _build_recent_tx(recent_tx_parsed, contacts_by_iban),
         "accounts": accounts_list
     }
-
-
-@router.get("/portfolio")
-async def get_portfolio_summary(
-    current_user: UserModel = Depends(get_current_user),
-):
-    """Get investment portfolio summary (live from Trading 212)"""
-    try:
-        portfolio = await trading212_service.get_portfolio()
-        pies = await trading212_service.get_pies()
-        
-        positions = []
-        total_value = 0
-        total_profit = 0
-        
-        for pos in portfolio:
-            value = pos.get("currentPrice", 0) * pos.get("quantity", 0)
-            profit = pos.get("ppl", 0)
-            total_value += value
-            total_profit += profit
-            
-            positions.append({
-                "ticker": pos.get("ticker"),
-                "quantity": pos.get("quantity"),
-                "average_price": pos.get("averagePrice"),
-                "current_price": pos.get("currentPrice"),
-                "value": value,
-                "profit": profit,
-                "profit_percent": (profit / (value - profit) * 100) if value != profit else 0
-            })
-        
-        return {
-            "total_value": total_value,
-            "total_profit": total_profit,
-            "positions": positions,
-            "pies": pies
-        }
-    except Exception as e:
-        return {"error": str(e), "positions": [], "pies": []}
-
-
-@router.get("/balance-history")
-async def get_balance_history(
-    days: int = Query(30, ge=7, le=365),
-    current_user: UserModel = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get balance history for chart from database"""
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=days)
-
-    result = await db.execute(
-        select(TransactionModel).where(
-            TransactionModel.user_id == current_user.id,
-            TransactionModel.date >= start_date.strftime("%Y-%m-%d"),
-            TransactionModel.account_id.in_(
-                select(AccountModel.id).where(
-                    AccountModel.user_id == current_user.id,
-                    AccountModel.is_visible == True,
-                )
-            ),
-        ).limit(1000)
-    )
-    transactions = result.scalars().all()
-
-    acc_result = await db.execute(
-        select(func.sum(AccountModel.balance)).where(
-            AccountModel.user_id == current_user.id,
-            AccountModel.type == "bank",
-            AccountModel.is_visible == True,
-        )
-    )
-    current_balance = acc_result.scalar() or 0
-    
-    history = []
-    daily_totals = {}
-    
-    for tx in transactions:
-        if tx.account_type != "bank":
-            continue
-        date = tx.date[:10]
-        if date not in daily_totals:
-            daily_totals[date] = 0
-        daily_totals[date] += tx.amount
-    
-    # Generate daily points
-    balance = current_balance
-    for i in range(days, -1, -1):
-        date = (end_date - timedelta(days=i)).strftime("%Y-%m-%d")
-        if date in daily_totals:
-            balance -= daily_totals[date]
-        history.append({"date": date, "balance": balance})
-    
-    history.reverse()
-    return {"history": history}
 
 
 @router.get("/net-worth-history")

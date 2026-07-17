@@ -340,31 +340,6 @@ async def get_settlement_summary(
     }
 
 
-@router.get("/")
-async def get_category_summary(
-    date_from: Optional[str] = Query(None),
-    date_to: Optional[str] = Query(None),
-    current_user: UserModel = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get spending by category from database.
-
-    Note: shadowed by the paginated `get_transactions` above (same path) — kept
-    for legacy reasons but never reached by the router.
-    """
-    transactions = await get_transactions(date_from, date_to, limit=500, db=db)
-    
-    categories = {}
-    for tx in transactions:
-        if tx.amount < 0:  # Only expenses
-            cat = tx.category or "Other"
-            if cat not in categories:
-                categories[cat] = 0
-            categories[cat] += abs(tx.amount)
-    
-    return {"categories": categories}
-
-
 class CategoryUpdate(BaseModel):
     category: str
     learn: bool = True  # If true, create a rule for this merchant

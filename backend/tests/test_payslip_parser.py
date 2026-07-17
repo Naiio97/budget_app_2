@@ -3,8 +3,6 @@
 Testuje se parse_payslip_text na syntetickém textu napodobujícím rozházenou
 textovou vrstvu pásky (Elanor). Všechna čísla jsou vymyšlená.
 """
-import pytest
-
 from services.payslip_parser import parse_payslip_text
 
 

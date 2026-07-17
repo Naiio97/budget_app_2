@@ -1,7 +1,7 @@
 import {
-    Account, Transaction, DashboardData, BalanceHistory, Portfolio,
+    Account, Transaction, DashboardData,
     NetWorthHistory, SyncStatus, ApiKeysResponse,
-    InvestmentPortfolio, Budget, BudgetOverview,
+    InvestmentPortfolio, Budget,
     SavingsGoal, PaginatedResponse, Contact,
     Pie, InvestmentPortfolioDetail, PortfolioHistory,
     ManualInvestmentAccount,
@@ -151,13 +151,6 @@ export const MOCK_TRANSACTIONS: PaginatedResponse<Transaction> = {
     pages: 1
 };
 
-export const MOCK_BALANCE_HISTORY: BalanceHistory = {
-    history: Array.from({ length: 30 }).map((_, i) => ({
-        date: new Date(Date.now() - (29 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        balance: 100000 + Math.floor(Math.random() * 60000)
-    }))
-};
-
 export const MOCK_NET_WORTH: NetWorthHistory = {
     history: Array.from({ length: 30 }).map((_, i) => {
         const bank = 40000 + Math.floor(Math.random() * 10000);
@@ -170,20 +163,6 @@ export const MOCK_NET_WORTH: NetWorthHistory = {
         };
     }),
     currency: 'CZK'
-};
-
-export const MOCK_BUDGET_OVERVIEW: BudgetOverview = {
-    month: currentYearMonth(),
-    month_name: 'Aktuální měsíc',
-    total_budget: 40000,
-    total_spent: 32000,
-    total_percentage: 80,
-    categories: [
-        { category: 'Bydlení', amount: 18000, spent: 18000, percentage: 100 },
-        { category: 'Jídlo', amount: 10000, spent: 9500, percentage: 95 },
-        { category: 'Doprava', amount: 5000, spent: 4500, percentage: 90 },
-    ],
-    categories_count: 3
 };
 
 // Kumulativní denní útrata pro burn-down: zvlněné denní přírůstky (≥ 0),
@@ -410,15 +389,6 @@ export const MOCK_SUBSCRIPTIONS_DETECT: DetectedSubscription[] = [
         next_due_estimate: daysFromNow(51),
     },
 ];
-
-export const MOCK_PORTFOLIO: Portfolio = {
-    total_value: 109000,
-    total_profit: 15000,
-    positions: [
-        { ticker: 'AAPL', quantity: 10, average_price: 150, current_price: 180, value: 1800, profit: 300, profit_percent: 20 },
-        { ticker: 'VWCE', quantity: 50, average_price: 95, current_price: 110, value: 5500, profit: 750, profit_percent: 15.7 },
-    ]
-};
 
 export const MOCK_INVESTMENT_PORTFOLIO: InvestmentPortfolio = {
     total_value: 109000,
@@ -751,9 +721,7 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         }
         return MOCK_WRAPPED;
     }
-    if (path.startsWith('/dashboard/balance-history')) return MOCK_BALANCE_HISTORY;
     if (path.startsWith('/dashboard/net-worth-history')) return MOCK_NET_WORTH;
-    if (path.startsWith('/dashboard/portfolio')) return MOCK_PORTFOLIO;
     if (path.startsWith('/dashboard/monthly-report')) return MOCK_MONTHLY_REPORT;
     if (path.startsWith('/dashboard/')) return MOCK_DASHBOARD;
     if (path.startsWith('/accounts/institutions')) return { institutions: [] };
@@ -821,7 +789,6 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/investments/pies')) return MOCK_PIES;
     if (path.startsWith('/investments/history')) return MOCK_PORTFOLIO_HISTORY;
     if (path.startsWith('/investments/dividends')) return { dividends: [] };
-    if (path.startsWith('/budgets/overview')) return MOCK_BUDGET_OVERVIEW;
     if (path.startsWith('/budgets/goals')) return MOCK_GOALS;
     if (path.startsWith('/budgets/')) return MOCK_BUDGETS;
     if (path.startsWith('/sync/status')) return MOCK_SYNC_STATUS;
