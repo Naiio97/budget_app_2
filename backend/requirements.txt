@@ -1,24 +1,26 @@
-fastapi
-uvicorn[standard]
-httpx
-python-dotenv
-pydantic
-pydantic-settings
-sqlalchemy>=2.0.0
-greenlet>=3.0.0
-asyncpg
-alembic
+# Verze zapinované 2026-07-17 (stav ověřeného venv) — deploy tak nemůže
+# potichu potáhnout breaking změnu. Upgrade = vědomě zvednout verzi a pustit testy.
+fastapi==0.135.1
+uvicorn[standard]==0.41.0
+httpx==0.28.1
+python-dotenv==1.2.2
+pydantic==2.12.5
+pydantic-settings==2.13.1
+sqlalchemy==2.0.48
+greenlet==3.3.2
+asyncpg==0.31.0
+alembic==1.18.4
 # [crypto] pulls in `cryptography` — required for RS256 verification of the
 # Google ID token in services/oauth_verify.py (HS256 alone doesn't need it).
-pyjwt[crypto]>=2.8.0
-passlib[argon2]>=1.7.4
-slowapi>=0.1.9
-email-validator>=2.0.0
-pywebpush
+pyjwt[crypto]==2.13.0
+passlib[argon2]==1.7.4
+slowapi==0.1.9
+email-validator==2.3.0
+pywebpush==2.3.0
 # Strukturované JSON logy (LOG_FORMAT=json) — pro Log Analytics / budoucí ELK
-python-json-logger>=3.0.0
+python-json-logger==4.1.0
 # Odhad výplaty: čtení nahraného .xlsx timesheetu + multipart upload (UploadFile/Form)
-openpyxl
-python-multipart
+openpyxl==3.1.5
+python-multipart==0.0.32
 # Odhad výplaty: čtení nahrané výplatnice (PDF) pro kalibraci a porovnání
-pypdf
+pypdf==6.14.2

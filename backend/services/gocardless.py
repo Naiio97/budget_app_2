@@ -7,6 +7,7 @@ from schemas import (
     TransactionSchema, Integration, SpectacularRequisition,
     Requisition, AccountDetail, AccountBalance, BalanceSchema
 )
+from services.timefmt import utcnow
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ def _is_valid(expires_at: Optional[datetime]) -> bool:
     """Return True if the token is still usable (has time left minus buffer)."""
     if expires_at is None:
         return False
-    return datetime.utcnow() < expires_at - timedelta(seconds=_EXPIRY_BUFFER_SECS)
+    return utcnow() < expires_at - timedelta(seconds=_EXPIRY_BUFFER_SECS)
 
 
 class GoCardlessService:
@@ -169,12 +170,12 @@ class GoCardlessService:
         """Parse a /token/new/ or /token/refresh/ response into memory."""
         self.access_token = data["access"]
         access_secs = int(data.get("access_expires", 86400))
-        self.access_expires = datetime.utcnow() + timedelta(seconds=access_secs)
+        self.access_expires = utcnow() + timedelta(seconds=access_secs)
 
         if "refresh" in data:
             self.refresh_token = data["refresh"]
             refresh_secs = int(data.get("refresh_expires", 2592000))
-            self.refresh_expires = datetime.utcnow() + timedelta(seconds=refresh_secs)
+            self.refresh_expires = utcnow() + timedelta(seconds=refresh_secs)
 
         logger.info(
             "New GC token acquired — access expires ~%ds from now, refresh expires ~%ds from now",
@@ -211,7 +212,7 @@ class GoCardlessService:
             # Refresh endpoint only returns a new access token (no new refresh)
             self.access_token = data["access"]
             access_secs = int(data.get("access_expires", 86400))
-            self.access_expires = datetime.utcnow() + timedelta(seconds=access_secs)
+            self.access_expires = utcnow() + timedelta(seconds=access_secs)
             logger.info("GC access token refreshed — expires in ~%ds", access_secs)
 
     # ------------------------------------------------------------------ #

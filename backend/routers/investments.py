@@ -3,14 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import timedelta
 import json
 
 from auth import get_current_user
 from database import get_db
 from models import AccountModel, TransactionModel, PortfolioSnapshotModel, UserModel
 from services.exchange_rates import get_exchange_rate
-from services.timefmt import utc_iso
+from services.timefmt import utc_iso, utcnow
 
 router = APIRouter()
 
@@ -115,7 +115,7 @@ async def get_portfolio_history(
     """Get portfolio value history from daily snapshots saved at each sync"""
     period_days = {"1W": 7, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "ALL": 3650}
     days = period_days.get(period, 30)
-    start_date = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    start_date = (utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     result = await db.execute(
         select(PortfolioSnapshotModel)

@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -14,6 +13,7 @@ from models import (
     ManualInvestmentSnapshotModel,
     UserModel,
 )
+from services.timefmt import utcnow
 
 router = APIRouter()
 
@@ -131,7 +131,7 @@ def _build_account(acc: ManualInvestmentAccountModel) -> ManualInvestmentAccount
 
 
 async def _save_snapshot(db: AsyncSession, account_id: int, total_value: float) -> None:
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = utcnow().strftime("%Y-%m-%d")
     existing = await db.execute(
         select(ManualInvestmentSnapshotModel)
         .where(ManualInvestmentSnapshotModel.account_id == account_id)

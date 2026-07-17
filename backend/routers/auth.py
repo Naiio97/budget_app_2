@@ -4,7 +4,6 @@ Designed for Auth.js (NextAuth v5) on the frontend driving Google / Apple
 OIDC. The handshake happens client-side; this router only mints the backend
 JWT and provisions the user row.
 """
-from datetime import datetime
 from typing import Annotated, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,6 +17,7 @@ from database import get_db
 from models import UserModel
 from services.default_rules import seed_default_rules
 from services.oauth_verify import verify_google_id_token
+from services.timefmt import utcnow
 
 router = APIRouter()
 
@@ -143,7 +143,7 @@ async def oauth_upsert(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
 
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = utcnow()
     await db.commit()
     await db.refresh(user)
 
@@ -190,7 +190,7 @@ async def register(
     await db.flush()
     await seed_default_rules(db, user.id)
 
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = utcnow()
     await db.commit()
     await db.refresh(user)
 
@@ -225,7 +225,7 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is disabled")
 
-    user.last_login_at = datetime.utcnow()
+    user.last_login_at = utcnow()
     await db.commit()
     await db.refresh(user)
 

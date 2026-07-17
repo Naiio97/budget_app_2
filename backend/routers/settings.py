@@ -3,12 +3,12 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, and_
-from datetime import datetime
 
 from auth import get_current_user
 from database import get_db
 from models import SettingsModel, CategoryRuleModel, UserModel, ShareRuleModel, TransactionModel
 from services.share_rules import compute_my_share
+from services.timefmt import utcnow
 
 router = APIRouter()
 
@@ -38,7 +38,7 @@ async def set_setting(db: AsyncSession, user_id: int, key: str, value: str):
     existing = await db.get(SettingsModel, (user_id, key))
     if existing:
         existing.value = value
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = utcnow()
     else:
         setting = SettingsModel(user_id=user_id, key=key, value=value)
         db.add(setting)

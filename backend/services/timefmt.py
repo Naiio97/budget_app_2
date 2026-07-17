@@ -8,6 +8,15 @@ si pak čas převede do své zóny sám.
 from datetime import datetime, timezone
 
 
+def utcnow() -> datetime:
+    """Naivní UTC now — stejná sémantika jako deprecated datetime.utcnow().
+
+    DB sloupce jsou naivní (bez tzinfo), takže aware datetime by rozbil
+    porovnávání i ukládání. Až se sloupce zmigrují na timezone-aware,
+    stačí smazat .replace() tady."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def utc_iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None

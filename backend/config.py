@@ -18,6 +18,18 @@ class Settings(BaseSettings):
     trading212_api_key: str = ""
     frontend_url: str = "http://localhost:3000"
 
+    # CORS — čárkami oddělený seznam povolených originů. Default pokrývá
+    # produkční frontend i lokální vývoj; na Azure jde přepsat env proměnnou
+    # CORS_ORIGINS bez nové image (stejně jako LOG_LEVEL).
+    cors_origins_raw: str = Field(
+        default="https://budget-frontend.redfield-d4fd3af1.westeurope.azurecontainerapps.io,http://localhost:3000",
+        alias="cors_origins",
+    )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins_raw.split(",") if o.strip()]
+
     # Úroveň logování (DEBUG/INFO/WARNING…) — na Azure jde přepnout env
     # proměnnou LOG_LEVEL bez nové image, jen novou revizí Container App.
     log_level: str = "INFO"
