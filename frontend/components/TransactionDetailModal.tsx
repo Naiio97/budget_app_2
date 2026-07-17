@@ -1,0 +1,687 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { Transaction, TransactionDetail, TransactionShare, Tag, SettlementSummary, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getSettlementSummary, getTags, createTag, setTransactionTags } from '@/lib/api';
+import { Icons } from '@/lib/icons';
+import { getCategoryIcon } from '@/lib/category-icons';
+import { getLineIcon } from '@/lib/line-icons';
+import { formatCurrency, formatDateFull, formatAccount, getDisplayName, type Category } from './transaction-format';
+
+// Detail transakce — bottom sheet / modal. Vlastní stav (detail, tagy,
+// rozdělení nákladů, vypořádání) drží tady; do seznamu se změny propisují
+// přes onPatchTx / onContactSaved, aby zůstal v sync bez refetche.
+export default function TransactionDetailModal({ tx, categories, categoryIcons, categoryColors, counterpartySuggestions, updatingCategory, onCategorySelect, onPatchTx, onContactSaved, onClose }: {
+    tx: Transaction;
+    categories: Category[];
+    categoryIcons: Record<string, string>;
+    categoryColors: Record<string, string>;
+    counterpartySuggestions: string[];
+    updatingCategory: boolean;
+    onCategorySelect: (txId: string, category: string) => void;
+    onPatchTx: (id: string, patch: Partial<Transaction>) => void;
+    onContactSaved: (iban: string, direction: 'creditor' | 'debtor', name: string) => void;
+    onClose: () => void;
+}) {
+    const [txDetail, setTxDetail] = useState<TransactionDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [modalPickingCategory, setModalPickingCategory] = useState(false);
+    const [modalPickingTags, setModalPickingTags] = useState(false);
+    const [allTags, setAllTags] = useState<Tag[] | null>(null);
+    const [newTagName, setNewTagName] = useState('');
+    const [savingTags, setSavingTags] = useState(false);
+    const [namingIban, setNamingIban] = useState<string | null>(null);
+    const [nameInput, setNameInput] = useState('');
+    const [savingContact, setSavingContact] = useState(false);
+    // Shared cost / settlement (VYLEPSENI.md 3.1)
+    const [shareEditing, setShareEditing] = useState(false);
+    const [shareInput, setShareInput] = useState('');
+    const [shareNoteInput, setShareNoteInput] = useState('');
+    const [shareCounterpartyInput, setShareCounterpartyInput] = useState('');
+    const [shareLearnRule, setShareLearnRule] = useState(false);
+    const [savingShare, setSavingShare] = useState(false);
+    const [savingExclude, setSavingExclude] = useState(false);
+    const [settlementSummary, setSettlementSummary] = useState<SettlementSummary | null>(null);
+    // Bottom sheet na telefonu: švihnutí dolů zavře detail. Táhne se jen
+    // když je vnitřní scroll úplně nahoře, jinak gesto patří scrollování.
+    const [sheetDrag, setSheetDrag] = useState({ y: 0, dragging: false });
+    const sheetScrollRef = useRef<HTMLDivElement>(null);
+    const sheetDragStartY = useRef<number | null>(null);
+
+    const onSheetTouchStart = (e: React.TouchEvent) => {
+        if (window.innerWidth > 680) return;
+        if ((sheetScrollRef.current?.scrollTop ?? 0) > 0) return;
+        sheetDragStartY.current = e.touches[0].clientY;
+        setSheetDrag({ y: 0, dragging: true });
+    };
+    const onSheetTouchMove = (e: React.TouchEvent) => {
+        if (sheetDragStartY.current === null) return;
+        const dy = e.touches[0].clientY - sheetDragStartY.current;
+        setSheetDrag({ y: Math.max(dy, 0), dragging: true });
+    };
+    const onSheetTouchEnd = () => {
+        if (sheetDragStartY.current === null) return;
+        sheetDragStartY.current = null;
+        setSheetDrag(prev => {
+            if (prev.y > 110) onClose();
+            return { y: 0, dragging: false };
+        });
+    };
+
+    // Close on Escape + lock body scroll while open
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.removeEventListener('keydown', handleKey);
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [onClose]);
+
+    // Fetch rich detail when the modal opens
+    useEffect(() => {
+        setDetailLoading(true);
+        getTransactionDetail(tx.id)
+            .then(setTxDetail)
+            .catch(() => setTxDetail(null))
+            .finally(() => setDetailLoading(false));
+    }, [tx.id]);
+
+    const handleSaveContact = async (iban: string, direction: 'creditor' | 'debtor') => {
+        const trimmed = nameInput.trim();
+        if (!trimmed) return;
+        setSavingContact(true);
+        try {
+            await saveContact(iban, trimmed);
+            // Update detail + list entries locally so the rename propagates without a refetch.
+            setTxDetail(prev => prev && {
+                ...prev,
+                creditor_name: direction === 'creditor' ? trimmed : prev.creditor_name,
+                debtor_name: direction === 'debtor' ? trimmed : prev.debtor_name,
+                counterparty_name_source: 'contact_manual',
+            });
+            onContactSaved(iban, direction, trimmed);
+            setNamingIban(null);
+            setNameInput('');
+        } catch (err) {
+            console.error('Failed to save contact:', err);
+        } finally {
+            setSavingContact(false);
+        }
+    };
+
+    const handleSaveShare = async (t: Transaction, share: TransactionShare, learnRule = false) => {
+        setSavingShare(true);
+        try {
+            const saved = await updateTransactionShare(t.id, share);
+            // Propagate locally (same pattern as contacts) so list + detail stay in sync without refetch.
+            onPatchTx(t.id, saved);
+            setTxDetail(prev => prev && { ...prev, ...saved });
+            setShareEditing(false);
+
+            // "Dělit takhle i příště" — learn a share rule from this split. Pattern
+            // anchors on the counterparty name (stable), % derived from this split.
+            if (learnRule && share.my_share_amount != null && t.amount < 0) {
+                const pattern = (t.creditor_name || t.description || '').toLowerCase().trim();
+                if (pattern.length >= 3) {
+                    const pct = Math.round((share.my_share_amount / Math.abs(t.amount)) * 10000) / 100;
+                    try {
+                        await createShareRule({
+                            pattern,
+                            my_percentage: pct,
+                            counterparty: share.share_counterparty || null,
+                            note: share.settlement_note || null,
+                            apply_retroactively: true,
+                        });
+                    } catch (err) {
+                        // duplicate rule etc. — the split itself is already saved
+                        console.error('Failed to create share rule:', err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to update transaction share:', err);
+        } finally {
+            setSavingShare(false);
+        }
+    };
+
+    const handleToggleExcluded = async (t: Transaction, excluded: boolean) => {
+        setSavingExclude(true);
+        try {
+            await setTransactionExcluded(t.id, excluded);
+            // Optimisticky (server počítá stejně): vyřazený → is_excluded true;
+            // zpět → jen skutečný převod zůstává vyřazený
+            const isExcluded = excluded || (!!t.transaction_type && t.transaction_type !== 'normal');
+            onPatchTx(t.id, { user_excluded: excluded, is_excluded: isExcluded });
+            setTxDetail(prev => prev && { ...prev, user_excluded: excluded, is_excluded: isExcluded });
+        } catch (err) {
+            console.error('Failed to toggle transaction exclusion:', err);
+        } finally {
+            setSavingExclude(false);
+        }
+    };
+
+    const openTagPicker = () => {
+        setModalPickingTags(p => !p);
+        if (allTags === null) {
+            getTags()
+                .then(d => setAllTags(d.tags))
+                .catch(err => console.error('Failed to load tags:', err));
+        }
+    };
+
+    const handleToggleTag = async (txId: string, tag: Tag) => {
+        const current = tx.tags ?? [];
+        const next = current.some(t => t.id === tag.id)
+            ? current.filter(t => t.id !== tag.id)
+            : [...current, tag];
+        setSavingTags(true);
+        try {
+            const res = await setTransactionTags(txId, next.map(t => t.id));
+            onPatchTx(txId, { tags: res.tags });
+        } catch (err) {
+            console.error('Failed to set tags:', err);
+        } finally {
+            setSavingTags(false);
+        }
+    };
+
+    const TAG_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#6366f1', '#a855f7', '#ec4899'];
+
+    const handleCreateTag = async (txId: string) => {
+        const name = newTagName.trim();
+        if (!name) return;
+        setSavingTags(true);
+        try {
+            const created = await createTag(name, TAG_COLORS[(allTags?.length ?? 0) % TAG_COLORS.length]);
+            setAllTags(prev => [...(prev ?? []), created]);
+            setNewTagName('');
+            await handleToggleTag(txId, created);
+        } catch (err) {
+            console.error('Failed to create tag:', err);
+        } finally {
+            setSavingTags(false);
+        }
+    };
+
+    return (
+        <div onClick={() => onClose()} className="modal-backdrop tx-modal-overlay">
+            <div onClick={e => e.stopPropagation()} className="modal tx-modal-card"
+                onTouchStart={onSheetTouchStart} onTouchMove={onSheetTouchMove} onTouchEnd={onSheetTouchEnd}
+                style={{
+                    transform: sheetDrag.y > 0 ? `translateY(${sheetDrag.y}px)` : undefined,
+                    transition: sheetDrag.dragging ? 'none' : 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
+                }}>
+                <div className="tx-sheet-grip" aria-hidden />
+                <div className="tx-modal-scroll" ref={sheetScrollRef}>
+
+                {/* Sdílený datalist pro oba editory (společný náklad i vypořádání) */}
+                <datalist id="share-counterparties">
+                    {counterpartySuggestions.map(name => <option key={name} value={name} />)}
+                </datalist>
+
+                {/* ── Hero header ── */}
+                <div style={{
+                    padding: '20px var(--spacing-lg) 18px',
+                    background: tx.amount >= 0
+                        ? 'linear-gradient(180deg, color-mix(in srgb, var(--pos) 12%, transparent), transparent)'
+                        : 'linear-gradient(180deg, color-mix(in srgb, var(--neg) 8%, transparent), transparent)',
+                    borderBottom: '0.5px solid var(--border)',
+                    textAlign: 'center',
+                    position: 'relative',
+                }}>
+                    <button onClick={() => onClose()} className="btn btn-icon btn-ghost tx-modal-close"
+                        aria-label="Zavřít">{getLineIcon('close', 16)}</button>
+
+                    {(() => {
+                        const catColor = categoryColors[tx.category || 'Other'];
+                        return (
+                            <div style={{
+                                width: 64, height: 64, borderRadius: 18, margin: '0 auto 10px',
+                                display: 'grid', placeItems: 'center',
+                                fontSize: '1.8rem', lineHeight: 1,
+                                background: catColor ? catColor + '22' : 'var(--surface-sunken)',
+                                color: catColor || undefined,
+                            }}>
+                                {getCategoryIcon(categoryIcons[tx.category || 'Other'], 32)}
+                            </div>
+                        );
+                    })()}
+                    <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 4, fontWeight: 500 }}>
+                        {getDisplayName(tx)}
+                    </div>
+                    <div className="num" style={{
+                        fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em',
+                        color: tx.amount >= 0 ? 'var(--pos)' : 'var(--text)',
+                    }}>
+                        {tx.amount >= 0 ? '+' : ''}{formatCurrency(tx.amount, tx.currency)}
+                    </div>
+                    {tx.my_share_amount != null && tx.amount < 0 && (
+                        <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 4 }}>
+                            z toho moje část {formatCurrency(-tx.my_share_amount, tx.currency)}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Detail rows ── */}
+                {detailLoading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-xl)' }}>
+                        <div style={{ width: 24, height: 24, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    </div>
+                ) : (
+                    <dl style={{ margin: 0 }}>
+                        {/* Kategorie — kliknutí otevře picker */}
+                        <div className="label-row" onClick={() => setModalPickingCategory(p => !p)}
+                            style={{ cursor: 'pointer' }}>
+                            <dt>Kategorie</dt>
+                            <dd style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {updatingCategory
+                                    ? <span style={{ color: 'var(--text-3)' }}>Ukládám…</span>
+                                    : (() => {
+                                        const catColor = categoryColors[tx.category || 'Other'];
+                                        return (
+                                            <span className={`chip ${catColor ? '' : 'chip-accent'}`}
+                                                style={catColor ? { background: catColor + '22', color: catColor } : undefined}>
+                                                {getCategoryIcon(categoryIcons[tx.category || 'Other'], 13)} {tx.category || 'Other'}
+                                            </span>
+                                        );
+                                    })()
+                                }
+                                <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
+                            </dd>
+                        </div>
+
+                        {/* Category picker */}
+                        {modalPickingCategory && (
+                            <div style={{ padding: '10px var(--spacing-lg)', borderBottom: '0.5px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 6, background: 'var(--surface-sunken)' }}>
+                                {[...categories.filter(c => c.is_active),
+                                    { id: -1, name: 'Internal Transfer', icon: Icons.category.internalTransfer, color: '#6b7280', is_income: false, is_active: true },
+                                    { id: -2, name: 'Family Transfer', icon: Icons.category.familyTransfer, color: '#6b7280', is_income: false, is_active: true },
+                                ].filter((cat, i, self) => i === self.findIndex(c => c.name === cat.name)).map(cat => (
+                                    <button key={cat.name}
+                                        onClick={() => { onCategorySelect(tx.id, cat.name); setModalPickingCategory(false); }}
+                                        className={`chip ${tx.category === cat.name ? 'chip-accent' : ''}`}
+                                        style={{
+                                            cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4,
+                                            ...(tx.category !== cat.name && cat.color ? { background: cat.color + '22', color: cat.color } : {}),
+                                        }}>
+                                        {getCategoryIcon(cat.icon, 13)} {cat.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Tagy — druhá osa třídění ("dovolená 2026", "rekonstrukce"…) */}
+                        <div className="label-row" onClick={openTagPicker} style={{ cursor: 'pointer' }}>
+                            <dt>Tagy</dt>
+                            <dd style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                {(tx.tags?.length ?? 0) === 0
+                                    ? <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Přidat tag</span>
+                                    : (tx.tags ?? []).map(tag => (
+                                        <span key={tag.id} className="chip" style={{ color: tag.color ?? undefined }}>
+                                            #{tag.name}
+                                        </span>
+                                    ))}
+                                <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
+                            </dd>
+                        </div>
+
+                        {/* Tag picker */}
+                        {modalPickingTags && (
+                            <div style={{ padding: '10px var(--spacing-lg)', borderBottom: '0.5px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 6, background: 'var(--surface-sunken)', alignItems: 'center', opacity: savingTags ? 0.6 : 1 }}>
+                                {allTags === null ? (
+                                    <span style={{ color: 'var(--text-3)', fontSize: 13 }}>Načítám…</span>
+                                ) : (
+                                    <>
+                                        {allTags.map(tag => {
+                                            const active = (tx.tags ?? []).some(t => t.id === tag.id);
+                                            return (
+                                                <button key={tag.id}
+                                                    onClick={() => handleToggleTag(tx.id, tag)}
+                                                    disabled={savingTags}
+                                                    className={`chip ${active ? 'chip-accent' : ''}`}
+                                                    style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem', color: active ? undefined : (tag.color ?? undefined) }}>
+                                                    #{tag.name}
+                                                </button>
+                                            );
+                                        })}
+                                        <input
+                                            className="input"
+                                            placeholder="+ nový tag"
+                                            value={newTagName}
+                                            onChange={e => setNewTagName(e.target.value)}
+                                            onKeyDown={e => { if (e.key === 'Enter') handleCreateTag(tx.id); }}
+                                            style={{ flex: '0 1 180px', minWidth: 120, height: 32, minHeight: 32, padding: '0 12px', fontSize: '0.8rem' }}
+                                        />
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="label-row">
+                            <dt>Datum</dt>
+                            <dd>{formatDateFull(tx.date)}</dd>
+                        </div>
+
+                        {txDetail?.balance_after != null && (
+                            <div className="label-row">
+                                <dt>Zůstatek po</dt>
+                                <dd className="num">{formatCurrency(txDetail.balance_after, txDetail.balance_after_currency || tx.currency)}</dd>
+                            </div>
+                        )}
+                        {!txDetail?.balance_after && txDetail?.value_date && txDetail.value_date !== tx.date && (
+                            <div className="label-row">
+                                <dt>Valuta</dt>
+                                <dd>{formatDateFull(txDetail.value_date)}</dd>
+                            </div>
+                        )}
+
+                        {(txDetail?.account_name || tx.account_name) && (
+                            <div className="label-row">
+                                <dt>Účet</dt>
+                                <dd>{txDetail?.account_name || tx.account_name}</dd>
+                            </div>
+                        )}
+
+                        {/* Counterparty rows */}
+                        {(() => {
+                            const debtorName = txDetail?.debtor_name || tx.debtor_name;
+                            const creditorName = txDetail?.creditor_name || tx.creditor_name;
+                            const debtorIban = txDetail?.debtor_iban || tx.debtor_iban || null;
+                            const creditorIban = txDetail?.creditor_iban || tx.creditor_iban || null;
+                            const nameSource = txDetail?.counterparty_name_source ?? tx.counterparty_name_source ?? null;
+                            const isOutgoing = tx.amount < 0;
+                            const counterpartyDir: 'creditor' | 'debtor' = isOutgoing ? 'creditor' : 'debtor';
+
+                            const renderParty = (label: string, name: string | null | undefined, iban: string | null, dir: 'creditor' | 'debtor') => {
+                                const isEditable = counterpartyDir === dir;
+                                const canEdit = isEditable && (!name || nameSource === 'contact_auto' || nameSource === 'contact_manual');
+                                return (
+                                    <div className="label-row">
+                                        <dt>{label}</dt>
+                                        <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, minWidth: 0, flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ fontWeight: name ? 500 : 400, color: name ? 'var(--text)' : 'var(--text-3)', fontStyle: name ? 'normal' : 'italic' }}>
+                                                    {name || 'Nepojmenovaná protistrana'}
+                                                </span>
+                                                {canEdit && namingIban !== iban && (
+                                                    <button onClick={() => { setNamingIban(iban); setNameInput(name || ''); }}
+                                                        style={{ fontSize: '0.72rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-3)', cursor: 'pointer', padding: '2px 6px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                        {getLineIcon('edit', 12)} {name ? 'Přejmenovat' : 'Pojmenovat'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            {iban && <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontFamily: 'monospace', fontWeight: 400 }}>{formatAccount(iban)?.display ?? iban}</span>}
+                                            {iban && namingIban === iban && (
+                                                <div style={{ display: 'flex', gap: 4, width: '100%' }} onClick={e => e.stopPropagation()}>
+                                                    <input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSaveContact(iban, dir);
+                                                            if (e.key === 'Escape') { setNamingIban(null); setNameInput(''); }
+                                                        }}
+                                                        placeholder="Např. Táta, Nájem, ČEZ…"
+                                                        style={{ flex: '1 1 200px', minWidth: 0, padding: '5px 8px', fontSize: '0.82rem', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--surface-sunken)', color: 'var(--text)', outline: 'none' }}
+                                                    />
+                                                    <button onClick={() => handleSaveContact(iban, dir)} disabled={savingContact || !nameInput.trim()}
+                                                        className="btn btn-primary btn-sm">{savingContact ? '…' : 'OK'}</button>
+                                                    <button onClick={() => { setNamingIban(null); setNameInput(''); }} className="btn btn-sm">✕</button>
+                                                </div>
+                                            )}
+                                        </dd>
+                                    </div>
+                                );
+                            };
+
+                            const showDebtor = debtorName || (counterpartyDir === 'debtor' && debtorIban);
+                            const showCreditor = creditorName || (counterpartyDir === 'creditor' && creditorIban);
+                            return <>
+                                {showDebtor && renderParty('Odesílatel', debtorName, debtorIban, 'debtor')}
+                                {showCreditor && renderParty('Příjemce', creditorName, creditorIban, 'creditor')}
+                            </>;
+                        })()}
+
+                        {txDetail?.fx_rate && (
+                            <div className="label-row">
+                                <dt>Kurz</dt>
+                                <dd>{txDetail.fx_source_currency} → {txDetail.fx_target_currency} @ {txDetail.fx_rate}</dd>
+                            </div>
+                        )}
+                        {(txDetail?.remittance_info || (!txDetail?.remittance_info && tx.description && tx.description !== getDisplayName(tx))) && (
+                            <div className="label-row">
+                                <dt>Zpráva</dt>
+                                <dd style={{ fontWeight: 400, color: 'var(--text-2)' }}>{txDetail?.remittance_info || tx.description}</dd>
+                            </div>
+                        )}
+                        {txDetail?.additional_info && (
+                            <div className="label-row">
+                                <dt>Poznámka</dt>
+                                <dd style={{ fontWeight: 400, color: 'var(--text-2)' }}>{txDetail.additional_info}</dd>
+                            </div>
+                        )}
+
+                        {/* ── Společný náklad / vypořádání (VYLEPSENI.md 3.1) ── */}
+                        {tx.account_type === 'bank' && tx.transaction_type === 'normal' && !tx.is_excluded && tx.amount < 0 && (() => {
+                            const total = Math.abs(tx.amount);
+                            const parsedShare = parseFloat(shareInput.replace(',', '.'));
+                            const shareValid = parsedShare >= 0 && parsedShare <= total;
+                            const rest = total - parsedShare;
+                            const openShareEditor = () => {
+                                setShareEditing(true);
+                                setShareInput(String(tx.my_share_amount ?? Math.round(total / 2 * 100) / 100));
+                                setShareNoteInput(tx.settlement_note || '');
+                                setShareCounterpartyInput(tx.share_counterparty || '');
+                                setShareLearnRule(false);
+                            };
+                            const saveShare = () => {
+                                if (savingShare || !shareValid) return;
+                                handleSaveShare(tx, {
+                                    my_share_amount: parsedShare,
+                                    settlement_flag: false,
+                                    settlement_note: shareNoteInput.trim() || null,
+                                    share_counterparty: shareCounterpartyInput.trim() || null,
+                                }, shareLearnRule);
+                            };
+                            const onShareKeys = (e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') saveShare();
+                                if (e.key === 'Escape') { e.stopPropagation(); setShareEditing(false); }
+                            };
+                            return <>
+                                <div className="label-row" onClick={() => shareEditing ? setShareEditing(false) : openShareEditor()} style={{ cursor: 'pointer' }}>
+                                    <dt>Společný náklad</dt>
+                                    <dd style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                        {tx.my_share_amount != null ? (
+                                            <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                {getLineIcon('users', 12)} Moje část {formatCurrency(tx.my_share_amount, tx.currency)}
+                                                {tx.share_counterparty ? ` · ${tx.share_counterparty}` : ''}
+                                            </span>
+                                        ) : (
+                                            <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Celý výdaj je můj</span>
+                                        )}
+                                        <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
+                                    </dd>
+                                </div>
+                                {shareEditing && (
+                                    <div className="share-editor" onClick={e => e.stopPropagation()}>
+                                        <div className="share-pcts">
+                                            {[25, 50, 75].map(pct => {
+                                                const val = Math.round(total * pct / 100 * 100) / 100;
+                                                return (
+                                                    <button key={pct} className={`share-pct${Math.abs(parsedShare - val) < 0.005 ? ' active' : ''}`}
+                                                        onClick={() => setShareInput(String(val))}>
+                                                        {pct} %
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="share-amount-row">
+                                            <label htmlFor="share-amount">Moje část</label>
+                                            <input id="share-amount" className="input" type="number" inputMode="decimal" min={0} max={total} step="0.01"
+                                                value={shareInput} onChange={e => setShareInput(e.target.value)} onKeyDown={onShareKeys} />
+                                            <span className="share-amount-total">z {formatCurrency(total, tx.currency)}</span>
+                                        </div>
+                                        {shareValid && (
+                                            <div className="share-rest">
+                                                {rest > 0.005
+                                                    ? <>Zbytek <strong>{formatCurrency(rest, tx.currency)}</strong> dluží {shareCounterpartyInput.trim() || 'protistrana'}</>
+                                                    : 'Nic k vypořádání — celý výdaj je tvůj'}
+                                            </div>
+                                        )}
+                                        <input className="input" value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
+                                            onKeyDown={onShareKeys}
+                                            placeholder="Kdo dluží zbytek (např. Žena)" list="share-counterparties" />
+                                        <input className="input" value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
+                                            onKeyDown={onShareKeys}
+                                            placeholder="Poznámka (nájem…)" />
+                                        <label className="share-rule-check">
+                                            <input type="checkbox" checked={shareLearnRule} onChange={e => setShareLearnRule(e.target.checked)} />
+                                            Dělit takhle i příště (vytvořit pravidlo)
+                                        </label>
+                                        <div className="share-actions">
+                                            {tx.my_share_amount != null && (
+                                                <button className="btn btn-sm share-remove" disabled={savingShare}
+                                                    onClick={() => handleSaveShare(tx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
+                                                    Zrušit rozdělení
+                                                </button>
+                                            )}
+                                            <button className="btn btn-sm" onClick={() => setShareEditing(false)}>Zrušit</button>
+                                            <button className="btn btn-primary btn-sm"
+                                                disabled={savingShare || !shareValid}
+                                                onClick={saveShare}>
+                                                {savingShare ? '…' : 'Uložit'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>;
+                        })()}
+                        {tx.account_type === 'bank' && tx.amount > 0
+                            && ((tx.transaction_type === 'normal' && !tx.is_excluded) || tx.transaction_type === 'family_transfer') && (() => {
+                            const openSettlementEditor = () => {
+                                setShareEditing(true);
+                                setShareNoteInput(tx.settlement_note || '');
+                                setShareCounterpartyInput(tx.share_counterparty || (tx.transaction_type === 'family_transfer' ? 'Žena' : ''));
+                                // Saldo pro nápovědu v editoru — čerstvé při každém otevření
+                                getSettlementSummary().then(setSettlementSummary).catch(() => setSettlementSummary(null));
+                            };
+                            const saveSettlement = () => handleSaveShare(tx, {
+                                my_share_amount: null, settlement_flag: true,
+                                settlement_note: shareNoteInput.trim() || null,
+                                share_counterparty: shareCounterpartyInput.trim() || null,
+                            });
+                            const onSettlementKeys = (e: React.KeyboardEvent) => {
+                                if (e.key === 'Enter') saveSettlement();
+                                if (e.key === 'Escape') { e.stopPropagation(); setShareEditing(false); }
+                            };
+                            // Saldo protistrany z inputu; když nesedí na žádnou, celkové saldo.
+                            const cpName = shareCounterpartyInput.trim();
+                            const cpRow = settlementSummary?.counterparties.find(c => (c.name || '').toLowerCase() === cpName.toLowerCase());
+                            const saldo = cpRow ? cpRow.balance : settlementSummary?.balance;
+                            // U už označené vratky je tahle platba v saldu započtená — porovnání nedává smysl
+                            const saldoMatches = !tx.settlement_flag && saldo != null && Math.abs(tx.amount - saldo) < 0.01;
+                            return <>
+                                <div className="label-row" onClick={() => shareEditing ? setShareEditing(false) : openSettlementEditor()} style={{ cursor: 'pointer' }}>
+                                    <dt>Vypořádání</dt>
+                                    <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                            {tx.settlement_flag ? (
+                                                <span className="chip chip-accent" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    {getLineIcon('handshake', 12)} Vypořádání{tx.share_counterparty ? ` · ${tx.share_counterparty}` : ''}
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>Označit jako vypořádání</span>
+                                            )}
+                                            <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
+                                        </div>
+                                        {tx.settlement_flag && tx.settlement_note && (
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--text-3)', fontWeight: 400 }}>{tx.settlement_note}</span>
+                                        )}
+                                        {!tx.settlement_flag && tx.transaction_type === 'family_transfer' && (
+                                            <span style={{ fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 500 }}>
+                                                Vypadá jako vratka — označ ji a započítá se do salda vypořádání.
+                                            </span>
+                                        )}
+                                    </dd>
+                                </div>
+                                {shareEditing && (
+                                    <div className="share-editor" onClick={e => e.stopPropagation()}>
+                                        {settlementSummary && saldo != null && (
+                                            <div className={`share-saldo${saldoMatches ? ' match' : ''}`}>
+                                                {saldo > 0.005
+                                                    ? <>
+                                                        {cpRow ? cpName : 'Celkem'} ti aktuálně dluží <strong>{formatCurrency(saldo, settlementSummary.currency)}</strong>
+                                                        {saldoMatches && ' — tahle platba to přesně srovná'}
+                                                    </>
+                                                    : 'Žádný nevyrovnaný zůstatek'}
+                                            </div>
+                                        )}
+                                        <input className="input" autoFocus value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
+                                            onKeyDown={onSettlementKeys}
+                                            placeholder="Od koho (např. Žena)" list="share-counterparties" />
+                                        <input className="input" value={shareNoteInput} onChange={e => setShareNoteInput(e.target.value)}
+                                            onKeyDown={onSettlementKeys}
+                                            placeholder="Poznámka (nájem + kreditka…)" />
+                                        <div className="share-actions">
+                                            {tx.settlement_flag && (
+                                                <button className="btn btn-sm share-remove" disabled={savingShare}
+                                                    onClick={() => handleSaveShare(tx, { my_share_amount: null, settlement_flag: false, settlement_note: null, share_counterparty: null })}>
+                                                    Zrušit vypořádání
+                                                </button>
+                                            )}
+                                            <button className="btn btn-sm" onClick={() => setShareEditing(false)}>Zrušit</button>
+                                            <button className="btn btn-primary btn-sm" disabled={savingShare} onClick={saveSettlement}>
+                                                {savingShare ? '…' : 'Potvrdit'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>;
+                        })()}
+
+                        {/* Ruční vyřazení z příjmů/výdajů — na splátkové konstrukce
+                            (Air/Twisto: plná platba + okamžitá vratka) apod. */}
+                        {tx.account_type === 'bank' && (
+                            <div className="label-row">
+                                <dt>Počítat do bilance</dt>
+                                <dd style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, minWidth: 0 }}>
+                                    {tx.user_excluded ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                                            <span className="chip">{getLineIcon('ban', 13)} Nepočítá se</span>
+                                            <button className="tx-act" disabled={savingExclude}
+                                                onClick={() => handleToggleExcluded(tx, false)}>
+                                                {savingExclude ? '…' : 'Vrátit do bilance'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button className="tx-act" disabled={savingExclude}
+                                            onClick={() => handleToggleExcluded(tx, true)}>
+                                            {savingExclude
+                                                ? '…'
+                                                : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>{getLineIcon('ban', 14)} Ne</span>}
+                                        </button>
+                                    )}
+                                </dd>
+                            </div>
+                        )}
+
+                        {/* Footer — badges + ID */}
+                        <div style={{ padding: '10px var(--spacing-lg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span className="chip chip-success">✓ Zaúčtováno</span>
+                                {tx.transaction_type === 'internal_transfer' && <span className="chip">{getCategoryIcon(Icons.category.internalTransfer, 13)} Interní převod</span>}
+                                {tx.transaction_type === 'family_transfer' && <span className="chip">{getCategoryIcon(Icons.category.familyTransfer, 13)} Rodinný převod</span>}
+                                {tx.user_excluded && <span className="chip">{getLineIcon('ban', 13)} Ručně vyřazeno</span>}
+                                {tx.is_excluded && !tx.user_excluded && <span className="chip">Vyloučeno z rozpočtu</span>}
+                                {tx.settlement_flag && <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{getLineIcon('handshake', 12)} Vypořádání — mimo příjmy</span>}
+                                {tx.my_share_amount != null && tx.amount < 0 && <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{getLineIcon('users', 12)} Společný náklad</span>}
+                            </div>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-3)', fontFamily: 'monospace' }}>{tx.id}</span>
+                        </div>
+                    </dl>
+                )}
+                </div>
+            </div>
+        </div>
+    );
+}
