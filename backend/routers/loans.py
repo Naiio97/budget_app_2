@@ -430,6 +430,8 @@ async def toggle_loan_payment(
         raise HTTPException(status_code=404, detail="Payment not found")
 
     payment.is_paid = data.is_paid
+    # Ruční odznačení zamkne splátku před auto-párováním (viz match-transactions).
+    payment.match_locked = not data.is_paid
     if not data.is_paid:
         payment.matched_transaction_id = None
     elif data.matched_transaction_id is not None:

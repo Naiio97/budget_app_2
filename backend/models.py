@@ -461,6 +461,8 @@ class LoanPaymentModel(Base):
     remaining_balance = Column(Float, nullable=False)      # zůstatek dluhu po této splátce
     is_paid = Column(Boolean, nullable=False, default=False)
     matched_transaction_id = Column(String, nullable=True)  # ID spárované transakce
+    # Ruční odznačení „zaplaceno" — auto-párování takovou splátku přeskakuje
+    match_locked = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     loan = relationship("LoanModel", back_populates="payments")

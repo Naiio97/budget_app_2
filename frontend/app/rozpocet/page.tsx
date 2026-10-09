@@ -242,7 +242,7 @@ export default function RozpocetPage() {
     const matchTransactions = async () => {
         const res = await apiFetch(`/monthly-budget/${yearMonth}/match-transactions`, { method: 'POST' });
         const data = await res.json();
-        alert(`Spárováno ${data.matched_count} výdajů:\n\n📝 Podle patternu: ${data.details?.by_pattern || 0}\n💰 Podle částky: ${data.details?.by_amount || 0}\n📂 Podle kategorie: ${data.details?.by_category || 0}`);
+        alert(`Spárováno ${data.matched_count} výdajů:\n\n📝 Podle patternu: ${data.details?.by_pattern || 0}\n📅 Podle splátkového kalendáře: ${data.details?.by_schedule || 0}\n💰 Podle částky: ${data.details?.by_amount || 0}\n📂 Podle kategorie: ${data.details?.by_category || 0}`);
         refreshBudget();
     };
     const copyFromPrevious = async () => {

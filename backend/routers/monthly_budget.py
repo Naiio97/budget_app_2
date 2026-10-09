@@ -12,15 +12,18 @@ from auth import get_current_user
 from database import get_db
 from models import (
     MonthlyBudgetModel, MonthlyIncomeItemModel, RecurringExpenseModel, MonthlyExpenseModel,
-    TransactionModel, UserModel,
+    TransactionModel, UserModel, ContactModel, TagModel, TransactionTagModel,
     LoanModel, LoanPaymentModel, AccountModel, SubscriptionModel
 )
 from routers.recurring_expenses import RecurringExpenseCreate
 from routers.subscriptions import PERIOD_MONTHS, _add_months, _my_amount, _parse_date, _primary_token
 from services.categorization import fold
+from routers.contacts import normalize_iban
+from services.expense_matching import match_expenses
 from services.salary_period import period_bounds, salary_arrival_date
 
 from datetime import timedelta
+from types import SimpleNamespace
 
 router = APIRouter(tags=["Budget & Expenses"])
 
@@ -606,9 +609,45 @@ async def copy_from_previous_month(
     return {"status": "copied", "from": prev_year_month, "expenses_copied": copied_count, "income_items_copied": income_copied}
 
 
-def _tx_matches_pattern(tx: TransactionModel, pattern: str) -> bool:
-    """Vzor se hledá v popisu i v raw_json (název protistrany z banky)."""
-    return pattern in (tx.description or "").lower() or pattern in (tx.raw_json or "").lower()
+async def _transaction_labels(
+    db: AsyncSession, user_id: int, transactions: list,
+) -> dict:
+    """tx.id → štítky, které uživatel platbě dal: jméno kontaktu příjemce
+    (podle IBANu z raw_json) a názvy tagů."""
+    tx_iban = {}
+    for tx in transactions:
+        try:
+            raw = json.loads(tx.raw_json) if tx.raw_json else {}
+        except Exception:
+            continue
+        account = (raw.get("creditorAccount") or {}) if isinstance(raw, dict) else {}
+        iban = normalize_iban(account.get("iban") or account.get("bban"))
+        if iban:
+            tx_iban[tx.id] = iban
+
+    labels: dict = {}
+    if tx_iban:
+        contacts = (await db.execute(
+            select(ContactModel.iban, ContactModel.name).where(
+                ContactModel.user_id == user_id,
+                ContactModel.iban.in_(set(tx_iban.values())),
+            )
+        )).all()
+        name_by_iban = {iban: name for iban, name in contacts}
+        for tx_id, iban in tx_iban.items():
+            if iban in name_by_iban:
+                labels.setdefault(tx_id, []).append(name_by_iban[iban])
+
+    tx_ids = [t.id for t in transactions]
+    if tx_ids:
+        tag_rows = (await db.execute(
+            select(TransactionTagModel.transaction_id, TagModel.name)
+            .join(TagModel, TagModel.id == TransactionTagModel.tag_id)
+            .where(TagModel.user_id == user_id, TransactionTagModel.transaction_id.in_(tx_ids))
+        )).all()
+        for tx_id, name in tag_rows:
+            labels.setdefault(tx_id, []).append(name)
+    return labels
 
 
 def _derive_pattern(tx: TransactionModel) -> Optional[str]:
@@ -666,8 +705,6 @@ async def match_transactions(
         .where(TransactionModel.date >= start_date)
         .where(TransactionModel.date < end_date)
         .where(TransactionModel.amount < 0)
-        # Převody a ručně vyřazené platby nejsou výdaj, který by šlo spárovat.
-        .where(TransactionModel.is_excluded.is_(False))
         # Hidden accounts are excluded from budget matching.
         .where(TransactionModel.account_id.in_(
             select(AccountModel.id).where(
@@ -678,74 +715,72 @@ async def match_transactions(
     )
     transactions = tx_result.scalars().all()
 
-    category_by_name = {}
-    for rec in recurring_expenses:
-        if rec.category:
-            category_by_name[rec.name.lower()] = rec.category
+    category_by_name = {r.name.lower(): r.category for r in recurring_expenses if r.category}
+    pattern_by_rec_id = {r.id: r.match_pattern.lower() for r in recurring_expenses if r.match_pattern}
+    category_by_rec_id = {r.id: r.category for r in recurring_expenses if r.category}
+    patterns, categories = {}, {}
+    for ex in expenses:
+        # Vzor/kategorie podle vazby na šablonu, jinak podle shody názvu.
+        pat = pattern_by_rec_id.get(ex.recurring_expense_id) or pattern_by_name.get(ex.name.lower())
+        cat = category_by_rec_id.get(ex.recurring_expense_id) or category_by_name.get(ex.name.lower())
+        if pat:
+            patterns[ex.id] = pat
+        if cat:
+            categories[ex.id] = cat
+
+    # Splátky úvěrů splatné v měsíci (bez vazby na transakci, neodznačené ručně)
+    # se párují společně s výdaji, ať si je výdaje s podobnou částkou nevezmou.
+    loan_rows = (await db.execute(
+        select(LoanModel, LoanPaymentModel)
+        .join(LoanPaymentModel, LoanPaymentModel.loan_id == LoanModel.id)
+        .where(
+            LoanModel.user_id == current_user.id,
+            LoanModel.is_active.is_(True),
+            LoanPaymentModel.due_date.like(f"{year_month}-%"),
+        )
+    )).all()
+    loan_items = []
+    loan_payment_by_item = {}
+    used_tx_ids = {e.matched_transaction_id for e in expenses if e.matched_transaction_id}
+    for loan, payment in loan_rows:
+        if payment.matched_transaction_id:
+            used_tx_ids.add(payment.matched_transaction_id)
+            continue
+        if payment.match_locked:
+            continue
+        item = SimpleNamespace(
+            id=-payment.id, name=loan.name, amount=payment.amount, due_date=payment.due_date,
+        )
+        loan_items.append(item)
+        loan_payment_by_item[item.id] = payment
+        if loan.match_pattern:
+            patterns[item.id] = loan.match_pattern.lower()
 
     # Transakce už navázané na jiný výdaj se nesmí použít podruhé.
-    used_tx_ids = {e.matched_transaction_id for e in expenses if e.matched_transaction_id}
+    open_expenses = [e for e in expenses if not e.is_paid and not e.match_locked]
 
-    matched_count = 0
-    matched_by_amount = 0
-    matched_by_category = 0
+    labels = await _transaction_labels(db, current_user.id, transactions)
 
-    for expense in expenses:
-        if expense.is_paid or expense.match_locked:
-            continue
-
-        pattern = None
-        if expense.recurring_expense_id:
-            pattern = pattern_by_name.get(f"id_{expense.recurring_expense_id}")
-        if not pattern:
-            pattern = pattern_by_name.get(expense.name.lower())
-
-        expense_amount = abs(expense.amount)
-
-        def closest(candidates):
-            return min(candidates, key=lambda t: abs(abs(t.amount) - expense_amount), default=None)
-
-        def link(tx):
-            expense.is_paid = True
-            expense.matched_transaction_id = tx.id
-            used_tx_ids.add(tx.id)
-
-        # 1) Vzor v popisu platby (nejspolehlivější) — z kandidátů nejbližší částka.
-        if pattern:
-            tx = closest([
-                t for t in transactions
-                if t.id not in used_tx_ids and _tx_matches_pattern(t, pattern)
-            ])
-            if tx:
-                link(tx)
-                matched_count += 1
-                continue
-
-        # 2) Bez vzoru jen přes kategorii šablony — sama částka nestačí, jinak se
-        #    „zaplaceno" lepilo na libovolnou nesouvisející platbu podobné výše.
-        expense_category = category_by_name.get(expense.name.lower())
-        if not expense_category:
-            continue
-        same_category = [
-            t for t in transactions
-            if t.id not in used_tx_ids and t.category == expense_category
-        ]
-        tx = closest([t for t in same_category if abs(abs(t.amount) - expense_amount) <= expense_amount * 0.05])
-        if tx:
-            link(tx)
-            matched_by_amount += 1
-            continue
-        tx = closest([t for t in same_category if abs(abs(t.amount) - expense_amount) <= expense_amount * 0.10])
-        if tx:
-            link(tx)
-            matched_by_category += 1
+    counts = {"pattern": 0, "label": 0, "name": 0, "schedule": 0, "amount": 0, "category": 0}
+    for item, tx, reason in match_expenses(
+        open_expenses + loan_items, transactions, patterns, categories, used_tx_ids, labels,
+    ):
+        target = loan_payment_by_item.get(item.id, item)
+        target.is_paid = True
+        target.matched_transaction_id = tx.id
+        counts[reason] += 1
+    matched_count = counts["pattern"] + counts["label"] + counts["name"]
+    matched_by_schedule = counts["schedule"]
+    matched_by_amount = counts["amount"]
+    matched_by_category = counts["category"]
 
     await db.commit()
     return {
         "status": "matched",
-        "matched_count": matched_count + matched_by_amount + matched_by_category,
+        "matched_count": matched_count + matched_by_schedule + matched_by_amount + matched_by_category,
         "details": {
-            "by_pattern": matched_count,
+            "by_pattern": matched_count,  # vzor + štítek (kontakt/tag) + název
+            "by_schedule": matched_by_schedule,
             "by_amount": matched_by_amount,
             "by_category": matched_by_category
         }
@@ -903,7 +938,6 @@ async def get_candidate_transactions(
             TransactionModel.date >= start_date,
             TransactionModel.date < end_date,
             TransactionModel.amount < 0,
-            TransactionModel.is_excluded.is_(False),
             TransactionModel.account_id.in_(
                 select(AccountModel.id).where(
                     AccountModel.user_id == current_user.id,
