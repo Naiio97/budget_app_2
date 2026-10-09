@@ -9,6 +9,7 @@ from database import get_db
 from models import AccountModel, TransactionModel, ManualAccountModel, ContactModel, ManualInvestmentAccountModel, CategoryModel, UserModel, TagModel, TransactionTagModel, SettingsModel
 from services.exchange_rates import get_exchange_rate
 from services.timefmt import utc_iso, utcnow
+from services.salary_period import period_bounds, current_period_year_month
 from routers.contacts import normalize_iban
 import json
 
@@ -178,10 +179,12 @@ async def get_dashboard(
         )
         contacts_by_iban = {c.iban: c for c in contact_rows.scalars().all()}
     
-    # Get transactions for the CURRENT CALENDAR MONTH (not last 30 days — UI labels these
-    # as "tento měsíc" so they must match what the user sees on a calendar).
+    # Get transactions for the CURRENT SALARY PERIOD (výplata→výplata, ne od 1.).
+    # Platby před příchodem výplaty patří do minulého období, takže se do „tento
+    # měsíc" nezapočítávají — odpovídá tomu, co uživatel vidí v rozpočtu.
     today = datetime.now()
-    month_start = today.replace(day=1).strftime("%Y-%m-%d")
+    period_ym = await current_period_year_month(db, current_user.id, today.date())
+    month_start, _ = await period_bounds(db, current_user.id, period_ym)
     all_tx_q = select(TransactionModel).where(
         TransactionModel.user_id == current_user.id,
         TransactionModel.date >= month_start,

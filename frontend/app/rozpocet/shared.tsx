@@ -12,6 +12,8 @@ export interface MonthlyExpense {
 export interface IncomeItem { id: number; name: string; amount: number; order_index: number; is_salary: boolean; }
 export interface MonthlyBudget {
     id: number; year_month: string;
+    // Výplatní období: [period_start, period_end) — den příchodu výplaty místo 1.
+    period_start: string; period_end: string;
     income_items: IncomeItem[];
     investment_amount: number; surplus_to_savings: number; is_closed: boolean;
     total_income: number; total_expenses: number; remaining: number;

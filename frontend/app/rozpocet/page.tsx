@@ -69,12 +69,27 @@ export default function RozpocetPage() {
         enabled: viewMode === 'month',
     });
 
-    // Cashflow projekce má smysl jen pro aktuální měsíc
+    // Aktuální výplatní období (může být minulý kalendářní měsíc, dokud výplata
+    // nedorazila) — určuje výchozí zvolené období i „aktuálnost" pro cashflow.
+    const { data: currentPeriod } = useQuery<{ year_month: string; start: string; end: string }>({
+        queryKey: ['salaryPeriodCurrent'],
+        queryFn: () => apiFetch(`/salary-period/current`).then(r => r.json()),
+        staleTime: 5 * 60 * 1000,
+    });
+    const didInitPeriod = useRef(false);
+    useEffect(() => {
+        if (didInitPeriod.current || !currentPeriod) return;
+        didInitPeriod.current = true;
+        const [y, m] = currentPeriod.year_month.split('-').map(Number);
+        if (y !== selectedYear || m !== selectedMonth) { setSelectedYear(y); setSelectedMonth(m); }
+    }, [currentPeriod, selectedYear, selectedMonth]);
+    const isCurrentPeriod = !!currentPeriod && currentPeriod.year_month === yearMonth;
+
+    // Cashflow projekce má smysl jen pro aktuální výplatní období
     const { data: cashflow } = useQuery<Cashflow>({
         queryKey: queryKeys.cashflow,
         queryFn: getCashflowCurrent,
-        enabled: viewMode === 'month'
-            && selectedYear === currentYear && selectedMonth === currentMonth,
+        enabled: viewMode === 'month' && isCurrentPeriod,
     });
 
     const { data: annualData } = useQuery<AnnualData>({
@@ -273,26 +288,47 @@ export default function RozpocetPage() {
     const netSavings = investmentAmount + (budget?.surplus_to_savings || 0);
     const savingsRate = totalIncome > 0 ? Math.round((netSavings / totalIncome) * 100) : 0;
     const isOverBudget = remaining < 0;
-    const isCurrentMonth = selectedYear === currentYear && selectedMonth === currentMonth;
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const daysRemaining = isCurrentMonth ? Math.max(daysInMonth - now.getDate(), 0) : 0;
+    // Výplatní období z rozpočtu (den příchodu výplaty → další výplata).
+    const periodStart = budget?.period_start ? new Date(budget.period_start + 'T00:00:00') : null;
+    const periodEnd = budget?.period_end ? new Date(budget.period_end + 'T00:00:00') : null;
+    const todayMidnight = new Date(currentYear, now.getMonth(), now.getDate());
+    const daysRemaining = isCurrentPeriod && periodEnd
+        ? Math.max(Math.round((periodEnd.getTime() - todayMidnight.getTime()) / 86400000), 0)
+        : 0;
+    const fmtDay = (d: Date) => `${d.getDate()}. ${d.getMonth() + 1}.`;
+    // due_day (1–31) → konkrétní datum uvnitř období [start, end): den ≥ dne
+    // výplaty patří do prvního měsíce období, jinak do druhého.
+    const dueDateInPeriod = (dueDay?: number | null): Date | null => {
+        if (!dueDay || !periodStart || !periodEnd) return null;
+        const c1 = new Date(periodStart.getFullYear(), periodStart.getMonth(), dueDay);
+        if (c1 >= periodStart && c1 < periodEnd) return c1;
+        const c2 = new Date(periodEnd.getFullYear(), periodEnd.getMonth(), dueDay);
+        if (c2 >= periodStart && c2 < periodEnd) return c2;
+        return c1;
+    };
     // Limit na útratu = příjmy minus to, co jde stranou na investice/spoření —
     // odvozeno z `remaining` (ten už obojí odečítá), aby zůstal jeden zdroj pravdy.
     const budgetLimit = Math.max(totalExpenses + remaining, totalExpenses);
     const budgetSpentPct = budgetLimit > 0 ? Math.round((totalExpenses / budgetLimit) * 100) : 0;
     const dailyPace = daysRemaining > 0 ? Math.round(Math.max(remaining, 0) / daysRemaining) : Math.max(remaining, 0);
-    const monthSubLabel = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear} · ${isCurrentMonth ? `zbývá ${daysRemaining} dní do konce měsíce` : 'historický měsíc'}`;
-    // Řazení podle skutečné splatnosti (recurring_expenses.due_day / splátkový
+    const periodRangeLabel = periodStart && periodEnd
+        ? `${fmtDay(periodStart)} – ${fmtDay(new Date(periodEnd.getTime() - 86400000))}`
+        : `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+    const monthSubLabel = `${periodRangeLabel} · ${isCurrentPeriod ? `zbývá ${daysRemaining} dní do výplaty` : 'historické období'}`;
+    // Řazení podle skutečné splatnosti (konkrétní datum uvnitř období / splátkový
     // kalendář úvěru); bez data až na konec, tam podle výše částky.
     const byDueDay = (a: MonthlyExpense, b: MonthlyExpense) =>
-        (a.due_day ?? 99) - (b.due_day ?? 99) || b.my_amount - a.my_amount;
+        ((dueDateInPeriod(a.due_day)?.getTime() ?? Infinity) - (dueDateInPeriod(b.due_day)?.getTime() ?? Infinity))
+        || b.my_amount - a.my_amount;
     const upcomingExpenses = [...(budget?.expenses || [])]
         .filter(expense => !expense.is_paid)
         .sort(byDueDay)
         .slice(0, 4);
     const sortedExpenses = [...(budget?.expenses || [])].sort(byDueDay);
-    const dueLabel = (expense: MonthlyExpense) =>
-        expense.due_day ? `${expense.due_day}. ${selectedMonth}.` : '';
+    const dueLabel = (expense: MonthlyExpense) => {
+        const d = dueDateInPeriod(expense.due_day);
+        return d ? fmtDay(d) : '';
+    };
 
     const prevMonthIncome = selectedMonth === 1
         ? prevYearData?.months?.find(m => m.month === 12)?.income ?? 0
@@ -310,7 +346,7 @@ export default function RozpocetPage() {
     // ── tab content ──────────────────────────────────────────────
 
     const renderOverview = () => (<>
-        {isCurrentMonth && cashflow && <CashflowCard data={cashflow} />}
+        {isCurrentPeriod && cashflow && <CashflowCard data={cashflow} />}
         <div className="budget-overview-grid">
             <div className="surface budget-upcoming-card">
                 <div className="card-head">
@@ -329,7 +365,7 @@ export default function RozpocetPage() {
                                 <div className="budget-payment-name">{expense.name}</div>
                                 <div className="budget-payment-meta">
                                     {[
-                                        expense.due_day ? `Splatnost ${expense.due_day}. ${selectedMonth}.` : null,
+                                        dueLabel(expense) ? `Splatnost ${dueLabel(expense)}` : null,
                                         expense.is_auto_paid ? 'automatická platba' : null,
                                     ].filter(Boolean).join(' · ') || 'Čeká na úhradu'}
                                 </div>
@@ -837,7 +873,7 @@ export default function RozpocetPage() {
                                 <div className="kpi-value num">{formatCurrency(dailyPace)}</div>
                             </div>
                             <div className="budget-metric">
-                                <div className="kpi-label">Nevyčerpáno od 1. {selectedMonth}.</div>
+                                <div className="kpi-label">Nevyčerpáno od {periodStart ? fmtDay(periodStart) : `1. ${selectedMonth}.`}</div>
                                 <div className="kpi-value num">{budgetSpentPct}%</div>
                             </div>
                         </div>

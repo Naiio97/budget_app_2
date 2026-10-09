@@ -17,6 +17,9 @@ from models import (
 from routers.recurring_expenses import RecurringExpenseCreate
 from routers.subscriptions import PERIOD_MONTHS, _add_months, _my_amount, _parse_date, _primary_token
 from services.categorization import fold
+from services.salary_period import period_bounds, salary_arrival_date
+
+from datetime import timedelta
 
 router = APIRouter(tags=["Budget & Expenses"])
 
@@ -83,6 +86,10 @@ class MonthlyExpenseResponse(BaseModel):
 class MonthlyBudgetResponse(BaseModel):
     id: int
     year_month: str
+    # Výplatní období: [period_start, period_end) — den příchodu výplaty místo
+    # 1. dne měsíce. Frontend z toho počítá zbývající dny a popisky období.
+    period_start: str
+    period_end: str
     income_items: List[IncomeItemResponse]
     investment_amount: float
     surplus_to_savings: float
@@ -185,14 +192,6 @@ async def _loan_expense_rows(db: AsyncSession, user_id: int, year_month: str) ->
 SUBSCRIPTION_ROW_ID_OFFSET = 1_000_000
 
 
-def _month_bounds(year_month: str) -> tuple[str, str]:
-    """(start, end) — end je exkluzivní první den dalšího měsíce."""
-    year, month = map(int, year_month.split("-"))
-    if month == 12:
-        return f"{year_month}-01", f"{year + 1:04d}-01-01"
-    return f"{year_month}-01", f"{year:04d}-{month + 1:02d}-01"
-
-
 async def _subscription_expense_rows(
     db: AsyncSession, user_id: int, year_month: str, taken_names: set[str],
 ) -> List[MonthlyExpenseResponse]:
@@ -218,8 +217,8 @@ async def _subscription_expense_rows(
     if not subs:
         return []
 
-    start_date, end_date = _month_bounds(year_month)
-    month_start = _parse_date(start_date)
+    start_date, end_date = await period_bounds(db, user_id, year_month)
+    period_start = _parse_date(start_date)
     rows: List[MonthlyExpenseResponse] = []
 
     folded_taken = {fold(n).strip() for n in taken_names}
@@ -257,8 +256,8 @@ async def _subscription_expense_rows(
 
         due_day: Optional[int] = None
         if in_month is not None:
-            # Platba v měsíci proběhla → řádek je splatný a zaplacený.
-            due_day = (_parse_date(in_month.date) or month_start).day
+            # Platba v období proběhla → řádek je splatný a zaplacený.
+            due_day = (_parse_date(in_month.date) or period_start).day
         elif sub.period == "monthly":
             # Měsíční předplatné je splatné každý měsíc.
             anchor = last_before.date if last_before else sub.first_seen_date
@@ -274,13 +273,15 @@ async def _subscription_expense_rows(
             expected = _add_months(last_d, period_months)
             if expected.strftime("%Y-%m-%d") >= end_date:
                 continue
-            due_day = expected.day if expected.strftime("%Y-%m") == year_month else None
+            # Splatné v tomto období, když obnovení padne do [start, end);
+            # dřívější termín = po splatnosti, visí bez konkrétního data.
+            due_day = expected.day if expected.strftime("%Y-%m-%d") >= start_date else None
         else:
             # Žádná platba v historii — fáze se odvodí z first_seen_date.
             first_seen = _parse_date(sub.first_seen_date) if sub.first_seen_date else None
-            if first_seen is None or month_start is None:
+            if first_seen is None or period_start is None:
                 continue
-            months_diff = (month_start.year - first_seen.year) * 12 + (month_start.month - first_seen.month)
+            months_diff = (period_start.year - first_seen.year) * 12 + (period_start.month - first_seen.month)
             if months_diff < 0 or months_diff % period_months != 0:
                 continue
             due_day = first_seen.day
@@ -372,9 +373,13 @@ async def get_monthly_budget(
 
     total_expenses = sum(r.my_amount for r in expense_rows)
 
+    period_start, period_end = await period_bounds(db, current_user.id, year_month)
+
     return MonthlyBudgetResponse(
         id=budget.id,
         year_month=budget.year_month,
+        period_start=period_start,
+        period_end=period_end,
         income_items=[IncomeItemResponse(
             id=i.id,
             name=i.name,
@@ -628,13 +633,9 @@ async def match_transactions(
         if rec.id:
             pattern_by_name[f"id_{rec.id}"] = rec.match_pattern.lower()
 
-    start_date = f"{year_month}-01"
-    if year_month.endswith("-12"):
-        year = int(year_month[:4]) + 1
-        end_date = f"{year:04d}-01-01"
-    else:
-        year, month = map(int, year_month.split("-"))
-        end_date = f"{year:04d}-{month+1:02d}-01"
+    # Okno = výplatní období (od dne příchodu výplaty do další výplaty), ne
+    # kalendářní měsíc — platby před příchodem výplaty patří do minulého období.
+    start_date, end_date = await period_bounds(db, current_user.id, year_month)
 
     tx_result = await db.execute(
         select(TransactionModel)
@@ -749,8 +750,11 @@ async def sync_income_from_transactions(
         await db.commit()
         await db.refresh(budget)
 
-    start_date = f"{year_month}-01"
-    salary_window_end = f"{year_month}-11"
+    # Výplata financující období M dorazí v den začátku období — sečti transakce
+    # Salary v okně [příchod výplaty, +11 dní), ať se nechytne výplata dalšího měsíce.
+    arrival = await salary_arrival_date(db, current_user.id, year_month)
+    start_date = arrival.isoformat()
+    salary_window_end = (arrival + timedelta(days=11)).isoformat()
 
     salary_result = await db.execute(
         select(func.sum(TransactionModel.amount))

@@ -34,6 +34,11 @@ from models import (
     UserModel,
 )
 from services.exchange_rates import get_exchange_rate
+from services.salary_period import (
+    salary_arrival_date,
+    current_period_year_month,
+    period_bounds,
+)
 from routers.subscriptions import (
     PERIOD_MONTHS,
     _add_months,
@@ -224,11 +229,9 @@ async def _salary_event(
     if any(d.startswith(year_month) for d, _ in past_salaries):
         return None  # už přišla → je v zůstatku
 
-    days = [int(d[8:10]) for d, _ in past_salaries if len(d) >= 10]
-    pay_day = int(median(days)) if days else None
-    if not pay_day:
-        return None
-    expected_date = min(date(today.year, today.month, min(pay_day, eom.day)), eom)
+    # Datum příští výplaty ze sdíleného prediktoru (medián dne + posun na
+    # předchozí pracovní den) — stejná logika jako hranice výplatního období.
+    expected_date = await salary_arrival_date(db, user_id, today.strftime("%Y-%m"))
     if expected_date < today:
         expected_date = today  # po termínu, ale ještě nepřišla → počítej co nejdřív
 
@@ -257,15 +260,18 @@ async def _salary_event(
 async def _month_history(
     db: AsyncSession, user_id: int, today: date, current_balance: float,
 ) -> List[DailyPoint]:
-    """Skutečný průběh zůstatku od 1. dne měsíce do dneška — walk-back od
-    aktuálního zůstatku přes denní součty transakcí (jako balance-history)."""
-    month_start = today.replace(day=1)
+    """Skutečný průběh zůstatku od začátku výplatního období (den příchodu
+    výplaty) do dneška — walk-back od aktuálního zůstatku přes denní součty
+    transakcí (jako balance-history)."""
+    period_ym = await current_period_year_month(db, user_id, today)
+    start_str, _ = await period_bounds(db, user_id, period_ym)
+    period_start = date(int(start_str[:4]), int(start_str[5:7]), int(start_str[8:10]))
     txs = (await db.execute(
         select(TransactionModel.date, func.sum(TransactionModel.amount))
         .where(
             TransactionModel.user_id == user_id,
             TransactionModel.account_type == "bank",
-            TransactionModel.date >= month_start.strftime("%Y-%m-%d"),
+            TransactionModel.date >= period_start.strftime("%Y-%m-%d"),
             TransactionModel.account_id.in_(
                 select(AccountModel.id).where(
                     AccountModel.user_id == user_id,
@@ -280,7 +286,7 @@ async def _month_history(
     points: List[DailyPoint] = []
     balance = current_balance
     day = today
-    while day >= month_start:
+    while day >= period_start:
         points.append(DailyPoint(date=day.strftime("%Y-%m-%d"), balance=round(balance, 2)))
         balance -= daily_totals.get(day.strftime("%Y-%m-%d"), 0)
         day -= timedelta(days=1)
