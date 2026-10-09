@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Transaction, apiFetch } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 import { getCategoryIcon } from '@/lib/category-icons';
@@ -28,6 +29,7 @@ const FALLBACK_COLORS: Record<string, string> = {
 };
 
 export default function TransactionList({ transactions: initialTransactions, showAccount = false, onCategoryChange }: TransactionListProps) {
+    const queryClient = useQueryClient();
     const [transactions, setTransactions] = useState(initialTransactions);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -109,6 +111,14 @@ export default function TransactionList({ transactions: initialTransactions, sho
         return { income, expense };
     };
 
+    // Lokální úprava seznamu nestačí — React Query cache (transakce, dashboard,
+    // detail účtu, rozpočet…) by po návratu na stránku vrátila starý stav.
+    const invalidateTxCaches = useCallback(() => {
+        for (const key of ['transactions', 'dashboard', 'account-detail', 'budget-transactions', 'budget-overview', 'tags', 'tag-summary']) {
+            queryClient.invalidateQueries({ queryKey: [key] });
+        }
+    }, [queryClient]);
+
     const handleCategorySelect = async (txId: string, newCategory: string) => {
         setUpdatingId(txId);
         try {
@@ -122,6 +132,7 @@ export default function TransactionList({ transactions: initialTransactions, sho
                     tx.id === txId ? { ...tx, category: newCategory } : tx
                 ));
                 if (onCategoryChange) onCategoryChange(txId, newCategory);
+                invalidateTxCaches();
             }
         } catch (err) {
             console.error('Failed to update category:', err);
@@ -133,7 +144,8 @@ export default function TransactionList({ transactions: initialTransactions, sho
     // Modal propisuje změny (share, tagy, vyřazení) zpět do seznamu — bez refetche
     const patchTx = useCallback((id: string, patch: Partial<Transaction>) => {
         setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
-    }, []);
+        invalidateTxCaches();
+    }, [invalidateTxCaches]);
 
     const patchContact = useCallback((iban: string, direction: 'creditor' | 'debtor', name: string) => {
         setTransactions(prev => prev.map(tx => {

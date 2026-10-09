@@ -29,6 +29,7 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
     const [allTags, setAllTags] = useState<Tag[] | null>(null);
     const [newTagName, setNewTagName] = useState('');
     const [savingTags, setSavingTags] = useState(false);
+    const [tagError, setTagError] = useState<string | null>(null);
     const [namingIban, setNamingIban] = useState<string | null>(null);
     const [nameInput, setNameInput] = useState('');
     const [savingContact, setSavingContact] = useState(false);
@@ -178,11 +179,13 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
             ? current.filter(t => t.id !== tag.id)
             : [...current, tag];
         setSavingTags(true);
+        setTagError(null);
         try {
             const res = await setTransactionTags(txId, next.map(t => t.id));
             onPatchTx(txId, { tags: res.tags });
         } catch (err) {
             console.error('Failed to set tags:', err);
+            setTagError('Tag se nepodařilo uložit.');
         } finally {
             setSavingTags(false);
         }
@@ -194,6 +197,7 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
         const name = newTagName.trim();
         if (!name) return;
         setSavingTags(true);
+        setTagError(null);
         try {
             const created = await createTag(name, TAG_COLORS[(allTags?.length ?? 0) % TAG_COLORS.length]);
             setAllTags(prev => [...(prev ?? []), created]);
@@ -201,6 +205,7 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
             await handleToggleTag(txId, created);
         } catch (err) {
             console.error('Failed to create tag:', err);
+            setTagError(err instanceof Error ? err.message : 'Tag se nepodařilo vytvořit.');
         } finally {
             setSavingTags(false);
         }
@@ -355,6 +360,10 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                                             onKeyDown={e => { if (e.key === 'Enter') handleCreateTag(tx.id); }}
                                             style={{ flex: '0 1 180px', minWidth: 120, height: 32, minHeight: 32, padding: '0 12px', fontSize: '0.8rem' }}
                                         />
+                                        <button className="chip chip-accent" disabled={savingTags || !newTagName.trim()}
+                                            onClick={() => handleCreateTag(tx.id)}
+                                            style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem' }}>Přidat</button>
+                                        {tagError && <span style={{ color: 'var(--neg)', fontSize: 12, flexBasis: '100%' }}>{tagError}</span>}
                                     </>
                                 )}
                             </div>

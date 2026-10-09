@@ -182,9 +182,12 @@ function TransactionsPageContent() {
         dispatchTransactionAccumulator({ transactions: allTransactions, page, loading });
     }, [allTransactions, page, loading]);
 
-    const finalDisplayTransactions = isMobile
-        ? accumulatedTransactions.slice(0, mobileVisible)
-        : allTransactions;
+    // Memoizované — nová reference při každém renderu by v TransactionList
+    // resetovala lokální úpravy (kategorie, tagy) zpět na data z props.
+    const finalDisplayTransactions = useMemo(
+        () => isMobile ? accumulatedTransactions.slice(0, mobileVisible) : allTransactions,
+        [isMobile, accumulatedTransactions, mobileVisible, allTransactions],
+    );
 
     const finalMobileHasMore = isMobile && (
         mobileVisible < accumulatedTransactions.length || page < totalPages

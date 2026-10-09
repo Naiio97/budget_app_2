@@ -643,6 +643,8 @@ async def match_transactions(
         .where(TransactionModel.date >= start_date)
         .where(TransactionModel.date < end_date)
         .where(TransactionModel.amount < 0)
+        # Převody a ručně vyřazené platby nejsou výdaj, který by šlo spárovat.
+        .where(TransactionModel.is_excluded.is_(False))
         # Hidden accounts are excluded from budget matching.
         .where(TransactionModel.account_id.in_(
             select(AccountModel.id).where(
@@ -658,17 +660,16 @@ async def match_transactions(
         if rec.category:
             category_by_name[rec.name.lower()] = rec.category
 
-    used_tx_ids = set()
+    # Transakce už navázané na jiný výdaj se nesmí použít podruhé.
+    used_tx_ids = {e.matched_transaction_id for e in expenses if e.matched_transaction_id}
 
     matched_count = 0
     matched_by_amount = 0
     matched_by_category = 0
 
     for expense in expenses:
-        if expense.is_paid:
+        if expense.is_paid or expense.match_locked:
             continue
-
-        matched = False
 
         pattern = None
         if expense.recurring_expense_id:
@@ -676,53 +677,45 @@ async def match_transactions(
         if not pattern:
             pattern = pattern_by_name.get(expense.name.lower())
 
-        if pattern:
-            for tx in transactions:
-                if tx.id in used_tx_ids:
-                    continue
-                if pattern in tx.description.lower():
-                    expense.is_paid = True
-                    expense.matched_transaction_id = tx.id
-                    used_tx_ids.add(tx.id)
-                    matched_count += 1
-                    matched = True
-                    break
-
-        if matched:
-            continue
-
         expense_amount = abs(expense.amount)
-        tolerance = expense_amount * 0.05
 
-        for tx in transactions:
-            if tx.id in used_tx_ids:
+        def closest(candidates):
+            return min(candidates, key=lambda t: abs(abs(t.amount) - expense_amount), default=None)
+
+        def link(tx):
+            expense.is_paid = True
+            expense.matched_transaction_id = tx.id
+            used_tx_ids.add(tx.id)
+
+        # 1) Vzor v popisu platby (nejspolehlivější) — z kandidátů nejbližší částka.
+        if pattern:
+            tx = closest([
+                t for t in transactions
+                if t.id not in used_tx_ids and pattern in (t.description or "").lower()
+            ])
+            if tx:
+                link(tx)
+                matched_count += 1
                 continue
-            tx_amount = abs(tx.amount)
-            if abs(tx_amount - expense_amount) <= tolerance:
-                expense.is_paid = True
-                expense.matched_transaction_id = tx.id
-                used_tx_ids.add(tx.id)
-                matched_by_amount += 1
-                matched = True
-                break
 
-        if matched:
-            continue
-
+        # 2) Bez vzoru jen přes kategorii šablony — sama částka nestačí, jinak se
+        #    „zaplaceno" lepilo na libovolnou nesouvisející platbu podobné výše.
         expense_category = category_by_name.get(expense.name.lower())
-        if expense_category:
-            tolerance_wide = expense_amount * 0.20
-            for tx in transactions:
-                if tx.id in used_tx_ids:
-                    continue
-                if tx.category == expense_category:
-                    tx_amount = abs(tx.amount)
-                    if abs(tx_amount - expense_amount) <= tolerance_wide:
-                        expense.is_paid = True
-                        expense.matched_transaction_id = tx.id
-                        used_tx_ids.add(tx.id)
-                        matched_by_category += 1
-                        break
+        if not expense_category:
+            continue
+        same_category = [
+            t for t in transactions
+            if t.id not in used_tx_ids and t.category == expense_category
+        ]
+        tx = closest([t for t in same_category if abs(abs(t.amount) - expense_amount) <= expense_amount * 0.05])
+        if tx:
+            link(tx)
+            matched_by_amount += 1
+            continue
+        tx = closest([t for t in same_category if abs(abs(t.amount) - expense_amount) <= expense_amount * 0.10])
+        if tx:
+            link(tx)
+            matched_by_category += 1
 
     await db.commit()
     return {
@@ -840,6 +833,10 @@ async def update_monthly_expense(
         expense.my_amount_override = data.my_amount_override if data.my_amount_override >= 0 else None
     if data.is_paid is not None:
         expense.is_paid = data.is_paid
+        # Ruční rozhodnutí: vazba na transakci padá a odznačená platba se už
+        # auto-párováním znovu neoznačí.
+        expense.matched_transaction_id = None
+        expense.match_locked = not data.is_paid
     if data.name is not None:
         expense.name = data.name
 

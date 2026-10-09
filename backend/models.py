@@ -292,6 +292,8 @@ class MonthlyExpenseModel(Base):
     is_paid = Column(Boolean, default=False)
     is_auto_paid = Column(Boolean, default=False)
     matched_transaction_id = Column(String, nullable=True)  # ID transakce co to zaplatila
+    # Ruční odznačení „zaplaceno" — auto-párování takový výdaj přeskakuje
+    match_locked = Column(Boolean, default=False, server_default="false", nullable=False)
     
     # Relationships
     budget = relationship("MonthlyBudgetModel", back_populates="expenses")
