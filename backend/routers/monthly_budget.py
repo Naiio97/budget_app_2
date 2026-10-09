@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from pydantic import BaseModel
 from typing import List, Optional
+import json
 
 from auth import get_current_user
 from database import get_db
@@ -605,6 +606,28 @@ async def copy_from_previous_month(
     return {"status": "copied", "from": prev_year_month, "expenses_copied": copied_count, "income_items_copied": income_copied}
 
 
+def _tx_matches_pattern(tx: TransactionModel, pattern: str) -> bool:
+    """Vzor se hledá v popisu i v raw_json (název protistrany z banky)."""
+    return pattern in (tx.description or "").lower() or pattern in (tx.raw_json or "").lower()
+
+
+def _derive_pattern(tx: TransactionModel) -> Optional[str]:
+    """Vzor pro příští párování: název protistrany z banky, jinak nejvýraznější
+    token popisu (bez referenčních čísel a měst)."""
+    if tx.raw_json:
+        try:
+            raw = json.loads(tx.raw_json)
+            name = ((raw.get("creditorName") if isinstance(raw, dict) else None) or "").strip()
+            if len(name) >= 3:
+                return name.lower()
+        except Exception:
+            pass
+    if tx.description:
+        token = _primary_token(tx.description).strip().lower()
+        return token or None
+    return None
+
+
 @router.post("/monthly-budget/{year_month}/match-transactions")
 async def match_transactions(
     year_month: str,
@@ -691,7 +714,7 @@ async def match_transactions(
         if pattern:
             tx = closest([
                 t for t in transactions
-                if t.id not in used_tx_ids and pattern in (t.description or "").lower()
+                if t.id not in used_tx_ids and _tx_matches_pattern(t, pattern)
             ])
             if tx:
                 link(tx)
@@ -842,6 +865,129 @@ async def update_monthly_expense(
 
     await db.commit()
     return {"status": "updated"}
+
+
+class LinkTransactionRequest(BaseModel):
+    transaction_id: str
+    learn: bool = True  # zapamatovat si parametry platby pro příští auto-párování
+
+
+@router.get("/monthly-expenses/{expense_id}/candidate-transactions")
+async def get_candidate_transactions(
+    expense_id: int,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Odchozí platby ve výplatním období výdaje, nejbližší částkou první —
+    nabídka pro ruční spárování."""
+    expense = await _get_user_monthly_expense(db, current_user.id, expense_id)
+    budget = (await db.execute(
+        select(MonthlyBudgetModel).where(MonthlyBudgetModel.id == expense.budget_id)
+    )).scalar_one()
+    start_date, end_date = await period_bounds(db, current_user.id, budget.year_month)
+
+    linked_ids = {
+        mid for (mid,) in (await db.execute(
+            select(MonthlyExpenseModel.matched_transaction_id)
+            .where(
+                MonthlyExpenseModel.budget_id == budget.id,
+                MonthlyExpenseModel.id != expense.id,
+                MonthlyExpenseModel.matched_transaction_id.isnot(None),
+            )
+        )).all()
+    }
+    txs = (await db.execute(
+        select(TransactionModel)
+        .where(
+            TransactionModel.user_id == current_user.id,
+            TransactionModel.date >= start_date,
+            TransactionModel.date < end_date,
+            TransactionModel.amount < 0,
+            TransactionModel.is_excluded.is_(False),
+            TransactionModel.account_id.in_(
+                select(AccountModel.id).where(
+                    AccountModel.user_id == current_user.id,
+                    AccountModel.is_visible == True,
+                )
+            ),
+        )
+    )).scalars().all()
+
+    target = abs(expense.amount)
+    txs = sorted(
+        (t for t in txs if t.id not in linked_ids),
+        key=lambda t: (abs(abs(t.amount) - target), t.date),
+    )[:40]
+    return {"transactions": [
+        {
+            "id": t.id, "date": t.date, "description": t.description,
+            "amount": t.amount, "currency": t.currency, "category": t.category,
+            "creditor_name": _derive_pattern(t),
+        } for t in txs
+    ]}
+
+
+@router.post("/monthly-expenses/{expense_id}/link-transaction")
+async def link_transaction_to_expense(
+    expense_id: int,
+    data: LinkTransactionRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Ruční spárování výdaje s transakcí. S `learn` se z platby odvodí vzor,
+    kategorie a splatnost a uloží do šablony pravidelného výdaje — příští
+    měsíce se pak spárují samy (viz match-transactions)."""
+    expense = await _get_user_monthly_expense(db, current_user.id, expense_id)
+    tx = (await db.execute(
+        select(TransactionModel).where(
+            TransactionModel.id == data.transaction_id,
+            TransactionModel.user_id == current_user.id,
+        )
+    )).scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    expense.is_paid = True
+    expense.matched_transaction_id = tx.id
+    expense.match_locked = False
+
+    learned = None
+    pattern = _derive_pattern(tx) if data.learn else None
+    if data.learn:
+        template = None
+        if expense.recurring_expense_id:
+            template = (await db.execute(
+                select(RecurringExpenseModel).where(
+                    RecurringExpenseModel.id == expense.recurring_expense_id,
+                    RecurringExpenseModel.user_id == current_user.id,
+                )
+            )).scalar_one_or_none()
+        if template is None:
+            # Jednorázový výdaj → udělej z něj šablonu, ať se příště páruje sám.
+            template = RecurringExpenseModel(
+                user_id=current_user.id,
+                name=expense.name,
+                default_amount=expense.amount,
+                my_percentage=expense.my_percentage or 100,
+            )
+            db.add(template)
+            await db.flush()
+            expense.recurring_expense_id = template.id
+        if pattern:
+            template.match_pattern = pattern
+        if tx.category and not template.category:
+            template.category = tx.category
+        if tx.date and len(tx.date) >= 10:
+            template.due_day = int(tx.date[8:10])
+        learned = {
+            "recurring_expense_id": template.id,
+            "match_pattern": template.match_pattern,
+            "category": template.category,
+            "due_day": template.due_day,
+        }
+
+    await db.commit()
+    return {"status": "linked", "learned": learned}
 
 
 @router.post("/monthly-budget/{year_month}/expenses")

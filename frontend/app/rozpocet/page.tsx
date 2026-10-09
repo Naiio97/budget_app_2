@@ -13,6 +13,7 @@ import { getLineIcon } from '@/lib/line-icons';
 import { apiFetch, getCashflowCurrent, Cashflow } from '@/lib/api';
 import AnnualOverview from './AnnualOverview';
 import SalaryEstimateCard from './SalaryEstimateCard';
+import LinkTransactionModal from './LinkTransactionModal';
 import { MONTH_NAMES, formatCurrency, Ring, type Tab, type MonthlyExpense, type IncomeItem, type MonthlyBudget, type RecurringExpense, type ManualAccount, type AnnualData } from './shared';
 
 export default function RozpocetPage() {
@@ -27,6 +28,7 @@ export default function RozpocetPage() {
     const [activeTab, setActiveTab] = useState<Tab>('overview');
 
     const [showAddExpense, setShowAddExpense] = useState(false);
+    const [linkingExpense, setLinkingExpense] = useState<MonthlyExpense | null>(null);
     const [newExpense, setNewExpense] = useState({ name: '', amount: '', is_auto_paid: false, match_pattern: '', due_day: '' });
     const [showAddAccount, setShowAddAccount] = useState(false);
     const [newAccount, setNewAccount] = useState({ name: '', balance: '' });
@@ -585,6 +587,9 @@ export default function RozpocetPage() {
                                                                     Čekající
                                                                 </button>
                                                             </div>
+                                                            <button type="button" className="btn btn-sm" onClick={() => setLinkingExpense(expense)}>
+                                                                Spárovat s platbou
+                                                            </button>
                                                             <button onClick={() => deleteMonthlyExpense(expense.id)} className="bd-delete">
                                                                 {getLineIcon('delete', 14)} Smazat
                                                             </button>
@@ -815,6 +820,15 @@ export default function RozpocetPage() {
     return (
         <MainLayout disableScroll={viewMode === 'month' && activeTab === 'expenses'}>
             <div className={`page-container budget-page ${viewMode === 'month' && activeTab === 'expenses' ? 'budget-page-fit' : ''}`} style={{ gap: 'var(--spacing-md)', display: 'flex', flexDirection: 'column' }}>
+
+                {linkingExpense && (
+                    <LinkTransactionModal
+                        expenseId={linkingExpense.id}
+                        expenseName={linkingExpense.name}
+                        onLinked={() => { refreshBudget(); queryClient.invalidateQueries({ queryKey: queryKeys.recurringExpenses }); }}
+                        onClose={() => setLinkingExpense(null)}
+                    />
+                )}
 
                 {/* ── Header ── */}
                 <div className="page-head">
