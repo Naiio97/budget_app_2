@@ -658,7 +658,7 @@ function cleanTicker(ticker: string) {
 }
 
 function allocationColor(index: number) {
-    const colors = ['#34c759', '#007aff', '#ff9f0a', '#5e5ce6', '#ff3b30', '#30b0c7', '#af52de', '#64d2ff'];
+    const colors = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba'];
     return colors[index % colors.length];
 }
 

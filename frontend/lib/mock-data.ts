@@ -826,8 +826,15 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         return MOCK_ANNUAL_OVERVIEW(year);
     }
     if (path.startsWith('/manual-investments/') && path.includes('/history')) return [];
-    if (path.startsWith('/manual-investments/')) return MOCK_MANUAL_INVESTMENTS;
-    if (path.startsWith('/manual-accounts/')) return MOCK_MANUAL_ACCOUNTS;
+    if (path.startsWith('/manual-investments/')) {
+        // bez id = seznam, s id = jeden účet
+        const id = path.slice('/manual-investments/'.length).split('?')[0];
+        return id ? (MOCK_MANUAL_INVESTMENTS.find(a => String(a.id) === id) ?? MOCK_MANUAL_INVESTMENTS[0]) : MOCK_MANUAL_INVESTMENTS;
+    }
+    if (path.startsWith('/manual-accounts/')) {
+        const id = path.slice('/manual-accounts/'.length).split('?')[0];
+        return id ? (MOCK_MANUAL_ACCOUNTS.find(a => String(a.id) === id) ?? MOCK_MANUAL_ACCOUNTS[0]) : MOCK_MANUAL_ACCOUNTS;
+    }
     if (path.startsWith('/contacts/')) return MOCK_CONTACTS;
     if (path.startsWith('/loans/summary')) return MOCK_LOANS_SUMMARY;
     if (path.match(/^\/loans\/\d+\/schedule/)) return MOCK_LOAN_SCHEDULE;

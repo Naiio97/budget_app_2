@@ -91,7 +91,7 @@
   --glass-border-light:var(--border);
   --glass-shadow:      rgba(0,0,0,0.4);
   --accent-primary:    var(--accent);
-  --accent-secondary:  #5e5ce6;
+  --accent-secondary:  #8b82cc;
   --accent-success:    var(--pos);
   --accent-warning:    var(--warn);
   --accent-danger:     var(--neg);
@@ -635,7 +635,7 @@ select.input {
   border-radius: 10px; font-size: 1.2rem; flex-shrink: 0;
 }
 .account-icon.bank       { background: linear-gradient(135deg, #1e40c4, #0b2eb0); }
-.account-icon.investment { background: linear-gradient(135deg, #5e5ce6, #3634a3); }
+.account-icon.investment { background: linear-gradient(135deg, #8b82cc, #5f55a8); }
 .account-icon.manual     { background: linear-gradient(135deg, #10b981, #059669); }
 .account-info { flex: 1; min-width: 0; }
 .account-name    { font-weight: 590; font-size: 14px; letter-spacing: -0.012em; }

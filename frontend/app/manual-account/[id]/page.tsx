@@ -434,7 +434,7 @@ export default function ManualAccountDetailPage() {
                                         </button>
                                         <button
                                             onClick={() => deleteEnvelope(envelope.id)}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ff6b6b' }}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neg)' }}
                                         >
                                             {Icons.action.delete}
                                         </button>

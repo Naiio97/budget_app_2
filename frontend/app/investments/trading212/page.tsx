@@ -35,7 +35,7 @@ import {
 import { POSITION_COLOR_PALETTE, PositionScope, getPositionColor, setPositionColor } from '@/lib/positionColors';
 
 const PERIODS = ['1W', '1M', '3M', '6M', '1Y', 'ALL'];
-const FALLBACK_PALETTE = ['#34c759', '#007aff', '#ff9f0a', '#5e5ce6', '#ff3b30', '#30b0c7', '#af52de', '#64d2ff'];
+const FALLBACK_PALETTE = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba'];
 
 function cleanTicker(ticker: string) {
     return ticker.replace('_US_EQ', '').replace('_EQ', '');

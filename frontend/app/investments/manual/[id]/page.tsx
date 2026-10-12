@@ -420,7 +420,7 @@ export default function ManualInvestmentDetailPage() {
                                     formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
                                     labelFormatter={(l: string) => fmtDate(l)}
                                 />
-                                <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
+                                <Area type="monotone" dataKey="value" stroke="#5cb5c9" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </GlassCard>
