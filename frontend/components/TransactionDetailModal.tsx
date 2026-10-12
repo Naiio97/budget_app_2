@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Transaction, TransactionDetail, TransactionShare, Tag, SettlementSummary, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getSettlementSummary, getTags, createTag, setTransactionTags } from '@/lib/api';
+import { Transaction, TransactionDetail, TransactionShare, Tag, getTransactionDetail, saveContact, updateTransactionShare, setTransactionExcluded, createShareRule, getTags, createTag, setTransactionTags } from '@/lib/api';
 import { Icons } from '@/lib/icons';
 import { getCategoryIcon } from '@/lib/category-icons';
 import { getLineIcon } from '@/lib/line-icons';
@@ -41,7 +41,6 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
     const [shareLearnRule, setShareLearnRule] = useState(false);
     const [savingShare, setSavingShare] = useState(false);
     const [savingExclude, setSavingExclude] = useState(false);
-    const [settlementSummary, setSettlementSummary] = useState<SettlementSummary | null>(null);
     // Bottom sheet na telefonu: švihnutí dolů zavře detail. Táhne se jen
     // když je vnitřní scroll úplně nahoře, jinak gesto patří scrollování.
     const [sheetDrag, setSheetDrag] = useState({ y: 0, dragging: false });
@@ -571,8 +570,6 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                                 setShareEditing(true);
                                 setShareNoteInput(tx.settlement_note || '');
                                 setShareCounterpartyInput(tx.share_counterparty || (tx.transaction_type === 'family_transfer' ? 'Žena' : ''));
-                                // Saldo pro nápovědu v editoru — čerstvé při každém otevření
-                                getSettlementSummary().then(setSettlementSummary).catch(() => setSettlementSummary(null));
                             };
                             const saveSettlement = () => handleSaveShare(tx, {
                                 my_share_amount: null, settlement_flag: true,
@@ -583,12 +580,6 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                                 if (e.key === 'Enter') saveSettlement();
                                 if (e.key === 'Escape') { e.stopPropagation(); setShareEditing(false); }
                             };
-                            // Saldo protistrany z inputu; když nesedí na žádnou, celkové saldo.
-                            const cpName = shareCounterpartyInput.trim();
-                            const cpRow = settlementSummary?.counterparties.find(c => (c.name || '').toLowerCase() === cpName.toLowerCase());
-                            const saldo = cpRow ? cpRow.balance : settlementSummary?.balance;
-                            // U už označené vratky je tahle platba v saldu započtená — porovnání nedává smysl
-                            const saldoMatches = !tx.settlement_flag && saldo != null && Math.abs(tx.amount - saldo) < 0.01;
                             return <>
                                 <div className="label-row" onClick={() => shareEditing ? setShareEditing(false) : openSettlementEditor()} style={{ cursor: 'pointer' }}>
                                     <dt>Vypořádání</dt>
@@ -615,16 +606,6 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                                 </div>
                                 {shareEditing && (
                                     <div className="share-editor" onClick={e => e.stopPropagation()}>
-                                        {settlementSummary && saldo != null && (
-                                            <div className={`share-saldo${saldoMatches ? ' match' : ''}`}>
-                                                {saldo > 0.005
-                                                    ? <>
-                                                        {cpRow ? cpName : 'Celkem'} ti aktuálně dluží <strong>{formatCurrency(saldo, settlementSummary.currency)}</strong>
-                                                        {saldoMatches && ' — tahle platba to přesně srovná'}
-                                                    </>
-                                                    : 'Žádný nevyrovnaný zůstatek'}
-                                            </div>
-                                        )}
                                         <input className="input" autoFocus value={shareCounterpartyInput} onChange={e => setShareCounterpartyInput(e.target.value)}
                                             onKeyDown={onSettlementKeys}
                                             placeholder="Od koho (např. Žena)" list="share-counterparties" />

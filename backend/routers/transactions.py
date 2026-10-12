@@ -1,5 +1,4 @@
 import json
-from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from typing import List, Optional
@@ -236,108 +235,6 @@ async def get_transactions(
         size=limit,
         pages=pages
     )
-
-
-@router.get("/settlement-summary")
-async def get_settlement_summary(
-    months: int = Query(12, ge=1, le=36),
-    current_user: UserModel = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Saldo vypořádání (VYLEPSENI.md 3.1): kolik mi protistrany dluží
-    (jejich podíly na rozdělených výdajích) vs. kolik už poslaly (vypořádání).
-    """
-    visible_accounts = select(AccountModel.id).where(
-        AccountModel.user_id == current_user.id,
-        AccountModel.is_visible == True,
-    )
-    result = await db.execute(
-        select(TransactionModel).where(
-            TransactionModel.user_id == current_user.id,
-            TransactionModel.account_type == "bank",
-            TransactionModel.account_id.in_(visible_accounts),
-            or_(
-                and_(TransactionModel.my_share_amount.isnot(None), TransactionModel.amount < 0),
-                and_(TransactionModel.settlement_flag == True, TransactionModel.amount > 0),  # noqa: E712
-            ),
-        ).order_by(TransactionModel.date.desc())
-    )
-    txs = result.scalars().all()
-
-    def tx_snippet(tx, their_amount=None):
-        return {
-            "id": tx.id,
-            "date": tx.date,
-            "description": tx.description,
-            "amount": tx.amount,
-            "currency": tx.currency,
-            "category": tx.category,
-            "my_share_amount": tx.my_share_amount,
-            "their_amount": their_amount,
-            "note": tx.settlement_note,
-            "counterparty": tx.share_counterparty,
-        }
-
-    total_owed = 0.0
-    total_received = 0.0
-    by_month: dict[str, dict] = {}
-    by_cp: dict[str, dict] = {}
-    expenses = []
-    settlements = []
-
-    for tx in txs:
-        month = (tx.date or "")[:7]
-        cp = tx.share_counterparty or ""
-        month_row = by_month.setdefault(month, {"owed": 0.0, "received": 0.0})
-        cp_row = by_cp.setdefault(cp, {"owed": 0.0, "received": 0.0})
-
-        if tx.amount < 0 and tx.my_share_amount is not None:
-            their = max(abs(tx.amount) - min(tx.my_share_amount, abs(tx.amount)), 0.0)
-            total_owed += their
-            month_row["owed"] += their
-            cp_row["owed"] += their
-            if len(expenses) < 30:
-                expenses.append(tx_snippet(tx, their_amount=round(their, 2)))
-        else:
-            total_received += tx.amount
-            month_row["received"] += tx.amount
-            cp_row["received"] += tx.amount
-            if len(settlements) < 30:
-                settlements.append(tx_snippet(tx))
-
-    # Souvislá řada posledních N měsíců (i prázdné), nejstarší první — pro graf
-    today = datetime.now()
-    month_series = []
-    for i in range(months - 1, -1, -1):
-        y, m = today.year, today.month - i
-        while m <= 0:
-            y, m = y - 1, m + 12
-        key = f"{y:04d}-{m:02d}"
-        row = by_month.get(key, {"owed": 0.0, "received": 0.0})
-        month_series.append({
-            "month": key,
-            "owed": round(row["owed"], 2),
-            "received": round(row["received"], 2),
-        })
-
-    return {
-        "total_owed": round(total_owed, 2),
-        "total_received": round(total_received, 2),
-        "balance": round(total_owed - total_received, 2),
-        "counterparties": [
-            {
-                "name": name or None,
-                "owed": round(row["owed"], 2),
-                "received": round(row["received"], 2),
-                "balance": round(row["owed"] - row["received"], 2),
-            }
-            for name, row in sorted(by_cp.items(), key=lambda kv: kv[1]["owed"], reverse=True)
-        ],
-        "months": month_series,
-        "expenses": expenses,
-        "settlements": settlements,
-        "currency": "CZK",
-    }
 
 
 class CategoryUpdate(BaseModel):

@@ -18,7 +18,6 @@ export const NAV_PAGES: { href: string; label: string }[] = [
     { href: '/investments', label: 'Investice' },
     { href: '/loans', label: 'Úvěry' },
     { href: '/subscriptions', label: 'Předplatné' },
-    { href: '/vyporadani', label: 'Vypořádání' },
 ];
 
 const LS_KEY = 'nav_prefs';

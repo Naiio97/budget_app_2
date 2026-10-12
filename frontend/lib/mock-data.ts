@@ -729,22 +729,6 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         return { account: MOCK_ACCOUNTS[0], transactions: MOCK_TRANSACTIONS.items, total: 20, pages: 1, current_page: 1 };
     }
     if (path.startsWith('/accounts/')) return MOCK_ACCOUNTS;
-    if (path.startsWith('/transactions/settlement-summary')) return {
-        total_owed: 45000, total_received: 30000, balance: 15000,
-        counterparties: [{ name: 'Žena', owed: 45000, received: 30000, balance: 15000 }],
-        months: [
-            { month: '2026-05', owed: 15000, received: 15000 },
-            { month: '2026-06', owed: 15000, received: 15000 },
-            { month: '2026-07', owed: 15000, received: 0 },
-        ],
-        expenses: [
-            { id: 'demo-split-1', date: '2026-07-01', description: 'Nájem', amount: -30000, currency: 'CZK', category: 'Utilities', my_share_amount: 15000, their_amount: 15000, note: 'nájem', counterparty: 'Žena' },
-        ],
-        settlements: [
-            { id: 'demo-settle-1', date: '2026-06-15', description: 'Převod', amount: 15000, currency: 'CZK', category: 'Other', my_share_amount: null, their_amount: null, note: 'vratka za červen', counterparty: 'Žena' },
-        ],
-        currency: 'CZK',
-    };
     if (path.startsWith('/transactions/')) {
         // Detail endpoint hits /transactions/{id}; the list is /transactions/
         // or /transactions/?... — anything after the trailing slash is the id.

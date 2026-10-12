@@ -135,31 +135,3 @@ export async function setTransactionExcluded(id: string, excluded: boolean): Pro
     }
     return response.json();
 }
-
-export interface SettlementTxSnippet {
-    id: string;
-    date: string;
-    description: string;
-    amount: number;
-    currency: string;
-    category: string | null;
-    my_share_amount: number | null;
-    their_amount: number | null;
-    note: string | null;
-    counterparty: string | null;
-}
-
-export interface SettlementSummary {
-    total_owed: number;
-    total_received: number;
-    balance: number;
-    counterparties: Array<{ name: string | null; owed: number; received: number; balance: number }>;
-    months: Array<{ month: string; owed: number; received: number }>;
-    expenses: SettlementTxSnippet[];
-    settlements: SettlementTxSnippet[];
-    currency: string;
-}
-
-export async function getSettlementSummary(months = 12): Promise<SettlementSummary> {
-    return fetchApi<SettlementSummary>(`/transactions/settlement-summary?months=${months}`);
-}
