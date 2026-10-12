@@ -4682,3 +4682,9 @@ body:has(.dash) {
 .account-detail-head h1 { color: var(--head-text) !important; font-weight: 500; letter-spacing: -0.02em; }
 .investment-header p,
 .account-detail-sub { color: var(--head-muted); }
+
+/* Ikony transakcí: neutrální dlaždice v celé aplikaci (barvy kategorií z databáze nechávají aplikaci křiklavou) */
+.transaction-icon {
+  width: 44px; height: 44px; border-radius: 14px;
+  background: var(--surface-sunken) !important; color: var(--text-2) !important;
+}
