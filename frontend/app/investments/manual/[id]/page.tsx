@@ -29,7 +29,7 @@ import {
     Cell,
 } from 'recharts';
 
-const COLORS = ['#2dd4bf', '#818cf8', '#fb923c', '#34d399', '#f472b6', '#60a5fa', '#facc15', '#a78bfa'];
+const COLORS = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba'];
 
 type PositionForm = {
     name: string;
@@ -244,7 +244,7 @@ export default function ManualInvestmentDetailPage() {
                                             {pieData.map((p, i) => <Cell key={p.id} fill={colorForIndex(p.id, i)} />)}
                                         </Pie>
                                         <Tooltip
-                                            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                            contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
                                             formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
                                         />
                                     </PieChart>
@@ -408,15 +408,15 @@ export default function ManualInvestmentDetailPage() {
                             <AreaChart data={history} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="manualInvGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="#5cb5c9" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#5cb5c9" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                                 <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
                                 <YAxis tickFormatter={v => fmt(v, account.currency)} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
                                 <Tooltip
-                                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                    contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
                                     formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
                                     labelFormatter={(l: string) => fmtDate(l)}
                                 />
