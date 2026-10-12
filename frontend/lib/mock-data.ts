@@ -644,8 +644,8 @@ export const MOCK_MY_ACCOUNT_PATTERNS = {
 
 export const MOCK_POSITIONS = {
     positions: [
-        { ticker: 'VWCE', quantity: 50, average_price_eur: 95, current_price_eur: 110, value_czk: 137500, invested_czk: 118750, ppl_czk: 18750, ppl_pct: 15.8 },
-        { ticker: 'AAPL', quantity: 10, average_price_eur: 150, current_price_eur: 180, value_czk: 45000, invested_czk: 37500, ppl_czk: 7500, ppl_pct: 20 },
+        { ticker: 'VWCE', quantity: 50, average_price_eur: 95, current_price_eur: 110, value_czk: 72800, invested_czk: 62300, ppl_czk: 10500, ppl_pct: 16.9 },
+        { ticker: 'AAPL', quantity: 10, average_price_eur: 150, current_price_eur: 180, value_czk: 31200, invested_czk: 25700, ppl_czk: 5500, ppl_pct: 21.4 },
     ],
     currency: 'CZK',
 };
@@ -654,10 +654,10 @@ export const MOCK_PIES: { pies: Pie[]; currency: string } = {
     pies: [
         {
             id: 1, name: 'Růst', icon: '📈', goal: 500000,
-            invested_czk: 200000, value_czk: 240000, result_czk: 40000, result_pct: 20,
+            invested_czk: 88000, value_czk: 104000, result_czk: 16000, result_pct: 18.2,
             instruments: [
-                { ticker: 'VWCE', current_share: 70, value_czk: 168000, result_czk: 25000 },
-                { ticker: 'AAPL', current_share: 30, value_czk: 72000, result_czk: 15000 },
+                { ticker: 'VWCE', current_share: 70, value_czk: 72800, result_czk: 10500 },
+                { ticker: 'AAPL', current_share: 30, value_czk: 31200, result_czk: 5500 },
             ],
         },
     ],
