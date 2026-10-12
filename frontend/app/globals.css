@@ -4251,9 +4251,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
    omezené na .dash, ostatní stránky zůstávají beze změny (redesign běží
    po stránkách). Tmavý motiv je výchozí, světlý přepíše proměnné níž.   */
 .dash {
-  --d-card: #1c1c1e;
-  --d-card-border: rgba(255,255,255,0.06);
-  --d-shadow: 0 1px 0 rgba(0,0,0,0.4), 0 14px 36px rgba(0,0,0,0.35);
+  --d-card: rgba(255,255,255,0.06);
+  --d-card-border: rgba(255,255,255,0.10);
+  --d-shadow: 0 10px 34px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.05);
+  --d-pill-active: rgba(255,255,255,0.16);
+  --d-head-text: #f5f7fb;
+  --d-head-muted: rgba(235,240,250,0.72);
   --d-text: #f5f5f7;
   --d-muted: rgba(235,235,245,0.62);
   --d-faint: rgba(235,235,245,0.38);
@@ -4269,9 +4272,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   width: 100%;
 }
 [data-mode="light"] .dash {
-  --d-card: #ffffff;
-  --d-card-border: rgba(30,50,90,0.05);
-  --d-shadow: 0 1px 2px rgba(20,35,70,0.03), 0 14px 40px rgba(40,60,110,0.07);
+  --d-card: rgba(255,255,255,0.34);
+  --d-card-border: rgba(255,255,255,0.62);
+  --d-shadow: 0 10px 34px rgba(36,56,92,0.12), inset 0 1px 0 rgba(255,255,255,0.55);
+  --d-pill-active: rgba(255,255,255,0.92);
+  --d-head-text: #ffffff;
+  --d-head-muted: rgba(255,255,255,0.82);
   --d-text: #1b2740;
   --d-muted: #66758c;
   --d-faint: #98a4b6;
@@ -4283,13 +4289,32 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   --d-pos-soft: rgba(42,138,100,0.12);
   --d-neg: #a65a4b;
 }
-/* Světlý motiv: téměř bílé pozadí bez přechodu — karty se oddělují jen měkkým stínem (podle návrhu) */
-[data-mode="light"] body:has(.dash) { background: #fbfbfd; }
-.dash .page-head h1 { color: var(--d-text); }
-.dash .page-head .sub { color: var(--d-muted); }
+/* Pozadí: modrošedý přechod, nahoře tmavší, dole téměř světle šedý (barvy změřené z návrhu) */
+[data-mode="light"] body:has(.dash) {
+  background: linear-gradient(180deg,
+    #546881 0%, #8897ab 10%, #b6c1cf 19%, #c2ccd8 27%, #d5dce5 40%,
+    #e5e9ef 57%, #edf0f4 73%, #e8edf3 100%) fixed;
+}
+body:has(.dash) {
+  background: linear-gradient(180deg, #2b3b54 0%, #1e2a3d 28%, #141b27 62%, #0d1219 100%) fixed;
+}
+[data-mode="light"] body:has(.dash) { background-attachment: fixed; }
+
+/* Hlavička stránky leží na tmavší části přechodu → světlý text */
+.dash .page-head { align-items: flex-end; }
+.dash-eyebrow {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--d-head-muted); margin-bottom: 6px;
+}
+.dash .page-head h1 {
+  color: var(--d-head-text); font-size: clamp(28px, 3vw, 40px); font-weight: 500; letter-spacing: -0.02em;
+}
+.dash .page-head .sub { color: var(--d-head-muted); font-size: 14px; margin-top: 6px; }
 
 .dash-card {
   background: var(--d-card);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  backdrop-filter: blur(24px) saturate(140%);
   border: 1px solid var(--d-card-border);
   box-shadow: var(--d-shadow);
   border-radius: var(--d-radius);
@@ -4349,7 +4374,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   border: 0; background: transparent; color: var(--d-muted); cursor: pointer;
   font: inherit; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 999px;
 }
-.dash-range-item.active { background: var(--d-card); color: var(--d-accent); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+.dash-range-item.active { background: var(--d-pill-active); color: var(--d-accent); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 .dash-nw-hero { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
 .dash-nw-value { font-size: clamp(30px, 3.2vw, 46px); font-weight: 500; letter-spacing: -0.025em; }
 .dash-badge {

@@ -125,16 +125,9 @@ export default function DashboardPage() {
         {/* Page header */}
         <div className="page-head">
           <div>
-            <h1>{now ? `${getGreeting(now.getHours())}, Nicolas.` : 'Načítám…'}</h1>
-            <div className="sub">
-              {now && (
-                <>
-                  {formatDayLabel(now)}
-                  {' · '}
-                  {paydayText}
-                </>
-              )}
-            </div>
+            <div className="dash-eyebrow">{formatDayLabel(now)}</div>
+            <h1>Vaše finance, přehledně.</h1>
+            <div className="sub">{getGreeting(now.getHours())}, Nicolasi. Vše důležité máte na dosah.</div>
           </div>
         </div>
 
