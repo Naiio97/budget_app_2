@@ -33,21 +33,7 @@ interface MonthlyReport {
     currency: string;
 }
 
-interface Category {
-    id: number;
-    name: string;
-    color: string;
-    icon?: string;
-}
-
-const FALLBACK_COLORS: Record<string, string> = {
-    'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
-    'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
-    'Dividend': '#8b5cf6', 'Salary': '#10b981', 'Subscription': '#030303',
-    'Installments': '#4b4c95', 'Insurance': '#e5c52a', 'Supermarkets': '#e69eb0',
-    'ATM': '#f28f64', 'Other': '#6b7280',
-};
-
+const MUTED_PALETTE = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba', '#8fb36a', '#d4b36a', '#6f86c9', '#b98a6a'];
 const formatMoney = (amount: number) =>
     new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
@@ -66,20 +52,6 @@ export default function ReportsPage() {
         queryKey: [...queryKeys.monthlyReport(months), fullAmounts],
         queryFn: () => apiFetch(`/dashboard/monthly-report?months=${months}&full_amounts=${fullAmounts}`).then(r => r.json()),
     });
-
-    const { data: categoriesData = [] } = useQuery<Category[]>({
-        queryKey: queryKeys.categories,
-        queryFn: () => apiFetch(`/categories/`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
-        staleTime: 5 * 60 * 1000,
-    });
-
-    const categoryColors: Record<string, string> = useMemo(() =>
-        categoriesData.reduce((acc, cat) => {
-            acc[cat.name] = cat.color || FALLBACK_COLORS[cat.name] || '#6b7280';
-            return acc;
-        }, { ...FALLBACK_COLORS } as Record<string, string>),
-        [categoriesData]
-    );
 
     // Per-month breakdown with one line per top-5 category. Lines are easier to read
     // than stacked bars/areas — you can compare categories at a glance.
@@ -133,6 +105,17 @@ export default function ReportsPage() {
         }
         return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
     }, [report]);
+
+    // Tlumená paleta nového stylu pro kategorie, které se v grafech skutečně zobrazují,
+    // přidělená podle abecedy — stejná kategorie má v obou grafech stejnou barvu a barvy
+    // se neopakují (nepoužívají se křiklavé barvy z databáze).
+    const categoryColors: Record<string, string> = useMemo(() => {
+        const shown = Array.from(new Set([...topCategoriesAgg.map(([name]) => name), ...trendCategories])).sort();
+        return shown.reduce((acc, name, i) => {
+            acc[name] = MUTED_PALETTE[i % MUTED_PALETTE.length];
+            return acc;
+        }, {} as Record<string, string>);
+    }, [topCategoriesAgg, trendCategories]);
 
     if (loading) {
         return (
