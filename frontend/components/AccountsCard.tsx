@@ -4,6 +4,7 @@ import Link from 'next/link';
 import type { Account } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { getConsentStatus } from '@/lib/consent';
+import SyncButton from './SyncButton';
 
 // Tlumené barvy avatarů — přiřazují se podle názvu, aby byl účet pokaždé stejný.
 const AVATAR_COLORS = ['#3b7dd8', '#6b7586', '#24303f', '#2f9c78', '#7a67c4', '#c0794d', '#4a9db0'];
@@ -70,7 +71,10 @@ export default function AccountsCard({ accounts }: { accounts: Account[] }) {
         <div className="dash-card dash-accounts">
             <div className="dash-card-head">
                 <h3>Vaše účty</h3>
-                <span className="dash-count">{String(accounts.length).padStart(2, '0')}</span>
+                <div className="dash-head-tools">
+                    <SyncButton />
+                    <span className="dash-count">{accounts.length}</span>
+                </div>
             </div>
 
             <div className="dash-acc-list">

@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode, useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { signOut } from 'next-auth/react';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
+import { useSync } from '@/lib/use-sync';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { getConsentStatus } from '@/lib/consent';
@@ -56,6 +57,21 @@ interface MainLayoutProps {
 // světlý ve světlém; iOS podle jasu barvy zvolí i barvu textu hodin). Držíme ho
 // v obou režimech — prohlížeč i PWA. Bez něj iOS spadne na defaultní světlou lištu.
 const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
+const THEME_EVENT = 'koruna-theme-change';
+
+function subscribeTheme(onChange: () => void) {
+    window.addEventListener(THEME_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+        window.removeEventListener(THEME_EVENT, onChange);
+        window.removeEventListener('storage', onChange);
+    };
+}
+
+function readTheme(): 'dark' | 'light' {
+    return localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
+}
+
 function applyThemeToDocument(mode: 'dark' | 'light') {
     document.documentElement.setAttribute('data-mode', mode);
     let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
@@ -69,18 +85,18 @@ function applyThemeToDocument(mode: 'dark' | 'light') {
 
 export default function MainLayout({ children, disableScroll = false, hideRightPanel = false }: MainLayoutProps) {
     const pathname = usePathname();
-    const [isSyncing, setIsSyncing] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [hasMounted, setHasMounted] = useState(false);
-    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    // false na serveru a při hydrataci, true v prohlížeči — bez setState v efektu
+    const hasMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
+    const theme = useSyncExternalStore(subscribeTheme, readTheme, () => 'dark' as const);
     const [navHidden, setNavHidden] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
     const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
-    const queryClient = useQueryClient();
+    const { sync: handleSync, isSyncing } = useSync();
 
     const { data: syncStatus } = useQuery<SyncStatus>({
         queryKey: queryKeys.syncStatus,
@@ -119,18 +135,14 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
     const bottomNavItems = menuPages.slice(0, 4);
 
     useEffect(() => {
-        setHasMounted(true);
-        const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
-        const initial = saved ?? 'dark';
-        setTheme(initial);
-        applyThemeToDocument(initial);
-    }, []);
+        applyThemeToDocument(theme);
+    }, [theme]);
 
     const toggleTheme = () => {
         const next = theme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
         localStorage.setItem('theme', next);
         applyThemeToDocument(next);
+        window.dispatchEvent(new Event(THEME_EVENT));
     };
 
     useEffect(() => {
@@ -140,11 +152,14 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    useEffect(() => {
+    const [lastPathname, setLastPathname] = useState(pathname);
+    if (lastPathname !== pathname) {
+        setLastPathname(pathname);
         setIsCompactNavOpen(false);
         setIsMobileToolsOpen(false);
+        setIsUserMenuOpen(false);
         setNavHidden(false);
-    }, [pathname]);
+    }
 
     // Instagram-style bottom nav: hide on scroll down, reveal on scroll up.
     useEffect(() => {
@@ -193,36 +208,6 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
             return;
         }
         await signOut({ redirectTo: '/login' });
-    };
-
-    const handleSync = async () => {
-        if (isSyncing) return;
-        setIsSyncing(true);
-        try {
-            const result = await syncData();
-            if (result.failed_accounts && result.failed_accounts.length > 0) {
-                alert(`Sync se nepovedl pro: ${result.failed_accounts.join(', ')}. Zkontroluj připojení banky v Nastavení.`);
-            }
-            await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
-            queryClient.invalidateQueries({ queryKey: queryKeys.budgetOverview });
-            queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
-            queryClient.invalidateQueries({ queryKey: queryKeys.investmentPortfolio });
-            queryClient.invalidateQueries({ queryKey: queryKeys.portfolioDetail });
-            queryClient.invalidateQueries({ queryKey: queryKeys.portfolioPositions });
-            queryClient.invalidateQueries({ queryKey: queryKeys.dividends });
-            queryClient.invalidateQueries({ queryKey: ['portfolio-history'] });
-            queryClient.invalidateQueries({ queryKey: ['transactions'] });
-            queryClient.invalidateQueries({ queryKey: ['budget-transactions'] });
-            queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
-            queryClient.invalidateQueries({ queryKey: queryKeys.pies });
-        } catch (error) {
-            console.error('Sync failed:', error);
-            alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
-        } finally {
-            // I selhaný běh se zapisuje do historie — obnovit vždy
-            queryClient.invalidateQueries({ queryKey: queryKeys.syncHistory });
-            setIsSyncing(false);
-        }
     };
 
     const getBankLogo = (institution: string | undefined) => {

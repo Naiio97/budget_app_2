@@ -4332,6 +4332,15 @@ body:has(.dash) {
 }
 .dash-card-head h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--d-text); }
 .dash-count { font-size: 14px; color: var(--d-muted); font-variant-numeric: tabular-nums; }
+.dash-head-tools { display: inline-flex; align-items: center; gap: 12px; }
+.dash-sync {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 0; border-radius: 999px;
+  background: var(--d-track); color: var(--d-accent); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+.dash-sync:hover:not(:disabled) { background: var(--d-accent-soft); }
+.dash-sync:disabled { cursor: default; opacity: 0.75; }
+.dash-sync.syncing svg { animation: spin 0.9s linear infinite; }
 .dash-empty { padding: 28px 0; text-align: center; color: var(--d-faint); font-size: 14px; display: flex; justify-content: center; }
 .dash-spinner { width: 28px; height: 28px; border: 3px solid var(--d-track); border-top-color: var(--d-accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
 
