@@ -46,6 +46,8 @@ const SunIcon = <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.
 interface MainLayoutProps {
     children: ReactNode;
     disableScroll?: boolean;
+    /** Skryje pravý panel (net worth, účty, rychlé akce) — stránky, které mají vlastní přehled účtů. */
+    hideRightPanel?: boolean;
 }
 
 // iOS u appky přidané na plochu stavovou lištu neschová ani nenechá protéct —
@@ -65,7 +67,7 @@ function applyThemeToDocument(mode: 'dark' | 'light') {
     meta.content = THEME_BAR_COLOR[mode];
 }
 
-export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {
+export default function MainLayout({ children, disableScroll = false, hideRightPanel = false }: MainLayoutProps) {
     const pathname = usePathname();
     const [isSyncing, setIsSyncing] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
@@ -74,6 +76,8 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const [hasMounted, setHasMounted] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>('dark');
     const [navHidden, setNavHidden] = useState(false);
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
     const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
     const queryClient = useQueryClient();
@@ -163,6 +167,20 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         el.addEventListener('scroll', onScroll, { passive: true });
         return () => el.removeEventListener('scroll', onScroll);
     }, [isMobile]);
+
+    useEffect(() => {
+        if (!isUserMenuOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setIsUserMenuOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsUserMenuOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [isUserMenuOpen]);
 
     const handleLogout = async () => {
         clearBackendTokenCache();
@@ -282,6 +300,35 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 >
                     {theme === 'dark' ? SunIcon : MoonIcon}
                 </button>
+                <div className="appbar-user" ref={userMenuRef}>
+                    <button
+                        className="appbar-avatar"
+                        onClick={() => setIsUserMenuOpen(o => !o)}
+                        aria-label="Nabídka účtu"
+                        aria-expanded={isUserMenuOpen}
+                    >
+                        NB
+                    </button>
+                    {isUserMenuOpen && (
+                        <div className="user-menu" role="menu">
+                            <button className="user-menu-item" role="menuitem" onClick={() => { handleSync(); setIsUserMenuOpen(false); }} disabled={isSyncing}>
+                                <span>{SyncIcon}</span><span>{isSyncing ? 'Synchronizuji…' : 'Synchronizovat'}</span>
+                            </button>
+                            <Link href="/settings" className="user-menu-item" role="menuitem" onClick={() => setIsUserMenuOpen(false)}>
+                                <span>{APPBAR_ICONS['/settings']}</span><span>Nastavení</span>
+                            </Link>
+                            {syncStatus && syncStatus.status !== 'never' && syncStatus.last_sync && (
+                                <div className="user-menu-note">
+                                    Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}
+                                    {' · '}{syncStatus.syncs_today}/4 dnes
+                                </div>
+                            )}
+                            <button className="user-menu-item danger" role="menuitem" onClick={handleLogout}>
+                                <span>↩</span><span>Odhlásit se</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
             </header>
 
             <div ref={layoutRef} className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
@@ -322,7 +369,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 </main>
 
                 {/* Right panel — same on every page, scrolls with content */}
-                <aside className="right-panel">
+                {!hideRightPanel && <aside className="right-panel">
 
                     {/* Net worth hero */}
                     <div className="surface kpi">
@@ -429,7 +476,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                         )}
                     </div>
 
-                </aside>
+                </aside>}
 
                 {/* Mobile bottom navigation */}
                 {isMobile && (

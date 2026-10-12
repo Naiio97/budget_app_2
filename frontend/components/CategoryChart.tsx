@@ -1,59 +1,19 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '@/lib/queryKeys';
-import { apiFetch } from '@/lib/api';
-import { getCategoryIcon } from '@/lib/category-icons';
+import Link from 'next/link';
+import ArrowIcon from './ArrowIcon';
 
 interface CategoryChartProps {
     categories: Record<string, number>;
     currency?: string;
 }
 
-interface Category {
-    id: number;
-    name: string;
-    icon: string;
-    color: string;
-    is_income?: boolean;
-    is_active?: boolean;
-}
+// Tlumená paleta — kategorie se rozlišují pořadím, ne křiklavými barvami z databáze.
+const BAR_COLORS = ['#6a9fd0', '#b8a56a', '#9d92c9', '#a3acba', '#7fbf9e', '#d09a8a', '#7fb8c4'];
 
-const FALLBACK_COLORS: Record<string, string> = {
-    'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
-    'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
-    'Dividend': '#8b5cf6', 'Salary': '#10b981', 'Subscription': '#030303',
-    'Installments': '#4b4c95', 'Insurance': '#e5c52a', 'Supermarkets': '#e69eb0',
-    'ATM': '#f28f64',
-    'Internal Transfer': '#6b7280', 'Family Transfer': '#6b7280', 'Other': '#6b7280',
-};
-
-const FALLBACK_ICONS: Record<string, string> = {
-    'Restaurant': '🍔', 'Food': '🛒', 'Transport': '🚗', 'Utilities': '💡',
-    'Entertainment': '🎬', 'Shopping': '🛒', 'Investment': '📈',
-    'Salary': '💰', 'Dividend': '💵', 'Subscription': '📱',
-    'Installments': '📦', 'Insurance': '🏥', 'Supermarkets': '🍔',
-    'ATM': '💵', 'Other': '📦',
-};
+const TOP = 5;
 
 export default function CategoryChart({ categories, currency = 'CZK' }: CategoryChartProps) {
-    const { data: categoryList = [] } = useQuery<Category[]>({
-        queryKey: queryKeys.categories,
-        queryFn: () =>
-            apiFetch(`/categories/`)
-                .then(r => r.json())
-                .then(d => Array.isArray(d) ? d : []),
-        staleTime: 5 * 60 * 1000,
-    });
-
-    const meta = categoryList.reduce((acc, cat) => {
-        acc[cat.name] = { color: cat.color, icon: cat.icon };
-        return acc;
-    }, {} as Record<string, { color: string; icon: string }>);
-
-    const getColor = (name: string) => meta[name]?.color || FALLBACK_COLORS[name] || '#6b7280';
-    const getIcon = (name: string) => getCategoryIcon(meta[name]?.icon || FALLBACK_ICONS[name] || '📦', 15);
-
     const fmt = (amount: number) =>
         new Intl.NumberFormat('cs-CZ', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
@@ -61,53 +21,39 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1]);
 
-    if (sorted.length === 0) {
-        return (
-            <div style={{ textAlign: 'center', padding: 'var(--spacing-xl)', color: 'var(--text-3)', fontSize: 13 }}>
-                Žádné výdaje k zobrazení
-            </div>
-        );
-    }
-
-    const max = sorted[0][1];
+    const top = sorted.slice(0, TOP);
+    const max = top[0]?.[1] ?? 1;
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Stacked bar at top */}
-            <div style={{ display: 'flex', height: 8, borderRadius: 'var(--radius-full)', overflow: 'hidden', gap: 1 }}>
-                {sorted.slice(0, 8).map(([name, amount]) => {
-                    const total = sorted.reduce((s, [, v]) => s + v, 0);
-                    return (
-                        <div key={name}
-                            style={{ width: `${(amount / total) * 100}%`, background: getColor(name), transition: 'width 0.5s' }}
-                            title={`${name}: ${fmt(amount)}`}
-                        />
-                    );
-                })}
+        <div className="dash-card dash-cats">
+            <div className="dash-card-head">
+                <h3>Kam míří peníze</h3>
+                <Link href="/reports" className="dash-arrow-link" aria-label="Přehledy výdajů">
+                    <ArrowIcon />
+                </Link>
             </div>
 
-            {/* Category rows */}
-            {sorted.slice(0, 7).map(([name, amount]) => (
-                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                        width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                        background: getColor(name) + '22',
-                        color: getColor(name),
-                        display: 'grid', placeItems: 'center', fontSize: 14,
-                    }}>
-                        {getIcon(name)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ fontSize: 13, fontWeight: 510, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                            <span className="num" style={{ fontSize: 12, color: 'var(--text-2)', flexShrink: 0, marginLeft: 8 }}>{fmt(amount)}</span>
+            {top.length === 0 ? (
+                <div className="dash-empty">Žádné výdaje k zobrazení</div>
+            ) : (
+                <div className="dash-cat-list">
+                    {top.map(([name, amount], i) => (
+                        <div key={name} className="dash-cat">
+                            <div className="dash-cat-row">
+                                <span className="dash-cat-name">{name.trim()}</span>
+                                <span className="dash-cat-amount num">{fmt(amount)}</span>
+                            </div>
+                            <div className="dash-cat-track">
+                                <span style={{ width: `${(amount / max) * 100}%`, background: BAR_COLORS[i % BAR_COLORS.length] }} />
+                            </div>
                         </div>
-                        <div className="progress">
-                            <span style={{ width: `${(amount / max) * 100}%`, background: getColor(name) }} />
-                        </div>
-                    </div>
+                    ))}
                 </div>
-            ))}
+            )}
+
+            <Link href="/reports" className="dash-link">
+                Všechny kategorie <ArrowIcon size={12} />
+            </Link>
         </div>
     );
 }
