@@ -4271,7 +4271,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 [data-mode="light"] .dash {
   --d-card: #ffffff;
   --d-card-border: rgba(30,50,90,0.05);
-  --d-shadow: 0 1px 2px rgba(20,35,70,0.04), 0 12px 34px rgba(20,35,70,0.06);
+  --d-shadow: 0 1px 2px rgba(20,35,70,0.03), 0 14px 40px rgba(40,60,110,0.07);
   --d-text: #1b2740;
   --d-muted: #66758c;
   --d-faint: #98a4b6;
@@ -4283,6 +4283,8 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   --d-pos-soft: rgba(42,138,100,0.12);
   --d-neg: #a65a4b;
 }
+/* Světlý motiv: téměř bílé pozadí bez přechodu — karty se oddělují jen měkkým stínem (podle návrhu) */
+[data-mode="light"] body:has(.dash) { background: #fbfbfd; }
 .dash .page-head h1 { color: var(--d-text); }
 .dash .page-head .sub { color: var(--d-muted); }
 
