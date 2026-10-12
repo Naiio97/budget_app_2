@@ -779,6 +779,13 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/sync/history')) return MOCK_SYNC_HISTORY;
     if (path.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 };
     if (path.startsWith('/settings/salary-config')) return MOCK_SALARY_CONFIG;
+    if (path.startsWith('/salary-period/current')) {
+        const now = new Date();
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 8);
+        const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return { year_month: ym, start: `${ym}-08`, end: iso(next) };
+    }
     if (path === '/salary-estimate' || path === '/salary-estimate/') return [MOCK_SALARY_ESTIMATE];
     if (path.startsWith('/salary-estimate/')) return MOCK_SALARY_ESTIMATE;
     if (path.startsWith('/settings/api-keys')) return MOCK_API_KEYS;

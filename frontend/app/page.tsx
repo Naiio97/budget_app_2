@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
   if (isLoading || !data) {
     return (
-      <MainLayout hideRightPanel>
+      <MainLayout>
         <PageLoader />
       </MainLayout>
     );
@@ -119,7 +119,7 @@ export default function DashboardPage() {
     : getPaydayText(now, getNextPayday(now));
 
   return (
-    <MainLayout hideRightPanel>
+    <MainLayout>
       <div className="page-container dash">
 
         {/* Page header */}

@@ -4565,3 +4565,120 @@ body:has(.dash) {
   .dash-bars-plot { gap: 3px; }
   .dash-ratio-legend { gap: 24px; }
 }
+
+/* ══ THEME V2 — skleněné karty na modrošedém přechodu (celá aplikace) ═════
+   Přepisuje tokeny výše, takže se nový vzhled projeví ve všech stránkách.
+   Barvy přechodu a průsvitnost karet jsou změřené z návrhu.               */
+:root, [data-mode="dark"] {
+  --bg: #0d1219;
+  --bg-scene: linear-gradient(180deg, #2b3b54 0%, #1e2a3d 28%, #141b27 62%, #0d1219 100%);
+
+  --surface:          rgba(255,255,255,0.06);
+  --surface-strong:   #1b2535;
+  --surface-elevated: #243148;
+  --surface-sunken:   rgba(255,255,255,0.08);
+
+  --border:        rgba(255,255,255,0.10);
+  --border-strong: rgba(255,255,255,0.18);
+
+  --text:   #f5f7fb;
+  --text-2: rgba(235,240,250,0.66);
+  --text-3: rgba(235,240,250,0.42);
+
+  --pos:  #4cc38a;
+  --neg:  #e08a78;
+  --warn: #e0a85a;
+  --info: #5b9bff;
+
+  --accent:      #5b9bff;
+  --accent-soft: rgba(91,155,255,0.16);
+
+  --card-border: rgba(255,255,255,0.10);
+  --card-shadow: 0 10px 34px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.05);
+  --head-text:   #f5f7fb;
+  --head-muted:  rgba(235,240,250,0.72);
+
+  --shadow-sm: 0 4px 14px rgba(0,0,0,0.25);
+  --shadow:    0 10px 34px rgba(0,0,0,0.30);
+  --shadow-lg: 0 24px 64px rgba(0,0,0,0.50);
+  --glass-blur: 24px;
+}
+
+[data-mode="light"] {
+  --bg: #e8edf3;
+  --bg-scene: linear-gradient(180deg,
+    #546881 0%, #8897ab 10%, #b6c1cf 19%, #c2ccd8 27%, #d5dce5 40%,
+    #e5e9ef 57%, #edf0f4 73%, #e8edf3 100%);
+
+  --surface:          rgba(255,255,255,0.34);
+  --surface-strong:   #f4f7fb;
+  --surface-elevated: #ffffff;
+  --surface-sunken:   rgba(30,50,90,0.06);
+
+  --border:        rgba(30,50,90,0.09);
+  --border-strong: rgba(30,50,90,0.16);
+
+  --text:   #1b2740;
+  --text-2: #5d6c83;
+  --text-3: #8a97aa;
+
+  --pos:  #2a8a64;
+  --neg:  #b4584a;
+  --warn: #b9782c;
+  --info: #2f6fdb;
+
+  --accent:      #2f6fdb;
+  --accent-soft: rgba(47,111,219,0.11);
+
+  --card-border: rgba(255,255,255,0.62);
+  --card-shadow: 0 10px 34px rgba(36,56,92,0.12), inset 0 1px 0 rgba(255,255,255,0.55);
+  --head-text:   #ffffff;
+  --head-muted:  rgba(255,255,255,0.84);
+
+  --shadow-sm: 0 4px 14px rgba(36,56,92,0.08);
+  --shadow:    0 10px 34px rgba(36,56,92,0.12);
+  --shadow-lg: 0 24px 64px rgba(20,35,70,0.22);
+}
+
+/* Karty */
+.glass, .surface,
+[data-mode="light"] .glass, [data-mode="light"] .surface {
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border: 1px solid var(--card-border);
+  border-radius: 26px;
+  box-shadow: var(--card-shadow);
+}
+
+/* Hlavička stránky leží na tmavší části přechodu → světlý text */
+.page-head h1 { color: var(--head-text); font-weight: 500; letter-spacing: -0.02em; }
+.page-head .sub { color: var(--head-muted); }
+.page-head .seg-item { color: var(--text-2); }
+
+/* Přepínače (segmenty) — kapsle jako v dashboardu */
+.seg {
+  padding: 4px; border-radius: 999px; background: rgba(255,255,255,0.32);
+}
+[data-mode="dark"] .seg { background: rgba(255,255,255,0.07); }
+.seg-item { padding: 6px 14px; border-radius: 999px; color: var(--text-2); font-weight: 600; }
+[data-mode] .seg-item.active {
+  background: rgba(255,255,255,0.94); color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+[data-mode="dark"] .seg-item.active { background: rgba(255,255,255,0.16); color: var(--accent); box-shadow: none; }
+.page-head .seg-item { color: var(--head-muted); }
+[data-mode] .page-head .seg-item.active { color: var(--accent); }
+
+/* Horní lišta: nabídka „Další" */
+.appbar-more { position: relative; display: flex; }
+.appbar-more > .appbar-nav-item { border: 0; font-family: inherit; cursor: pointer; }
+.appbar-more > .appbar-nav-item:not(.active) { background: transparent; }
+.more-menu { left: 0; right: auto; min-width: 200px; }
+.user-menu-item.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* Další hlavičky stránek (investice, detail účtu) — světlý text na tmavší části přechodu */
+.investment-header h1,
+.account-detail-head h1 { color: var(--head-text) !important; font-weight: 500; letter-spacing: -0.02em; }
+.investment-header p,
+.account-detail-sub { color: var(--head-muted); }

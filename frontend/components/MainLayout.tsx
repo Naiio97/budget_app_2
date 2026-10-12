@@ -47,8 +47,6 @@ const SunIcon = <Svg><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.
 interface MainLayoutProps {
     children: ReactNode;
     disableScroll?: boolean;
-    /** Skryje pravý panel (net worth, účty, rychlé akce) — stránky, které mají vlastní přehled účtů. */
-    hideRightPanel?: boolean;
 }
 
 // iOS u appky přidané na plochu stavovou lištu neschová ani nenechá protéct —
@@ -83,7 +81,7 @@ function applyThemeToDocument(mode: 'dark' | 'light') {
     meta.content = THEME_BAR_COLOR[mode];
 }
 
-export default function MainLayout({ children, disableScroll = false, hideRightPanel = false }: MainLayoutProps) {
+export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {
     const pathname = usePathname();
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
@@ -94,6 +92,8 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
     const [navHidden, setNavHidden] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const userMenuRef = useRef<HTMLDivElement>(null);
+    const [isMoreOpen, setIsMoreOpen] = useState(false);
+    const moreRef = useRef<HTMLDivElement>(null);
     const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
     const { sync: handleSync, isSyncing } = useSync();
@@ -121,6 +121,11 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
     const pages = NAV_PAGES.map(p => ({ ...p, icon: NAV_EMOJI[p.href] }));
     const menuPages = pages.filter(p => placements[p.href] === 'menu');
     const quickPages = pages.filter(p => placements[p.href] === 'quick');
+    // Horní lišta: pár hlavních záložek, zbytek pod „Další"
+    const PRIMARY_HREFS = ['/', '/transactions', '/rozpocet', '/investments'];
+    const primaryPages = menuPages.filter(p => PRIMARY_HREFS.includes(p.href));
+    const morePages = [...menuPages.filter(p => !PRIMARY_HREFS.includes(p.href)), ...quickPages];
+    const moreActive = morePages.some(p => p.href === pathname);
 
     // Drawer (hamburger) ukazuje všechno nescryté + Nastavení, ať se uživatel
     // vždycky dostane všude i bez appbaru.
@@ -158,6 +163,7 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
         setIsCompactNavOpen(false);
         setIsMobileToolsOpen(false);
         setIsUserMenuOpen(false);
+        setIsMoreOpen(false);
         setNavHidden(false);
     }
 
@@ -196,6 +202,20 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
             document.removeEventListener('keydown', onKey);
         };
     }, [isUserMenuOpen]);
+
+    useEffect(() => {
+        if (!isMoreOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (moreRef.current && !moreRef.current.contains(e.target as Node)) setIsMoreOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMoreOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [isMoreOpen]);
 
     const handleLogout = async () => {
         clearBackendTokenCache();
@@ -258,7 +278,7 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
                     <span>Koruna</span>
                 </Link>
                 <nav className="appbar-nav">
-                    {menuPages.map((item) => (
+                    {primaryPages.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
@@ -268,6 +288,36 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
                             <span>{item.label}</span>
                         </Link>
                     ))}
+                    {morePages.length > 0 && (
+                        <div className="appbar-more" ref={moreRef}>
+                            <button
+                                className={`appbar-nav-item ${moreActive || isMoreOpen ? 'active' : ''}`}
+                                onClick={() => setIsMoreOpen(o => !o)}
+                                aria-expanded={isMoreOpen}
+                                aria-haspopup="menu"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+                                    <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+                                </svg>
+                                <span>Další</span>
+                            </button>
+                            {isMoreOpen && (
+                                <div className="user-menu more-menu" role="menu">
+                                    {morePages.map(item => (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            role="menuitem"
+                                            className={`user-menu-item ${pathname === item.href ? 'current' : ''}`}
+                                            onClick={() => setIsMoreOpen(false)}
+                                        >
+                                            <span>{APPBAR_ICONS[item.href]}</span><span>{item.label}</span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </nav>
                 <span className="appbar-divider" aria-hidden />
                 <button
@@ -352,116 +402,6 @@ export default function MainLayout({ children, disableScroll = false, hideRightP
 
                     {children}
                 </main>
-
-                {/* Right panel — same on every page, scrolls with content */}
-                {!hideRightPanel && <aside className="right-panel">
-
-                    {/* Net worth hero */}
-                    <div className="surface kpi">
-                        <div className="kpi-label">Čisté jmění</div>
-                        <div className="kpi-value num" style={{ fontSize: '1.6rem', marginTop: 4 }}>
-                            {formatCurrency(totalBalance)}
-                        </div>
-                        <div className="kpi-sub">
-                            <span className="muted" style={{ fontSize: 12 }}>
-                                {accounts.length} {accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Accounts list */}
-                    <div className="surface">
-                        <div className="card-head">
-                            <h4>Účty</h4>
-                            <span className="muted">{accounts.length}</span>
-                        </div>
-                        <div style={{ padding: '8px var(--spacing-md) var(--spacing-md)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {accounts.length === 0 ? (
-                                <div style={{ padding: '12px 0', color: 'var(--text-3)', fontSize: 13, textAlign: 'center' }}>
-                                    Žádné účty
-                                </div>
-                            ) : (
-                                accounts.map((account) => {
-                                    const logoUrl = getBankLogo(account.institution);
-                                    const href = getAccountHref(account);
-                                    const consent = getConsentStatus(account.consent_expires_at);
-                                    const consentWarning = consent && (consent.expired || consent.expiringSoon);
-                                    const syncBroken = !consentWarning && !!account.last_sync_error;
-                                    return (
-                                        <Link key={account.id} href={href} className="acc-card">
-                                            {logoUrl ? (
-                                                <div className="acc-logo" style={{ background: '#fff', padding: 4, overflow: 'hidden' }}>
-                                                    <Image src={logoUrl} alt={account.institution || account.name} width={32} height={32} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                                </div>
-                                            ) : (
-                                                <div className="acc-logo" style={{ background: getAccentColor(account.type), fontSize: 11 }}>
-                                                    {getInitials(account.name)}
-                                                </div>
-                                            )}
-                                            <div style={{ minWidth: 0, flex: 1 }}>
-                                                <div className="acc-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.name}</div>
-                                                {consentWarning ? (
-                                                    <div className="acc-balance" style={{ color: consent.color, fontWeight: 600 }} title={consent.label}>
-                                                        {consent.shortLabel}
-                                                    </div>
-                                                ) : syncBroken ? (
-                                                    <div className="acc-balance" style={{ color: 'var(--warn)', fontWeight: 600 }} title={account.last_sync_error ?? undefined}>
-                                                        sync selhává
-                                                    </div>
-                                                ) : (
-                                                    <div className="acc-balance">{account.currency}</div>
-                                                )}
-                                            </div>
-                                            <div className="num" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', flexShrink: 0, color: account.balance < 0 ? 'var(--neg)' : 'var(--text)' }}>
-                                                {formatCurrency(account.balance, account.currency)}
-                                            </div>
-                                        </Link>
-                                    );
-                                })
-                            )}
-                            <Link href="/settings" className="btn btn-ghost btn-sm" style={{ justifyContent: 'center', marginTop: 4 }}>
-                                + Propojit účet
-                            </Link>
-                        </div>
-                    </div>
-
-                    {/* Quick actions */}
-                    <div className="surface">
-                        <div className="card-head"><h4>Rychlé akce</h4></div>
-                        <div style={{ padding: 'var(--spacing-sm)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <button className="btn btn-sm" onClick={handleSync} disabled={isSyncing}
-                                style={{ justifyContent: 'flex-start' }}>
-                                {isSyncing
-                                    ? <><span style={{ width: 13, height: 13, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} /><span>Sync...</span></>
-                                    : <><span>{SyncIcon}</span><span>Sync</span></>
-                                }
-                            </button>
-                            <Link href="/settings" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{APPBAR_ICONS['/settings']}</span><span>Nastavení</span>
-                            </Link>
-                            {quickPages.map((item) => (
-                                <Link key={item.href} href={item.href} className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                    <span>{APPBAR_ICONS[item.href]}</span><span>{item.label}</span>
-                                </Link>
-                            ))}
-                            <button className="btn btn-sm" onClick={handleLogout}
-                                style={{ justifyContent: 'center', gridColumn: '1 / -1', color: 'var(--neg)' }}>
-                                <span>↩</span><span>Odhlásit se</span>
-                            </button>
-                        </div>
-                        {syncStatus && syncStatus.status !== 'never' && (
-                            <div style={{ padding: '0 var(--spacing-sm) var(--spacing-sm)', fontSize: 11, color: 'var(--text-3)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {syncStatus.last_sync && (
-                                    <span>Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}</span>
-                                )}
-                                <span style={{ color: syncStatus.syncs_today >= 4 ? 'var(--neg)' : syncStatus.syncs_today >= 3 ? 'var(--warn)' : 'var(--text-3)', fontWeight: syncStatus.syncs_today >= 3 ? 600 : undefined }}>
-                                    {syncStatus.syncs_today}/4 dnes{syncStatus.syncs_today >= 4 && ' — denní limit'}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
-                </aside>}
 
                 {/* Mobile bottom navigation */}
                 {isMobile && (

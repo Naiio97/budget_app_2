@@ -80,12 +80,12 @@ export default function RozpocetPage() {
     });
     const didInitPeriod = useRef(false);
     useEffect(() => {
-        if (didInitPeriod.current || !currentPeriod) return;
+        if (didInitPeriod.current || !currentPeriod?.year_month) return;
         didInitPeriod.current = true;
         const [y, m] = currentPeriod.year_month.split('-').map(Number);
         if (y !== selectedYear || m !== selectedMonth) { setSelectedYear(y); setSelectedMonth(m); }
     }, [currentPeriod, selectedYear, selectedMonth]);
-    const isCurrentPeriod = !!currentPeriod && currentPeriod.year_month === yearMonth;
+    const isCurrentPeriod = !!currentPeriod?.year_month && currentPeriod.year_month === yearMonth;
 
     // Cashflow projekce má smysl jen pro aktuální výplatní období
     const { data: cashflow } = useQuery<Cashflow>({
