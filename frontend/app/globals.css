@@ -4266,9 +4266,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   --d-neg: #e08a78;
   --d-radius: 26px;
   gap: 20px;
-  max-width: 1480px;
   width: 100%;
-  margin: 0 auto;
 }
 [data-mode="light"] .dash {
   --d-card: #ffffff;
@@ -4285,8 +4283,6 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   --d-pos-soft: rgba(42,138,100,0.12);
   --d-neg: #a65a4b;
 }
-/* Světlý motiv: pozadí téměř bílé, ať karty s měkkým stínem „plavou" jako v návrhu */
-[data-mode="light"] body:has(.dash) { background: #f6f8fb; }
 .dash .page-head h1 { color: var(--d-text); }
 .dash .page-head .sub { color: var(--d-muted); }
 
