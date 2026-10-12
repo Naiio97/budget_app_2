@@ -22,28 +22,30 @@ function initials(name: string): string {
     return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-const BANK_NAMES: Record<string, string> = {
-    airbank: 'Air Bank',
-    csas: 'Česká spořitelna',
-    ceskasporitelna: 'Česká spořitelna',
-    kb: 'Komerční banka',
-    komercnibanka: 'Komerční banka',
-    csob: 'ČSOB',
-    moneta: 'Moneta',
-    fio: 'Fio banka',
-    raiffeisenbank: 'Raiffeisenbank',
-    rb: 'Raiffeisenbank',
-    trading212: 'Trading 212',
-    ppf: 'PPF banka',
-    revolut: 'Revolut',
-};
+// Rozpoznání podle částí kódu banky (GoCardless: „CESKA_SPORITELNA_GIBACZPX", „AIRBANK_AIRACZPP")
+const BANK_NAMES: Array<[string, string]> = [
+    ['airbank', 'Air Bank'],
+    ['sporitelna', 'Česká spořitelna'],
+    ['csas', 'Česká spořitelna'],
+    ['trading212', 'Trading 212'],
+    ['komercni', 'Komerční banka'],
+    ['csob', 'ČSOB'],
+    ['moneta', 'Moneta'],
+    ['fio', 'Fio banka'],
+    ['raiffeisen', 'Raiffeisenbank'],
+    ['ppf', 'PPF banka'],
+    ['revolut', 'Revolut'],
+];
 
-// Kódy bank typu „AIRBANK_AIRACZPP" → „Air Bank"
 function prettyInstitution(code?: string): string | null {
     if (!code) return null;
-    const key = code.split('_')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!key) return null;
-    return BANK_NAMES[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
+    const key = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const known = BANK_NAMES.find(([part]) => key.includes(part));
+    if (known) return known[1];
+    // Už čitelný název („Manuální investice") nech být, kód („SOME_BANK_XXXXCZPP") zkrať na první slovo
+    if (/[a-zá-ž]/.test(code) || /\s/.test(code)) return code;
+    const first = code.split('_')[0].toLowerCase();
+    return first ? first.charAt(0).toUpperCase() + first.slice(1) : null;
 }
 
 function subtitle(account: Account): string {
