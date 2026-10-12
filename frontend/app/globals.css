@@ -4441,13 +4441,19 @@ body:has(.dash) {
   grid-column: 2; display: flex; justify-content: space-between;
   font-size: 11.5px; color: var(--d-faint);
 }
-.dash-nw-split {
-  display: flex; gap: 40px; flex-wrap: wrap; margin-top: 22px; padding-top: 20px;
-  border-top: 1px solid var(--d-line); font-size: 13px; color: var(--d-muted);
-}
-.dash-nw-split > div { display: flex; flex-direction: column; gap: 6px; }
+.dash-ratio { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--d-line); }
+.dash-ratio-title { font-size: 13px; font-weight: 600; color: var(--d-muted); margin-bottom: 12px; }
+.dash-ratio-bar { display: flex; gap: 3px; height: 12px; border-radius: 999px; overflow: hidden; }
+.dash-ratio-bar span { min-width: 6px; transition: flex-grow 0.4s ease, filter var(--transition-fast); }
+.dash-ratio-bar span.bank { background: #5cb5c9; border-radius: 999px 4px 4px 999px; }
+.dash-ratio-bar span.invest { background: #8b82cc; border-radius: 4px 999px 999px 4px; }
+.dash-ratio-bar span:only-child { border-radius: 999px; }
+.dash-ratio-bar span:hover { filter: brightness(1.1); }
+.dash-ratio-legend { display: flex; gap: 40px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--d-muted); }
+.dash-ratio-legend > div { display: flex; flex-direction: column; gap: 6px; }
+.dash-ratio-legend strong { font-size: 17px; font-weight: 500; color: var(--d-text); }
+.dash-ratio-legend em { font-style: normal; margin-left: 8px; font-weight: 600; color: var(--d-text); }
 .dash-split-label { display: inline-flex; align-items: center; }
-.dash-nw-split strong { font-size: 17px; font-weight: 500; color: var(--d-text); }
 .dash-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; }
 .dash-dot.bank { background: #5cb5c9; }
 .dash-dot.invest { background: #8b82cc; }
@@ -4548,5 +4554,5 @@ body:has(.dash) {
   .dash-range-item { padding: 6px 10px; }
   .dash-bars { grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 150px auto; }
   .dash-bars-plot { gap: 3px; }
-  .dash-nw-split { gap: 24px; }
+  .dash-ratio-legend { gap: 24px; }
 }

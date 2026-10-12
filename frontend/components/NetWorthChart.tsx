@@ -68,6 +68,14 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
     const changePct = first && first.total > 0 ? (change / first.total) * 100 : 0;
     const positive = change >= 0;
 
+    // Poměr účtů a investic (záporný zůstatek se do poměru nepočítá)
+    const bankPart = Math.max(last?.bank ?? 0, 0);
+    const investPart = Math.max(last?.investment ?? 0, 0);
+    const partsTotal = bankPart + investPart;
+    const bankShare = partsTotal > 0 ? bankPart / partsTotal : 0;
+    const investShare = partsTotal > 0 ? investPart / partsTotal : 0;
+    const shareText = (share: number) => `${(share * 100).toFixed(share >= 0.1 || share === 0 ? 0 : 1).replace('.', ',')} %`;
+
     const bars = toBars(history);
     const axisMax = niceMax(Math.max(0, ...bars.map(b => b.total)));
     const ticks = [axisMax, axisMax / 2, 0];
@@ -168,14 +176,30 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                         </div>
                     </div>
 
-                    <div className="dash-nw-split">
-                        <div>
-                            <span className="dash-split-label"><span className="dash-dot bank" />Bankovní účty</span>
-                            <strong className="num">{formatCurrency(last.bank, currency)}</strong>
-                        </div>
-                        <div>
-                            <span className="dash-split-label"><span className="dash-dot invest" />Investice</span>
-                            <strong className="num">{formatCurrency(last.investment, currency)}</strong>
+                    <div className="dash-ratio">
+                        <div className="dash-ratio-title">Složení majetku</div>
+                        {partsTotal > 0 && (
+                            <div className="dash-ratio-bar" role="img"
+                                aria-label={`Bankovní účty ${shareText(bankShare)}, investice ${shareText(investShare)}`}>
+                                {bankPart > 0 && (
+                                    <span className="bank" style={{ flexGrow: bankPart }}
+                                        title={`Bankovní účty: ${formatCurrency(last.bank, currency)} (${shareText(bankShare)})`} />
+                                )}
+                                {investPart > 0 && (
+                                    <span className="invest" style={{ flexGrow: investPart }}
+                                        title={`Investice: ${formatCurrency(last.investment, currency)} (${shareText(investShare)})`} />
+                                )}
+                            </div>
+                        )}
+                        <div className="dash-ratio-legend">
+                            <div>
+                                <span className="dash-split-label"><span className="dash-dot bank" />Bankovní účty<em>{shareText(bankShare)}</em></span>
+                                <strong className="num">{formatCurrency(last.bank, currency)}</strong>
+                            </div>
+                            <div>
+                                <span className="dash-split-label"><span className="dash-dot invest" />Investice<em>{shareText(investShare)}</em></span>
+                                <strong className="num">{formatCurrency(last.investment, currency)}</strong>
+                            </div>
                         </div>
                     </div>
                 </>
