@@ -36,6 +36,10 @@ function formatDay(dateStr: string): string {
     return new Date(dateStr + 'T12:00:00').toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long' });
 }
 
+function formatDayFull(dateStr: string): string {
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 // Sloučí denní řadu do nejvýš MAX_BARS sloupců — hodnota sloupce = poslední den v úseku.
 function toBars(history: NetWorthHistory['history']) {
     if (history.length <= MAX_BARS) return history;
@@ -48,6 +52,7 @@ function toBars(history: NetWorthHistory['history']) {
 
 export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) {
     const [selectedDays, setSelectedDays] = useState(30);
+    const [hover, setHover] = useState<number | null>(null);
     const period = PERIODS.find(p => p.days === selectedDays) ?? PERIODS[0];
 
     const { data, isLoading, error } = useQuery<NetWorthHistory>({
@@ -114,15 +119,47 @@ export default function NetWorthChart({ currency = 'CZK' }: NetWorthChartProps) 
                         <div className="dash-bars-axis" aria-hidden>
                             {ticks.map(t => <span key={t}>{formatAxis(t)}</span>)}
                         </div>
-                        <div className="dash-bars-plot">
+                        <div className="dash-bars-plot" onMouseLeave={() => setHover(null)}>
                             {bars.map((b, i) => (
                                 <div
                                     key={b.date}
-                                    className={`dash-bar ${i === bars.length - 1 ? 'current' : ''}`}
-                                    style={{ height: `${Math.max(2, (b.total / axisMax) * 100)}%` }}
-                                    title={`${formatDay(b.date)}: ${formatCurrency(b.total, currency)}`}
-                                />
+                                    className={`dash-bar-col ${hover === i ? 'hover' : ''}`}
+                                    onMouseEnter={() => setHover(i)}
+                                    onFocus={() => setHover(i)}
+                                    onBlur={() => setHover(null)}
+                                    tabIndex={0}
+                                    role="img"
+                                    aria-label={`${formatDay(b.date)}: ${formatCurrency(b.total, currency)}`}
+                                >
+                                    <div
+                                        className={`dash-bar ${i === bars.length - 1 ? 'current' : ''}`}
+                                        style={{ height: `${Math.max(2, (b.total / axisMax) * 100)}%` }}
+                                    />
+                                </div>
                             ))}
+                            {hover != null && bars[hover] && (() => {
+                                const b = bars[hover];
+                                const prev = hover > 0 ? bars[hover - 1] : null;
+                                const delta = prev ? b.total - prev.total : null;
+                                const edge = hover < 3 ? 'left' : hover > bars.length - 4 ? 'right' : 'center';
+                                return (
+                                    <div
+                                        className={`dash-tip ${edge}`}
+                                        style={{
+                                            left: `${((hover + 0.5) / bars.length) * 100}%`,
+                                            bottom: `calc(${Math.max(2, (b.total / axisMax) * 100)}% + 12px)`,
+                                        }}
+                                    >
+                                        <span className="dash-tip-date">{formatDayFull(b.date)}</span>
+                                        <strong className="dash-tip-total num">{formatCurrency(b.total, currency)}</strong>
+                                        {delta != null && (
+                                            <span className={`dash-tip-delta ${delta >= 0 ? 'pos' : 'neg'}`}>
+                                                {delta >= 0 ? '▲ +' : '▼ −'}{formatCurrency(Math.abs(delta), currency)} oproti předchozímu
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <div className="dash-bars-labels" aria-hidden>
                             {labelIdx.map((i, k) => (
