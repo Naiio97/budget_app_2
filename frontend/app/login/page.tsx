@@ -62,6 +62,12 @@ function getTimeoutNotice(): string | null {
 }
 
 export default function LoginPage() {
+    // Přihlášení nemá hlavní šablonu, která motiv nastavuje — použij uložený motiv (výchozí tmavý)
+    useEffect(() => {
+        const saved = localStorage.getItem('theme');
+        document.documentElement.setAttribute('data-mode', saved === 'light' ? 'light' : 'dark');
+    }, []);
+
     const router = useRouter();
     const [mode, setMode] = useState<Mode>("login");
     const [email, setEmail] = useState("");

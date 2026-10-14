@@ -4,21 +4,21 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: radial-gradient(
-        circle at top,
-        color-mix(in srgb, var(--accent) 8%, var(--bg)) 0%,
-        var(--bg) 60%
-    );
+    /* přechod pozadí stejný jako v aplikaci */
+    background: var(--bg-scene);
+    background-attachment: fixed;
 }
 
 .login-card {
     width: 100%;
     max-width: 360px;
     background: var(--surface);
-    border: 0.5px solid var(--border);
-    border-radius: 24px;
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid var(--card-border);
+    border-radius: 26px;
     padding: 32px 28px;
-    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.35);
+    box-shadow: var(--card-shadow);
     text-align: center;
     box-sizing: border-box;
 }
@@ -147,7 +147,6 @@
 .login-divider::after { right: 0; }
 
 .login-divider span {
-    background: var(--surface);
     padding: 0 10px;
 }
 
@@ -202,9 +201,14 @@
 }
 
 .login-mode-switch button.active {
-    background: var(--surface);
-    color: var(--text);
+    background: rgba(255, 255, 255, 0.94);
+    color: var(--accent);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+[data-mode="dark"] .login-mode-switch button.active {
+    background: rgba(255, 255, 255, 0.16);
+    box-shadow: none;
 }
 
 .login-mode-switch button:disabled {
