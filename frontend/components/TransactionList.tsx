@@ -191,7 +191,6 @@ export default function TransactionList({ transactions: initialTransactions, sho
                 tx={modalTx}
                 categories={categories}
                 categoryIcons={categoryIcons}
-                categoryColors={categoryColors}
                 counterpartySuggestions={counterpartySuggestions}
                 updatingCategory={updatingId === modalTx.id}
                 onCategorySelect={handleCategorySelect}

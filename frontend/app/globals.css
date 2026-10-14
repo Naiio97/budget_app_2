@@ -4745,3 +4745,17 @@ body:has(.dash) {
 .tx-summary-row strong.pos { color: var(--d-pos); }
 .tx-summary-row strong.neg { color: var(--d-neg); }
 .tx-summary-note { font-size: 12px; color: var(--d-faint); }
+
+/* ══ DETAIL TRANSAKCE A OKNA — skleněný vzhled ══════════════════════════ */
+.modal-backdrop { background: rgba(10, 18, 32, 0.52); }
+[data-mode="light"] .modal-backdrop { background: rgba(30, 45, 70, 0.34); }
+.modal {
+  background: color-mix(in srgb, var(--surface-strong) 84%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+  backdrop-filter: blur(30px) saturate(150%);
+  border: 1px solid var(--card-border);
+  border-radius: 28px;
+  box-shadow: var(--shadow-lg);
+}
+.tx-modal-card .label-row dt { color: var(--text-2); }
+.tx-modal-card .label-row { border-bottom-color: var(--border); }
