@@ -125,7 +125,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const PRIMARY_HREFS = ['/', '/transactions', '/rozpocet', '/investments'];
     const primaryPages = menuPages.filter(p => PRIMARY_HREFS.includes(p.href));
     const morePages = [...menuPages.filter(p => !PRIMARY_HREFS.includes(p.href)), ...quickPages];
-    const moreActive = morePages.some(p => p.href === pathname);
+    const activeMorePage = morePages.find(p => p.href === pathname);
 
     // Drawer (hamburger) ukazuje všechno nescryté + Nastavení, ať se uživatel
     // vždycky dostane všude i bez appbaru.
@@ -288,10 +288,16 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <span>{item.label}</span>
                         </Link>
                     ))}
+                    {activeMorePage && (
+                        <Link href={activeMorePage.href} className="appbar-nav-item active">
+                            {APPBAR_ICONS[activeMorePage.href]}
+                            <span>{activeMorePage.label}</span>
+                        </Link>
+                    )}
                     {morePages.length > 0 && (
                         <div className="appbar-more" ref={moreRef}>
                             <button
-                                className={`appbar-nav-item ${moreActive || isMoreOpen ? 'active' : ''}`}
+                                className={`appbar-nav-item ${isMoreOpen ? 'active' : ''}`}
                                 onClick={() => setIsMoreOpen(o => !o)}
                                 aria-expanded={isMoreOpen}
                                 aria-haspopup="menu"

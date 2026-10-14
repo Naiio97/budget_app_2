@@ -4759,3 +4759,52 @@ body:has(.dash) {
 }
 .tx-modal-card .label-row dt { color: var(--text-2); }
 .tx-modal-card .label-row { border-bottom-color: var(--border); }
+
+/* ══ STRÁNKA ROZPOČTY ═══════════════════════════════════════════════════ */
+.bud-month {
+  display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--card-border); color: var(--text); font-size: 13.5px; font-weight: 500;
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+}
+.bud-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.dash .bud-kpis .dash-kpi { padding: 20px 28px; }
+.bud-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.bud-list, .bud-aside { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+@media (max-width: 1200px) { .bud-layout { grid-template-columns: minmax(0, 1fr); } .bud-kpis { grid-template-columns: minmax(0, 1fr); } }
+
+.bud-card { display: flex; flex-direction: column; gap: 16px; }
+.bud-card-head { display: flex; align-items: center; gap: 14px; }
+.bud-icon {
+  width: 46px; height: 46px; border-radius: 14px; flex-shrink: 0; display: grid; place-items: center;
+  background: var(--d-track); color: var(--d-muted);
+}
+.bud-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bud-title h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; color: var(--d-text); }
+.bud-title span { font-size: 13px; color: var(--d-muted); }
+.bud-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.bud-chips .chip { height: 26px; padding: 0 10px; font-size: 12px; gap: 6px; background: var(--d-track); color: var(--d-muted); }
+.bud-amount-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bud-amount { font-size: clamp(26px, 2.6vw, 34px); font-weight: 500; letter-spacing: -0.02em; color: var(--d-text); }
+.bud-amount span { font-size: 16px; font-weight: 400; color: var(--d-faint); }
+.dash-badge.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.bud-bar { height: 10px; border-radius: 999px; background: var(--d-track); overflow: hidden; }
+.bud-bar > span { display: block; height: 100%; border-radius: 999px; transition: width 0.5s ease; }
+.bud-bar-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--d-muted); margin-top: -6px; }
+.bud-tip { font-size: 13px; padding: 10px 14px; border-radius: 14px; background: var(--d-track); color: var(--d-muted); }
+
+.bud-tx { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.bud-tx-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bud-tx-head h4 { font-size: 15px; font-weight: 600; color: var(--d-text); }
+.bud-tx-toggle { background: none; border: 0; cursor: pointer; font: inherit; font-size: 13.5px; }
+
+.bud-pace p { font-size: 14px; line-height: 1.5; color: var(--d-muted); margin: 0 0 16px; }
+.bud-pace-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13.5px; color: var(--d-muted); }
+.bud-pace-row strong { font-size: 20px; font-weight: 500; color: var(--d-text); }
+.bud-pace-note { margin-top: 6px; font-size: 12px; color: var(--d-faint); }
+
+/* tabulka transakcí na úzkých šířkách: jen název a částka */
+@media (max-width: 700px) {
+  .tx-table .tx-table-head { display: none; }
+  .tx-table .transaction-item { grid-template-columns: 44px minmax(0, 1fr) auto; }
+  .tx-table .tx-cell { display: none; }
+}
