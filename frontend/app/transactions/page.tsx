@@ -7,6 +7,8 @@ import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
 import CustomSelect from '@/components/CustomSelect';
+import AccountsCard from '@/components/AccountsCard';
+import { categoryLabel, getDisplayName } from '@/components/transaction-format';
 import { Transaction, getTransactions, getDashboard, getTags, getTagSummary, apiFetch } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
@@ -171,6 +173,8 @@ function TransactionsPageContent() {
     const totalPages = txData?.pages || 1;
     const totalItems = txData?.total || 0;
     const accounts = dashData?.accounts || [];
+    const rangeFrom = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
+    const rangeTo = Math.min(page * pageSize, totalItems);
     const monthlyStats = dashData?.monthly || { income: 0, expenses: 0 };
 
     const [{ items: accumulatedTransactions }, dispatchTransactionAccumulator] = useReducer(
@@ -223,11 +227,48 @@ function TransactionsPageContent() {
         return months;
     };
 
-    const subText = [
-        `${totalItems} ${totalItems === 1 ? 'transakce' : totalItems >= 2 && totalItems <= 4 ? 'transakce' : 'transakcí'}`,
-        monthlyStats.income > 0 ? `+${formatCurrency(monthlyStats.income)} příjmy` : null,
-        monthlyStats.expenses > 0 ? `${formatCurrency(monthlyStats.expenses)} výdaje` : null,
-    ].filter(Boolean).join(' · ');
+
+    // Export všech transakcí podle aktuálních filtrů do CSV (otevře se v Excelu)
+    const [exporting, setExporting] = useState(false);
+    const exportCsv = async () => {
+        if (exporting) return;
+        setExporting(true);
+        try {
+            const rows: Transaction[] = [];
+            const PAGE = 1000;
+            for (let p = 1; p <= 30; p++) {
+                const res = await getTransactions({ ...txFilters, page: p, limit: PAGE });
+                rows.push(...res.items);
+                if (p >= (res.pages || 1)) break;
+            }
+            const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+            const lines = [
+                ['Datum', 'Název', 'Kategorie', 'Účet', 'Částka', 'Měna'].join(';'),
+                ...rows.map(t => [
+                    t.date,
+                    esc(getDisplayName(t)),
+                    esc(categoryLabel(t.category)),
+                    esc(t.account_name ?? ''),
+                    String(t.amount).replace('.', ','),
+                    t.currency,
+                ].join(';')),
+            ];
+            const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `transakce-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Export failed:', err);
+            alert('Export se nepodařil.');
+        } finally {
+            setExporting(false);
+        }
+    };
 
     return (
         <MainLayout>
@@ -237,7 +278,15 @@ function TransactionsPageContent() {
                 <div className="page-head">
                     <div>
                         <h1>Transakce</h1>
-                        <div className="sub">{subText}</div>
+                        <div className="sub">
+                            {totalItems.toLocaleString('cs-CZ')} {totalItems === 1 ? 'transakce' : totalItems >= 2 && totalItems <= 4 ? 'transakce' : 'transakcí'} · Všechny vaše pohyby na jednom místě.
+                        </div>
+                    </div>
+                    <div className="tx-head-actions">
+                        <button className="btn" onClick={exportCsv} disabled={exporting || totalItems === 0}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+                            {exporting ? 'Exportuji…' : 'Exportovat'}
+                        </button>
                     </div>
                 </div>
 
@@ -252,7 +301,7 @@ function TransactionsPageContent() {
                             <input
                                 type="text"
                                 className="input"
-                                placeholder="Hledat transakce..."
+                                placeholder="Hledat název, protistranu nebo poznámku…"
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 style={{ paddingLeft: 36 }}
@@ -278,7 +327,7 @@ function TransactionsPageContent() {
                                 options={getMonthOptions().map(m => ({ value: m.value, label: m.label }))}
                                 value={selectedMonth}
                                 onChange={val => { setSelectedMonth(val); resetFilters(); }}
-                                placeholder="Všechny měsíce"
+                                placeholder="Všechna období"
                             />
                         </div>
                         <div style={{ flex: '1 1 160px' }}>
@@ -367,15 +416,16 @@ function TransactionsPageContent() {
                     </div>
                 )}
 
-                {/* Transaction list */}
-                <div className="surface">
+                {/* Transaction list + pravý sloupec */}
+                <div className="tx-layout">
+                <div className="surface tx-main">
                     <div className="card-body-nopad">
                         {loading && page === 1 ? (
                             <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-xl)' }}>
                                 <div style={{ width: 28, height: 28, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                             </div>
                         ) : (
-                            <TransactionList transactions={finalDisplayTransactions} showAccount />
+                            <TransactionList transactions={finalDisplayTransactions} showAccount variant={isMobile ? 'list' : 'table'} />
                         )}
                     </div>
 
@@ -399,41 +449,56 @@ function TransactionsPageContent() {
 
                     {/* Desktop pagination */}
                     {!isMobile && (
-                        <div style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            gap: 'var(--spacing-lg)', padding: 'var(--spacing-md) var(--spacing-lg)',
-                            borderTop: '0.5px solid var(--border)',
-                            flexWrap: 'wrap',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)' }}>
-                                <span>Na stránku:</span>
-                                <div className="seg">
+                        <div className="tx-pager">
+                            <span className="tx-pager-count">
+                                {totalItems === 0 ? '0 transakcí' : `${rangeFrom}–${rangeTo} z ${totalItems.toLocaleString('cs-CZ')} transakcí`}
+                            </span>
+                            <div className="tx-pager-right">
+                                <select
+                                    className="tx-page-size"
+                                    value={pageSize}
+                                    onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
+                                    aria-label="Počet na stránku"
+                                >
                                     {[5, 10, 20, 50, 100].map(size => (
-                                        <div
-                                            key={size}
-                                            className={`seg-item ${pageSize === size ? 'active' : ''}`}
-                                            onClick={() => { setPageSize(size); setPage(1); }}
-                                        >
-                                            {size}
-                                        </div>
+                                        <option key={size} value={size}>{size} na stránku</option>
                                     ))}
-                                </div>
+                                </select>
+                                <button className="tx-page-btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} aria-label="Předchozí stránka">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 18-6-6 6-6" /></svg>
+                                </button>
+                                <span className="tx-page-num">{page} / {totalPages}</span>
+                                <button className="tx-page-btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} aria-label="Další stránka">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m9 18 6-6-6-6" /></svg>
+                                </button>
                             </div>
-                            {totalPages > 1 ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-lg)' }}>
-                                    <button className="btn" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ opacity: page <= 1 ? 0.4 : 1 }}>
-                                        ← Předchozí
-                                    </button>
-                                    <span style={{ fontSize: 13, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
-                                        {page} / {totalPages}
-                                    </span>
-                                    <button className="btn" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} style={{ opacity: page >= totalPages ? 0.4 : 1 }}>
-                                        Další →
-                                    </button>
-                                </div>
-                            ) : <span />}
                         </div>
                     )}
+                </div>
+
+                {!isMobile && (
+                    <aside className="dash tx-aside">
+                        <div className="dash-card tx-summary">
+                            <div className="dash-card-head"><h3>Souhrn transakcí</h3></div>
+                            <div className="tx-summary-row">
+                                <span>Příjmy</span>
+                                <strong className="num pos">{formatCurrency(monthlyStats.income)}</strong>
+                            </div>
+                            <div className="tx-summary-row">
+                                <span>Výdaje</span>
+                                <strong className="num">{formatCurrency(monthlyStats.expenses)}</strong>
+                            </div>
+                            <div className="tx-summary-row">
+                                <span>Bilance</span>
+                                <strong className={`num ${monthlyStats.income - monthlyStats.expenses >= 0 ? 'pos' : 'neg'}`}>
+                                    {monthlyStats.income - monthlyStats.expenses < 0 ? '−' : ''}{formatCurrency(Math.abs(monthlyStats.income - monthlyStats.expenses))}
+                                </strong>
+                            </div>
+                            <div className="tx-summary-note">za aktuální výplatní období</div>
+                        </div>
+                        <AccountsCard accounts={accounts} />
+                    </aside>
+                )}
                 </div>
 
             </div>

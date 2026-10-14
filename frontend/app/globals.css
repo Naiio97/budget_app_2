@@ -4688,3 +4688,60 @@ body:has(.dash) {
   width: 44px; height: 44px; border-radius: 14px;
   background: var(--surface-sunken) !important; color: var(--text-2) !important;
 }
+
+/* ══ STRÁNKA TRANSAKCE — tabulka + pravý sloupec ════════════════════════ */
+.tx-head-actions { display: flex; gap: 10px; align-items: center; }
+
+.tx-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.tx-main { padding: 0; overflow: hidden; }
+.tx-main .card-body-nopad { padding: 8px 24px 0; }
+.tx-aside { display: flex; flex-direction: column; gap: 20px; }
+@media (max-width: 1200px) { .tx-layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* tabulka */
+.tx-table .tx-table-head,
+.tx-table .transaction-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1.1fr) minmax(0, 1.1fr) 128px;
+  gap: 16px; align-items: center;
+}
+.tx-table .tx-table-head {
+  padding: 14px 4px 12px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-3); border-bottom: 1px solid var(--border);
+}
+.tx-table .tx-th-name { grid-column: 1 / 3; }
+.tx-table .tx-th-amount { text-align: right; }
+.tx-table .tx-day-header { padding: 16px 4px 8px; border-bottom: 0; }
+.tx-table .tx-day-summary { display: none; }
+.tx-table .tx-day-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.tx-table .tx-day-label::first-letter { text-transform: uppercase; }
+.tx-table .transaction-item { padding: 12px 4px; min-height: 0; }
+.tx-table .transaction-name { font-size: 15px; font-weight: 500; }
+.tx-table .tx-cell { font-size: 14px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-table .transaction-amount { text-align: right; font-size: 15px; font-weight: 500; }
+.tx-table .transaction-amount.income { color: var(--pos); }
+
+/* patička: počet, velikost stránky, číslování */
+.tx-pager {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 16px 24px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-2);
+}
+.tx-pager-right { display: flex; align-items: center; gap: 12px; }
+.tx-page-size {
+  appearance: none; -webkit-appearance: none; cursor: pointer; font: inherit; font-size: 13px; color: var(--text-2);
+  background: var(--surface-sunken); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px;
+}
+.tx-page-btn {
+  width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+  background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text);
+}
+.tx-page-btn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
+.tx-page-btn:disabled { opacity: 0.4; cursor: default; }
+.tx-page-num { font-variant-numeric: tabular-nums; min-width: 52px; text-align: center; }
+
+/* souhrn vpravo */
+.tx-summary-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; font-size: 13px; color: var(--d-muted); }
+.tx-summary-row strong { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; color: var(--d-text); }
+.tx-summary-row strong.pos { color: var(--d-pos); }
+.tx-summary-row strong.neg { color: var(--d-neg); }
+.tx-summary-note { font-size: 12px; color: var(--d-faint); }

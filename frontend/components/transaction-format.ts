@@ -47,3 +47,31 @@ export const getDisplayName = (tx: Transaction): string => {
         || tx.creditor_name
         || tx.description;
 };
+
+// České názvy systémových a běžných kategorií (v databázi jsou anglické)
+const CATEGORY_LABELS: Record<string, string> = {
+    'Internal Transfer': 'Interní převod',
+    'Family Transfer': 'Rodinný převod',
+    'Other': 'Ostatní',
+    'Food': 'Jídlo',
+    'Supermarkets': 'Supermarkety',
+    'Restaurant': 'Restaurace',
+    'Transport': 'Doprava',
+    'Utilities': 'Služby a energie',
+    'Housing': 'Bydlení',
+    'Shopping': 'Nákupy',
+    'Entertainment': 'Zábava',
+    'Installments': 'Splátky',
+    'Investment': 'Investice',
+    'Salary': 'Výplata',
+    'Dividend': 'Dividenda',
+    'Subscription': 'Předplatné',
+    'Insurance': 'Pojištění',
+    'Settlement': 'Vypořádání',
+    'ATM': 'Výběr hotovosti',
+};
+
+export const categoryLabel = (category: string | null | undefined): string => {
+    const name = (category || 'Other').trim();
+    return CATEGORY_LABELS[name] ?? name;
+};
