@@ -4787,7 +4787,7 @@ body:has(.dash) {
 .bud-amount { font-size: clamp(26px, 2.6vw, 34px); font-weight: 500; letter-spacing: -0.02em; color: var(--d-text); }
 .bud-amount span { font-size: 16px; font-weight: 400; color: var(--d-faint); }
 .dash-badge.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
-.bud-bar { height: 10px; border-radius: 999px; background: var(--d-track); overflow: hidden; }
+.bud-bar { height: 12px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
 .bud-bar > span { display: block; height: 100%; border-radius: 999px; transition: width 0.5s ease; }
 .bud-bar-meta { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--d-muted); margin-top: -6px; }
 .bud-tip { font-size: 13px; padding: 10px 14px; border-radius: 14px; background: var(--d-track); color: var(--d-muted); }

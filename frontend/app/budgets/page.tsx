@@ -18,7 +18,7 @@ import { getCategoryIcon as rawCategoryIcon } from '@/lib/category-icons';
 function progressColor(pct: number): string {
     if (pct >= 100) return 'var(--neg)';
     if (pct >= 80) return 'var(--warn)';
-    return 'var(--pos)';
+    return 'var(--accent)';
 }
 
 const formatCurrency = (amount: number) =>
