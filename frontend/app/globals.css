@@ -5155,3 +5155,8 @@ body:has(.dash) {
 .ln-modal { max-width: 780px; display: flex; flex-direction: column; max-height: 88vh; }
 .ln-modal-head { display: flex; align-items: center; gap: 14px; padding: 22px 26px 16px; border-bottom: 1px solid var(--border); }
 .ln-modal-body { overflow-y: auto; overscroll-behavior: contain; padding: 8px 20px 20px; margin: 0; }
+
+/* hlavička tabulky kalendáře: neprůhledná, aby pod ní nebyly vidět rolující řádky */
+.ln-modal .loan-schedule-head { background: #eef2f8; z-index: 1; color: var(--text-2); box-shadow: 0 1px 0 var(--border); }
+[data-mode="dark"] .ln-modal .loan-schedule-head { background: #1c2740; }
+.ln-modal-body { padding-top: 0; }
