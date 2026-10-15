@@ -5160,3 +5160,9 @@ body:has(.dash) {
 .ln-modal .loan-schedule-head { background: #eef2f8; z-index: 1; color: var(--text-2); box-shadow: 0 1px 0 var(--border); }
 [data-mode="dark"] .ln-modal .loan-schedule-head { background: #1c2740; }
 .ln-modal-body { padding-top: 0; }
+
+/* kalendář v okně: pruhy (hlavička, řádky) až do kraje, bez posuvníku */
+.ln-modal .ln-modal-body { padding: 0; margin: 0; border-top: 0; overflow: hidden; }
+.ln-modal .loan-schedule-scroll { max-height: 60vh; scrollbar-width: none; -ms-overflow-style: none; }
+.ln-modal .loan-schedule-scroll::-webkit-scrollbar, .ln-modal .ln-modal-body::-webkit-scrollbar { display: none; width: 0; }
+.ln-modal .loan-schedule-row { padding-left: 26px; padding-right: 26px; border-radius: 0; }
