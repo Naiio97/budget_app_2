@@ -29,8 +29,11 @@ import { queryKeys } from '@/lib/queryKeys';
 import {
     Area,
     AreaChart,
+    Bar,
+    BarChart,
     CartesianGrid,
     Cell,
+    Legend,
     Pie,
     PieChart,
     ResponsiveContainer,
@@ -390,15 +393,15 @@ export default function InvestmentsPage() {
                                 <AreaChart data={combinedChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="investmentValueFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="var(--pos)" stopOpacity={0.24} />
-                                            <stop offset="95%" stopColor="var(--pos)" stopOpacity={0} />
+                                            <stop offset="0%" stopColor="#4a86d8" stopOpacity={0.32} />
+                                            <stop offset="95%" stopColor="#4a86d8" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="4 7" stroke="var(--border)" vertical={false} />
                                     <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} height={24} tickMargin={2} />
                                     <YAxis tickFormatter={formatShortMoney} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} width={54} />
                                     <Tooltip content={<InvestmentTooltip />} />
-                                    <Area type="monotone" dataKey="value" stroke="var(--text)" strokeWidth={2.5} fill="url(#investmentValueFill)" />
+                                    <Area type="monotone" dataKey="value" stroke="#4a86d8" strokeWidth={2.5} fill="url(#investmentValueFill)" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
@@ -449,12 +452,15 @@ export default function InvestmentsPage() {
                         </div>
                         {allocationRows.length > 0 ? (
                             <div className="investment-allocation-body">
+                                <div className="inv2-donut">
                                 <PieChart width={190} height={190}>
                                     <Pie data={allocationRows} cx={95} cy={95} innerRadius={58} outerRadius={84} dataKey="value" strokeWidth={0}>
                                         {allocationRows.map((row) => <Cell key={row.id} fill={row.color} />)}
                                     </Pie>
                                     <Tooltip formatter={(value: number | undefined) => formatCurrency(Number(value ?? 0))} />
                                 </PieChart>
+                                    <div className="inv2-donut-center"><span>Celkem</span><strong>{formatCurrency(combinedTotal)}</strong></div>
+                                </div>
                                 <div className="investment-allocation-list">
                                     {allocationRows.map((row) => (
                                         <div className="investment-allocation-row" key={row.id}>
@@ -541,24 +547,15 @@ export default function InvestmentsPage() {
 
                         <div className="investment-projection-chart">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={projectionData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="projectionInvestedFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
-                                            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.05} />
-                                        </linearGradient>
-                                        <linearGradient id="projectionGainsFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="var(--pos)" stopOpacity={0.28} />
-                                            <stop offset="100%" stopColor="var(--pos)" stopOpacity={0.07} />
-                                        </linearGradient>
-                                    </defs>
+                                <BarChart data={projectionData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barCategoryGap="14%">
                                     <CartesianGrid strokeDasharray="4 7" stroke="var(--border)" vertical={false} />
-                                    <XAxis dataKey="year" tickFormatter={(year: number) => year === 0 ? 'Dnes' : `+${year}r`} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                    <XAxis dataKey="year" tickFormatter={(year: number) => year === 0 ? 'Dnes' : `${year}`} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} />
                                     <YAxis tickFormatter={formatShortMoney} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} width={54} />
-                                    <Tooltip content={<ProjectionTooltip />} />
-                                    <Area type="monotone" dataKey="invested" stackId="1" stroke="var(--accent)" strokeWidth={1.7} fill="url(#projectionInvestedFill)" />
-                                    <Area type="monotone" dataKey="gains" stackId="1" stroke="var(--pos)" strokeWidth={1.7} fill="url(#projectionGainsFill)" />
-                                </AreaChart>
+                                    <Tooltip cursor={{ fill: 'var(--surface-sunken)' }} content={<ProjectionTooltip />} />
+                                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} formatter={(v) => v === 'invested' ? 'Vloženo' : 'Výnos'} />
+                                    <Bar dataKey="invested" stackId="p" fill="#4a86d8" />
+                                    <Bar dataKey="gains" stackId="p" fill="#2f9c78" radius={[4, 4, 0, 0]} />
+                                </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
