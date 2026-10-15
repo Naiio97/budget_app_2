@@ -5166,3 +5166,7 @@ body:has(.dash) {
 .ln-modal .loan-schedule-scroll { max-height: 60vh; scrollbar-width: none; -ms-overflow-style: none; }
 .ln-modal .loan-schedule-scroll::-webkit-scrollbar, .ln-modal .ln-modal-body::-webkit-scrollbar { display: none; width: 0; }
 .ln-modal .loan-schedule-row { padding-left: 26px; padding-right: 26px; border-radius: 0; }
+
+/* ══ Posuvníky se v celé aplikaci nezobrazují (rolování funguje dál) ═══════ */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
