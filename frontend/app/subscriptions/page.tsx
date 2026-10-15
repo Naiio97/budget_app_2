@@ -248,28 +248,44 @@ export default function SubscriptionsPage() {
                     </div>
                 </div>
 
-                {/* Summary — "moje část" je hlavní číslo, celková částka jen jako kontext u sdílených */}
-                {summary && summary.active_count > 0 && (
-                    <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-sm)' }}>
-                        <GlassCard>
-                            <div className="stat-label">Platím měsíčně</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{formatCurrency(summary.my_monthly_total)}</div>
-                            {summary.my_monthly_total !== summary.monthly_total && (
-                                <div className="text-tertiary" style={{ fontSize: 12, marginTop: 2 }}>
-                                    z celkových {formatCurrency(summary.monthly_total)} (sdíleno s ostatními)
+                {/* Souhrn — "moje část" je hlavní číslo, celková částka jen jako kontext u sdílených */}
+                {summary && summary.active_count > 0 && (() => {
+                    const others = Math.max(summary.monthly_total - summary.my_monthly_total, 0);
+                    const minePct = summary.monthly_total > 0 ? (summary.my_monthly_total / summary.monthly_total) * 100 : 100;
+                    const cancelled = subs.filter(s => !s.is_active).length;
+                    return (
+                        <section className="surface sb-hero">
+                            <div className="sb-hero-main">
+                                <div className="sb-hero-label">Platím měsíčně</div>
+                                <div className="sb-hero-value num">{formatCurrency(summary.my_monthly_total)}</div>
+                                {others > 0 && (
+                                    <div className="sb-hero-sub">z celkových {formatCurrency(summary.monthly_total)} (sdíleno s ostatními)</div>
+                                )}
+                            </div>
+                            <div className="sb-hero-split">
+                                <div className="sb-hero-label">Moje část z celkových plateb</div>
+                                <div className="sb-split-bar">
+                                    <span style={{ width: `${minePct}%`, background: 'var(--accent)' }} />
+                                    {others > 0 && <span className="rest" style={{ width: `${100 - minePct}%` }} />}
                                 </div>
-                            )}
-                        </GlassCard>
-                        <GlassCard>
-                            <div className="stat-label">Platím ročně</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem', color: 'var(--warn)' }}>{formatCurrency(summary.my_yearly_total)}</div>
-                        </GlassCard>
-                        <GlassCard>
-                            <div className="stat-label">Aktivních předplatných</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{summary.active_count}</div>
-                        </GlassCard>
-                    </div>
-                )}
+                                <div className="sb-split-legend">
+                                    <span><i style={{ background: 'var(--accent)' }} /><b>Moje část</b> {formatCurrency(summary.my_monthly_total)}</span>
+                                    {others > 0 && <span><i className="rest" /><b>Platí ostatní</b> {formatCurrency(others)}</span>}
+                                </div>
+                            </div>
+                            <div className="sb-hero-stat">
+                                <div className="sb-hero-label">Platím ročně</div>
+                                <div className="sb-hero-num num">{formatCurrency(summary.my_yearly_total)}</div>
+                                <div className="sb-hero-sub">odhad z aktivních</div>
+                            </div>
+                            <div className="sb-hero-stat">
+                                <div className="sb-hero-label">Aktivních předplatných</div>
+                                <div className="sb-hero-num num">{summary.active_count}</div>
+                                <div className="sb-hero-sub">{cancelled} zrušen{cancelled === 1 ? 'é' : 'á'}</div>
+                            </div>
+                        </section>
+                    );
+                })()}
 
                 {/* Detected suggestions */}
                 {showDetect && (
@@ -329,7 +345,7 @@ export default function SubscriptionsPage() {
                     </GlassCard>
                 )}
 
-                {/* Subscription cards */}
+                {/* Aktivní + zrušená předplatná */}
                 {isLoading ? (
                     <p className="text-secondary">Načítám předplatná…</p>
                 ) : subs.length === 0 ? (
@@ -338,120 +354,207 @@ export default function SubscriptionsPage() {
                             Zatím nesleduješ žádná předplatná. Zkus „Najít v historii“ — projdu transakce a navrhnu, co vypadá jako opakovaná platba.
                         </p>
                     </GlassCard>
-                ) : (
-                    <div className="subs-grid">
-                        {subs.map(sub => editingId === sub.id ? (
-                            <GlassCard key={sub.id} className="subs-card-editing">
-                                <SubscriptionForm
-                                    title={`Upravit předplatné — ${sub.name}`}
-                                    form={form}
-                                    setForm={setForm}
-                                    saving={saving}
-                                    isEdit
-                                    hasError={updateMutation.isError}
-                                    onSubmit={submit}
-                                    onCancel={closeForm}
-                                />
-                            </GlassCard>
-                        ) : (
-                            <SubscriptionCard
-                                key={sub.id}
-                                sub={sub}
-                                onEdit={() => startEdit(sub)}
-                                onToggleActive={() => updateMutation.mutate({ id: sub.id, data: { is_active: !sub.is_active } })}
-                                onDelete={() => { if (confirm(`Smazat předplatné „${sub.name}"?`)) deleteMutation.mutate(sub.id); }}
-                                onAdoptPrice={() => { if (sub.price_change_to != null) updateMutation.mutate({ id: sub.id, data: { amount: sub.price_change_to } }); }}
-                            />
-                        ))}
-                    </div>
-                )}
+                ) : (() => {
+                    const active = subs.filter(s => s.is_active);
+                    const cancelled = subs.filter(s => !s.is_active);
+                    const editForm = (sub: Subscription) => (
+                        <SubscriptionForm
+                            title={`Upravit předplatné — ${sub.name}`}
+                            form={form}
+                            setForm={setForm}
+                            saving={saving}
+                            isEdit
+                            hasError={updateMutation.isError}
+                            onSubmit={submit}
+                            onCancel={closeForm}
+                        />
+                    );
+                    const handlers = (sub: Subscription) => ({
+                        onEdit: () => startEdit(sub),
+                        onToggleActive: () => updateMutation.mutate({ id: sub.id, data: { is_active: !sub.is_active } }),
+                        onDelete: () => { if (confirm(`Smazat předplatné „${sub.name}"?`)) deleteMutation.mutate(sub.id); },
+                        onAdoptPrice: () => { if (sub.price_change_to != null) updateMutation.mutate({ id: sub.id, data: { amount: sub.price_change_to } }); },
+                    });
+                    return (
+                        <>
+                            {active.length > 0 && (
+                                <>
+                                    <h2 className="sb-section-title">Aktivní</h2>
+                                    <div className="sb-grid">
+                                        {active.map(sub => editingId === sub.id ? (
+                                            <GlassCard key={sub.id} className="subs-card-editing">{editForm(sub)}</GlassCard>
+                                        ) : (
+                                            <SubscriptionCard key={sub.id} sub={sub} {...handlers(sub)} />
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                            {cancelled.length > 0 && (
+                                <>
+                                    <h2 className="sb-section-title">Zrušená</h2>
+                                    <section className="surface sb-cancelled">
+                                        {cancelled.map(sub => editingId === sub.id ? (
+                                            <div key={sub.id} className="sb-cancelled-edit">{editForm(sub)}</div>
+                                        ) : (
+                                            <CancelledRow key={sub.id} sub={sub} {...handlers(sub)} />
+                                        ))}
+                                    </section>
+                                </>
+                            )}
+                        </>
+                    );
+                })()}
             </div>
         </MainLayout>
     );
 }
 
-function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete, onAdoptPrice }: {
-    sub: Subscription;
+const AVATAR_COLORS = ['#d9534f', '#c73a7a', '#3b7dd8', '#2f9c78', '#7a67c4', '#c0794d', '#4a9db0'];
+function avatarColor(name: string): string {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function avatarText(name: string): string {
+    const words = name.trim().split(/[\s.]+/).filter(Boolean);
+    if (words.length === 0) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+}
+// Zobrazený název: velká písmena na začátku slov (NETFLIX.COM → Netflix.com)
+function prettyName(name: string): string {
+    if (name !== name.toUpperCase()) return name;
+    return name.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, p, c) => p + c.toUpperCase());
+}
+
+type CardHandlers = {
     onEdit: () => void;
     onToggleActive: () => void;
     onDelete: () => void;
     onAdoptPrice: () => void;
-}) {
-    const isShared = sub.my_amount_override != null || sub.my_percentage !== 100;
+};
+
+function SubActions({ sub, onEdit, onToggleActive, onDelete }: { sub: Subscription } & CardHandlers) {
     return (
-        <GlassCard className={sub.is_active ? '' : 'subs-card-inactive'}>
-            <div className="loan-card-head" style={{ marginBottom: 'var(--spacing-sm)' }}>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                    <div className="subs-card-title" title={sub.name}>{sub.name}</div>
+        <div className="sb-actions">
+            <button className="loan-delete-btn" onClick={onEdit} title="Upravit">{LineIcons.edit}</button>
+            <button className="loan-delete-btn" onClick={onToggleActive} title={sub.is_active ? 'Označit jako zrušené' : 'Znovu aktivovat'}>
+                {sub.is_active ? LineIcons.pause : LineIcons.play}
+            </button>
+            <button className="loan-delete-btn" onClick={onDelete} title="Smazat">{LineIcons.delete}</button>
+        </div>
+    );
+}
+
+function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete, onAdoptPrice }: { sub: Subscription } & CardHandlers) {
+    const isShared = sub.my_amount_override != null || sub.my_percentage !== 100;
+    const color = avatarColor(sub.name);
+    const minePct = sub.amount > 0 ? Math.min(100, (sub.my_amount / sub.amount) * 100) : 100;
+    return (
+        <GlassCard className="sb-card">
+            <div className="sb-card-head">
+                <span className="sb-avatar" style={{ background: color }}>{avatarText(sub.name)}</span>
+                <div className="sb-card-title">
+                    <strong title={sub.name}>{prettyName(sub.name)}</strong>
+                    <div className="sb-chips">
+                        {isShared && <span className="chip chip-accent">Sdíleno</span>}
+                        {sub.renewing_soon && <span className="chip chip-accent">Obnovení do 7 dní</span>}
+                        {sub.is_stale && <span className="chip chip-warn">Dlouho žádná platba — zrušené?</span>}
+                        {sub.price_change_from != null && sub.price_change_to != null && (
+                            <button
+                                className={`chip chip-action ${sub.price_change_to > sub.price_change_from ? 'chip-danger' : 'chip-success'}`}
+                                onClick={onAdoptPrice}
+                                title="Kliknutím převezmeš novou cenu do předplatného — upozornění pak zmizí"
+                            >
+                                {sub.price_change_to > sub.price_change_from ? 'Zdraženo' : 'Zlevněno'}: {formatCurrency(sub.price_change_from)} → {formatCurrency(sub.price_change_to)}
+                                <span className="chip-action-cta">Srovnat</span>
+                            </button>
+                        )}
+                        {sub.contribution_received_this_period === true && (
+                            <span className="chip chip-success" title={`Poslední příspěvek ${formatDate(sub.last_contribution_date)}${sub.last_contribution_amount != null ? ` · ${formatCurrency(sub.last_contribution_amount, sub.currency)}` : ''}`}>
+                                Podíl přišel ✓
+                            </span>
+                        )}
+                        {sub.contribution_received_this_period === false && (
+                            <span className="chip chip-warn" title={sub.last_contribution_date ? `Poslední příspěvek ${formatDate(sub.last_contribution_date)}` : 'Zatím žádný příspěvek'}>
+                                Podíl nepřišel
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                    <button className="loan-delete-btn" onClick={onEdit} title="Upravit">{LineIcons.edit}</button>
-                    <button className="loan-delete-btn" onClick={onToggleActive} title={sub.is_active ? 'Označit jako zrušené' : 'Znovu aktivovat'}>
-                        {sub.is_active ? LineIcons.pause : LineIcons.play}
-                    </button>
-                    <button className="loan-delete-btn" onClick={onDelete} title="Smazat">{LineIcons.delete}</button>
+                <div className="sb-card-price">
+                    <strong className="num">{formatCurrency(sub.amount, sub.currency)}</strong>
+                    <span>{PERIOD_LABEL[sub.period]}</span>
                 </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                <span className="num" style={{ fontSize: '1.5rem', fontWeight: 650 }}>{formatCurrency(sub.amount, sub.currency)}</span>
-                <span className="text-tertiary" style={{ fontSize: 13 }}>{PERIOD_LABEL[sub.period]}</span>
-                {sub.period !== 'monthly' && (
-                    <span className="text-tertiary" style={{ fontSize: 12 }}>(≈ {formatCurrency(sub.monthly_equivalent)}/měs)</span>
-                )}
-            </div>
             {isShared && (
-                <div className="num" style={{ fontSize: 13, color: 'var(--accent)', marginTop: 3 }}>
-                    Moje část: {formatCurrency(sub.my_amount, sub.currency)}
-                    {sub.my_amount_override == null && ` (${sub.my_percentage} %)`}
+                <div className="sb-mine">
+                    <div className="sb-mine-row">
+                        <span>Moje část</span>
+                        <span className="num">
+                            {formatCurrency(sub.my_amount, sub.currency)}
+                            {sub.my_amount_override == null && ` (${sub.my_percentage} %)`}
+                        </span>
+                    </div>
+                    <div className="sb-mine-bar"><span style={{ width: `${minePct}%`, background: color }} /></div>
                 </div>
             )}
 
-            {/* Badges */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 'var(--spacing-sm)', minHeight: 20 }}>
-                {!sub.is_active && <span className="chip">Zrušené</span>}
-                {isShared && <span className="chip chip-accent">Sdíleno</span>}
-                {sub.is_active && sub.renewing_soon && <span className="chip chip-accent">Obnovení do 7 dní</span>}
-                {sub.is_active && sub.is_stale && <span className="chip chip-warn">Dlouho žádná platba — zrušené?</span>}
-                {sub.price_change_from != null && sub.price_change_to != null && (
-                    <button
-                        className={`chip chip-action ${sub.price_change_to > sub.price_change_from ? 'chip-danger' : 'chip-success'}`}
-                        onClick={onAdoptPrice}
-                        title="Kliknutím převezmeš novou cenu do předplatného — upozornění pak zmizí"
-                    >
-                        {sub.price_change_to > sub.price_change_from ? 'Zdraženo' : 'Zlevněno'}: {formatCurrency(sub.price_change_from)} → {formatCurrency(sub.price_change_to)}
-                        <span className="chip-action-cta">Srovnat</span>
-                    </button>
-                )}
-                {sub.is_active && sub.contribution_received_this_period === true && (
-                    <span className="chip chip-success" title={`Poslední příspěvek ${formatDate(sub.last_contribution_date)}${sub.last_contribution_amount != null ? ` · ${formatCurrency(sub.last_contribution_amount, sub.currency)}` : ''}`}>
-                        Podíl přišel ✓
-                    </span>
-                )}
-                {sub.is_active && sub.contribution_received_this_period === false && (
-                    <span className="chip chip-warn" title={sub.last_contribution_date ? `Poslední příspěvek ${formatDate(sub.last_contribution_date)}` : 'Zatím žádný příspěvek'}>
-                        Podíl nepřišel
-                    </span>
-                )}
-            </div>
-
-            <div className="subs-meta-row">
+            <div className="sb-meta">
                 <div>
-                    <div className="loan-stat-label">Příští platba</div>
-                    <div className="loan-stat-value" style={{ fontSize: 14 }}>{formatDate(sub.next_due_date)}</div>
+                    <span>Příští platba</span>
+                    <strong>{formatDate(sub.next_due_date)}</strong>
                 </div>
                 <div>
-                    <div className="loan-stat-label">Poslední platba</div>
-                    <div className="loan-stat-value" style={{ fontSize: 14 }}>
+                    <span>Poslední platba</span>
+                    <strong>
                         {formatDate(sub.last_charged_date)}
                         {sub.last_amount != null ? ` · ${formatCurrency(sub.last_amount, sub.currency)}` : ''}
-                    </div>
+                    </strong>
                 </div>
                 <div>
-                    <div className="loan-stat-label">Plateb celkem</div>
-                    <div className="loan-stat-value" style={{ fontSize: 14 }}>{sub.charges_count}×</div>
+                    <span>Plateb celkem</span>
+                    <strong>{sub.charges_count}×</strong>
                 </div>
             </div>
+
+            <SubActions sub={sub} onEdit={onEdit} onToggleActive={onToggleActive} onDelete={onDelete} onAdoptPrice={onAdoptPrice} />
         </GlassCard>
+    );
+}
+
+function CancelledRow({ sub, onEdit, onToggleActive, onDelete, onAdoptPrice }: { sub: Subscription } & CardHandlers) {
+    const isShared = sub.my_amount_override != null || sub.my_percentage !== 100;
+    return (
+        <div className="sb-row">
+            <span className="sb-avatar muted">{avatarText(sub.name)}</span>
+            <div className="sb-row-title">
+                <div className="sb-row-name">
+                    <strong>{prettyName(sub.name)}</strong>
+                    <span className="chip">Zrušené</span>
+                    {isShared && <span className="chip chip-accent">Sdíleno</span>}
+                </div>
+                {isShared && (
+                    <span className="sb-row-sub">
+                        Moje část: {formatCurrency(sub.my_amount, sub.currency)}
+                        {sub.my_amount_override == null && ` (${sub.my_percentage} %)`}
+                    </span>
+                )}
+            </div>
+            <div className="sb-row-meta">
+                <span>Poslední platba</span>
+                <strong>{formatDate(sub.last_charged_date)}{sub.last_amount != null ? ` · ${formatCurrency(sub.last_amount, sub.currency)}` : ''}</strong>
+            </div>
+            <div className="sb-row-meta">
+                <span>Plateb celkem</span>
+                <strong>{sub.charges_count}×</strong>
+            </div>
+            <div className="sb-row-price">
+                <strong className="num">{formatCurrency(sub.amount, sub.currency)}</strong>
+                <span>{PERIOD_LABEL[sub.period]}</span>
+            </div>
+            <SubActions sub={sub} onEdit={onEdit} onToggleActive={onToggleActive} onDelete={onDelete} onAdoptPrice={onAdoptPrice} />
+        </div>
     );
 }
