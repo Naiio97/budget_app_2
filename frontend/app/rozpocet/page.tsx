@@ -14,7 +14,7 @@ import { apiFetch, getCashflowCurrent, Cashflow } from '@/lib/api';
 import AnnualOverview from './AnnualOverview';
 import SalaryEstimateCard from './SalaryEstimateCard';
 import LinkTransactionModal from './LinkTransactionModal';
-import { MONTH_NAMES, formatCurrency, Ring, type Tab, type MonthlyExpense, type IncomeItem, type MonthlyBudget, type RecurringExpense, type ManualAccount, type AnnualData } from './shared';
+import { MONTH_NAMES, formatCurrency, type Tab, type MonthlyExpense, type IncomeItem, type MonthlyBudget, type RecurringExpense, type ManualAccount, type AnnualData } from './shared';
 
 export default function RozpocetPage() {
     const queryClient = useQueryClient();
@@ -342,14 +342,15 @@ export default function RozpocetPage() {
     const TABS: { key: Tab; label: string }[] = [
         { key: 'overview', label: 'Přehled' },
         { key: 'expenses', label: 'Pravidelné platby' },
-        { key: 'accounts', label: 'Spořící účty' },
+        { key: 'accounts', label: 'Spořicí účty' },
     ];
 
     // ── tab content ──────────────────────────────────────────────
 
-    const renderOverview = () => (<>
-        {isCurrentPeriod && cashflow && <CashflowCard data={cashflow} />}
-        <div className="budget-overview-grid">
+    const renderOverview = () => (
+    <div className="bud-ov">
+        <div className="bud-ov-main">
+            {isCurrentPeriod && cashflow && <CashflowCard data={cashflow} />}
             <div className="surface budget-upcoming-card">
                 <div className="card-head">
                     <h3>Nadcházející platby</h3>
@@ -378,20 +379,26 @@ export default function RozpocetPage() {
                     ))}
                 </div>
             </div>
+        </div>
 
+        <div className="bud-ov-side">
             <div className="surface budget-plan-card">
                 <div className="card-head">
                     <h3>Měsíční plán</h3>
                     <span className="muted small">{formatCurrency(totalIncome)} příjem</span>
                 </div>
+                <div className="card-body budget-plan-body">{renderIncome()}</div>
+            </div>
+            <div className="surface budget-plan-card">
                 <div className="card-body budget-plan-body">
-                    {renderIncome()}
                     <SalaryEstimateCard workMonth={salaryWorkMonth} workMonthName={salaryWorkMonthName} refreshBudget={refreshBudget} />
-                    {renderSurplus()}
                 </div>
             </div>
+            <div className="surface budget-plan-card">
+                <div className="card-body budget-plan-body">{renderSurplus()}</div>
+            </div>
         </div>
-    </>);
+    </div>);
 
     const monthLabelCz = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
 
@@ -724,7 +731,7 @@ export default function RozpocetPage() {
                     />
                 </div>
                 <div className="plan-row">
-                    <span className="plan-label">Spořící účet</span>
+                    <span className="plan-label">Spořicí účet</span>
                     <span className="plan-row-spacer" />
                     <input type="number" className="plan-input plan-amount" placeholder="0"
                         value={editingBudgetFields['surplus_to_savings'] ?? ((budget?.surplus_to_savings || 0) === 0 ? '' : String(budget?.surplus_to_savings))}
@@ -738,7 +745,7 @@ export default function RozpocetPage() {
                 {totalIncome > 0 && (
                     <div className="budget-savings-rate-card" style={{ padding: '12px 14px', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 8 }}>
-                            <span style={{ color: 'var(--text-2)' }}>Spořící sazba</span>
+                            <span style={{ color: 'var(--text-2)' }}>Spořicí sazba</span>
                             <span style={{ fontWeight: 600, color: savingsRate >= 15 ? 'var(--pos)' : savingsRate >= 10 ? 'var(--warn)' : 'var(--neg)' }}>
                                 {savingsRate}% {savingsRate >= 15 ? Icons.savingsRate.good : savingsRate >= 10 ? Icons.savingsRate.neutral : Icons.savingsRate.bad}
                             </span>
@@ -762,90 +769,121 @@ export default function RozpocetPage() {
         </section>
     );
 
-    const renderAccounts = () => (
-        <div className="surface">
-            <div className="card-head">
-                <h3>{Icons.section.savingsAccounts} Spořící účty</h3>
-                <button className="btn btn-primary btn-sm" onClick={() => setShowAddAccount(true)}>+ Přidat</button>
-            </div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                {showAddAccount && (
-                    <div style={{ background: 'var(--surface-sunken)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--spacing-md)', display: 'flex', gap: 8 }}>
-                        <input className="input" placeholder="Název účtu" value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} style={{ flex: 1 }} />
-                        <input type="number" className="input" placeholder="Zůstatek" value={newAccount.balance} onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })} style={{ width: 110 }} />
-                        <button className="btn btn-primary btn-sm" onClick={createManualAccount}>Uložit</button>
-                        <button className="btn btn-sm" onClick={() => setShowAddAccount(false)}>×</button>
-                    </div>
-                )}
-                {manualAccounts.map(account => (
-                    <div key={account.id} style={{ padding: 'var(--spacing-md)', background: 'var(--surface-sunken)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--border)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <span style={{ fontWeight: 600, fontSize: 14 }}>{account.name}</span>
-                            {editingAccountId === account.id ? (
-                                <div style={{ display: 'flex', gap: 4 }}>
-                                    <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: 100, padding: '4px 8px' }} />
-                                    <button className="btn btn-primary btn-sm" onClick={() => updateManualAccountBalance(account.id)} aria-label="Uložit">{getLineIcon('check', 15)}</button>
-                                    <button className="btn btn-sm" onClick={() => setEditingAccountId(null)}>×</button>
-                                </div>
-                            ) : (
-                                <span onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }}
-                                    style={{ cursor: 'pointer', color: 'var(--accent)', fontWeight: 600, fontSize: 14, fontVariantNumeric: 'tabular-nums' }}>
-                                    {formatCurrency(account.balance)} <span style={{ color: 'var(--text)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
-                                </span>
-                            )}
+    const ENV_COLORS = ['#9d92c9', '#d4b36a', '#c58fb0', '#7fbf9e', '#6a9fd0', '#d09a8a', '#7fb8c4', '#a3acba'];
+
+    const renderAccounts = () => {
+        const totalBal = manualAccounts.reduce((s, a) => s + a.balance, 0);
+        const totalMine = manualAccounts.reduce((s, a) => s + a.my_balance, 0);
+        return (
+        <div className="sav-layout">
+            <div className="surface sav-main">
+                <div className="card-head">
+                    <h3>Spořicí účty</h3>
+                    <button className="btn btn-primary btn-sm" onClick={() => setShowAddAccount(true)}>+ Přidat</button>
+                </div>
+                <div className="card-body sav-body">
+                    {showAddAccount && (
+                        <div style={{ background: 'var(--surface-sunken)', border: '0.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 'var(--spacing-md)', display: 'flex', gap: 8 }}>
+                            <input className="input" placeholder="Název účtu" value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} style={{ flex: 1 }} />
+                            <input type="number" className="input" placeholder="Zůstatek" value={newAccount.balance} onChange={(e) => setNewAccount({ ...newAccount, balance: e.target.value })} style={{ width: 110 }} />
+                            <button className="btn btn-primary btn-sm" onClick={createManualAccount}>Uložit</button>
+                            <button className="btn btn-sm" onClick={() => setShowAddAccount(false)}>×</button>
                         </div>
-                        {Array.isArray(account.envelopes) && account.envelopes.length > 0 && (
-                            <div style={{ borderLeft: '2px solid var(--border)', paddingLeft: 12, marginBottom: 8 }}>
-                                <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Obálky</div>
-                                {account.envelopes.map(env => (
-                                    <div key={env.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, marginBottom: 3 }}>
-                                        <span style={{ color: 'var(--text-2)' }}>{env.is_mine ? Icons.envelope.mine : Icons.envelope.shared} {env.name}</span>
-                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                            <span style={{ color: env.is_mine ? 'var(--pos)' : 'var(--warn)', fontVariantNumeric: 'tabular-nums', fontWeight: 500 }}>
+                    )}
+                    {manualAccounts.length === 0 && !showAddAccount && (
+                        <div style={{ color: 'var(--text-3)', fontSize: 14, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Zatím žádný spořicí účet.</div>
+                    )}
+                    {manualAccounts.map(account => {
+                        const envs = Array.isArray(account.envelopes) ? account.envelopes : [];
+                        const envTotal = envs.reduce((s, e) => s + Math.abs(e.amount), 0);
+                        return (
+                            <div key={account.id} className="sav-account">
+                                <div className="sav-account-head">
+                                    <span className="sav-avatar">{account.name.charAt(0).toUpperCase()}</span>
+                                    <div className="sav-account-title">
+                                        <strong>{account.name}</strong>
+                                        <span>Spořicí účet · spravováno ručně</span>
+                                    </div>
+                                    {editingAccountId === account.id ? (
+                                        <div style={{ display: 'flex', gap: 4 }}>
+                                            <input type="number" className="input" value={editAccountBalance} onChange={(e) => setEditAccountBalance(e.target.value)} style={{ width: 110, padding: '4px 8px' }} />
+                                            <button className="btn btn-primary btn-sm" onClick={() => updateManualAccountBalance(account.id)} aria-label="Uložit">{getLineIcon('check', 15)}</button>
+                                            <button className="btn btn-sm" onClick={() => setEditingAccountId(null)}>×</button>
+                                        </div>
+                                    ) : (
+                                        <button type="button" className="sav-balance num"
+                                            onClick={() => { setEditingAccountId(account.id); setEditAccountBalance(String(account.balance)); }}>
+                                            {formatCurrency(account.balance)} <span>{getLineIcon('edit', 14)}</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {envTotal > 0 && (
+                                    <div className="sav-bar" role="img" aria-label="Rozdělení zůstatku do obálek">
+                                        {envs.map((env, i) => (
+                                            <span key={env.id} title={`${env.name}: ${formatCurrency(env.amount)}`}
+                                                style={{ flexGrow: Math.abs(env.amount), background: ENV_COLORS[i % ENV_COLORS.length] }} />
+                                        ))}
+                                        {account.balance - envTotal > 0 && <span className="rest" style={{ flexGrow: account.balance - envTotal }} />}
+                                    </div>
+                                )}
+
+                                {envs.length > 0 && <div className="sav-env-title">Obálky</div>}
+                                <div className="sav-env-list">
+                                    {envs.map((env, i) => (
+                                        <div key={env.id} className="sav-env">
+                                            <i style={{ background: ENV_COLORS[i % ENV_COLORS.length] }} />
+                                            <span className="sav-env-name">
+                                                {env.name}
+                                                <em>{env.is_mine ? 'moje peníze' : 'cizí rezerva'}{env.note ? ` · ${env.note}` : ''}</em>
+                                            </span>
+                                            <span className={`num sav-env-amount ${env.is_mine ? 'mine' : 'theirs'}`}>
                                                 {env.is_mine ? '' : '−'}{formatCurrency(env.amount)}
                                             </span>
-                                            <button onClick={() => deleteAccountItem(account.id, env.id)} className="btn btn-icon btn-ghost btn-sm" style={{ opacity: 0.55, color: 'var(--text)' }} aria-label="Smazat obálku">{getLineIcon('delete', 14)}</button>
+                                            <button onClick={() => deleteAccountItem(account.id, env.id)} className="btn btn-icon btn-ghost btn-sm" style={{ opacity: 0.55 }} aria-label="Smazat obálku">{getLineIcon('delete', 14)}</button>
                                         </div>
+                                    ))}
+                                </div>
+
+                                {showAddItem === account.id ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                        <div style={{ display: 'flex', gap: 4 }}>
+                                            <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
+                                            <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: 90, padding: '4px 8px' }} />
+                                            <button className="btn btn-primary btn-sm" onClick={() => addAccountItem(account.id)} aria-label="Přidat">{getLineIcon('check', 15)}</button>
+                                            <button className="btn btn-sm" onClick={() => setShowAddItem(null)}>×</button>
+                                        </div>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
+                                            <input type="checkbox" checked={newItem.is_mine} onChange={(e) => setNewItem({ ...newItem, is_mine: e.target.checked })} />
+                                            Volné (moje peníze)
+                                        </label>
                                     </div>
-                                ))}
+                                ) : (
+                                    <button onClick={() => setShowAddItem(account.id)} className="sav-add-env">+ Přidat obálku</button>
+                                )}
                             </div>
-                        )}
-                        {showAddItem === account.id ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
-                                <div style={{ display: 'flex', gap: 4 }}>
-                                    <input className="input" placeholder="Název" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={{ flex: 1, padding: '4px 8px' }} />
-                                    <input type="number" className="input" placeholder="Částka" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} style={{ width: 80, padding: '4px 8px' }} />
-                                    <button className="btn btn-primary btn-sm" onClick={() => addAccountItem(account.id)} aria-label="Přidat">{getLineIcon('check', 15)}</button>
-                                    <button className="btn btn-sm" onClick={() => setShowAddItem(null)}>×</button>
-                                </div>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={newItem.is_mine} onChange={(e) => setNewItem({ ...newItem, is_mine: e.target.checked })} />
-                                    Volné (moje peníze)
-                                </label>
-                            </div>
-                        ) : (
-                            <button onClick={() => setShowAddItem(account.id)} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>+ Přidat obálku</button>
-                        )}
-                        <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 8, marginTop: 8 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-3)', marginBottom: 3 }}>
-                                <span>Cizí rezervy</span>
-                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>−{formatCurrency(account.balance - account.my_balance)}</span>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 600, fontSize: 14 }}>
-                                <span>Volné k utracení</span>
-                                <span style={{ color: 'var(--pos)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(account.my_balance)}</span>
-                            </div>
-                            {account.balance > 0 && (
-                                <div className="progress" style={{ marginTop: 8 }}>
-                                    <span style={{ width: `${Math.min(100, (account.my_balance / account.balance) * 100)}%`, background: 'var(--pos)' }} />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                        );
+                    })}
+                </div>
             </div>
+
+            <aside className="sav-aside">
+                <div className="surface sav-free">
+                    <div className="card-head"><h3>Volné k utracení</h3></div>
+                    <div className="sav-free-body">
+                        <strong className="num sav-free-value">{formatCurrency(totalMine)}</strong>
+                        {totalBal > 0 && (
+                            <div className="sav-free-bar"><span style={{ width: `${Math.min(100, (totalMine / totalBal) * 100)}%` }} /></div>
+                        )}
+                        <div className="sav-free-row"><span>Zůstatek na účtech</span><span className="num">{formatCurrency(totalBal)}</span></div>
+                        <div className="sav-free-row"><span>Cizí rezervy</span><span className="num neg">−{formatCurrency(totalBal - totalMine)}</span></div>
+                        <div className="sav-free-row total"><span>Volné k utracení</span><span className="num pos">{formatCurrency(totalMine)}</span></div>
+                    </div>
+                </div>
+            </aside>
         </div>
-    );
+        );
+    };
 
     // ── annual view ───────────────────────────────────────────────
 
@@ -895,44 +933,33 @@ export default function RozpocetPage() {
 
                 {/* ── Hero card ── */}
                 {viewMode === 'month' && (
-                    <div className="surface budget-hero">
-                        <div className="budget-hero-metrics">
-                            <div className="budget-metric budget-metric-wide">
-                                <div className="kpi-label">Utraceno z rozpočtu</div>
-                                <div className="kpi-value num">
-                                    {formatCurrency(totalExpenses)}
-                                    <span style={{ fontSize: 16, color: 'var(--text-3)', fontWeight: 450 }}> / {formatCurrency(budgetLimit)}</span>
-                                </div>
-                                <div className="progress">
-                                    <span style={{
-                                        width: `${Math.min(budgetSpentPct, 100)}%`,
-                                    background: budgetSpentPct >= 100 ? 'var(--neg)' : 'var(--pos)',
-                                    }} />
-                                </div>
+                    <div className="surface bud-hero2">
+                        <div className="bud-hero2-main">
+                            <div className="kpi-label">Utraceno z rozpočtu</div>
+                            <div className="bud-hero2-value num">
+                                {formatCurrency(totalExpenses)}
+                                <span> / {formatCurrency(budgetLimit)}</span>
                             </div>
-                            <div className="budget-metric">
-                                <div className="kpi-label">Zbývá celkem</div>
-                                <div className="kpi-value num" style={{ color: isOverBudget ? 'var(--neg)' : 'var(--text)' }}>{formatCurrency(remaining)}</div>
+                            <div className="bud-hero2-bar">
+                                <span style={{ width: `${Math.min(budgetSpentPct, 100)}%`, background: budgetSpentPct >= 100 ? 'var(--neg)' : 'var(--accent)' }} />
                             </div>
-                            <div className="budget-metric">
-                                <div className="kpi-label">Denní tempo</div>
-                                <div className="kpi-value num">{formatCurrency(dailyPace)}</div>
-                            </div>
-                            <div className="budget-metric">
-                                <div className="kpi-label">Nevyčerpáno od {periodStart ? fmtDay(periodStart) : `1. ${selectedMonth}.`}</div>
-                                <div className="kpi-value num">{budgetSpentPct}%</div>
+                            <div className="bud-hero2-meta">
+                                <span>{budgetSpentPct} % z měsíce</span>
+                                <span>{formatCurrency(Math.max(remaining, 0))} zbývá</span>
                             </div>
                         </div>
-                        <div className="budget-month-ring">
-                            <div style={{ position: 'relative' }}>
-                                <Ring pct={budgetSpentPct} size={142} />
-                                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div className="num" style={{ fontSize: 25, fontWeight: 700, lineHeight: 1 }}>{budgetSpentPct}%</div>
-                                    <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 3 }}>z měsíce</div>
-                                </div>
+                        <div className="bud-hero2-stats">
+                            <div>
+                                <span>Zbývá celkem</span>
+                                <strong className="num" style={{ color: isOverBudget ? 'var(--neg)' : 'var(--pos)' }}>{formatCurrency(remaining)}</strong>
                             </div>
-                            <div className="kpi-sub" style={{ justifyContent: 'center' }}>
-                                {formatCurrency(Math.max(remaining, 0))} zbývá
+                            <div>
+                                <span>Denní tempo</span>
+                                <strong className="num">{formatCurrency(dailyPace)}</strong>
+                            </div>
+                            <div className="small">
+                                <span>Nevyčerpáno od {periodStart ? fmtDay(periodStart) : `1. ${selectedMonth}.`}</span>
+                                <strong className="num">{budgetSpentPct} %</strong>
                             </div>
                         </div>
                     </div>

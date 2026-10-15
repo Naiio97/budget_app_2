@@ -122,7 +122,7 @@ export default function BudgetsPage() {
 
                 {/* Tabs — rozpočty podle kategorií vs. spořící cíle na samostatných záložkách */}
                 <div className="seg" style={{ alignSelf: 'flex-start' }}>
-                    {([['budgets', 'Rozpočty'], ['goals', 'Spořící cíle']] as [Tab, string][]).map(([val, label]) => (
+                    {([['budgets', 'Rozpočty'], ['goals', 'Spořicí cíle']] as [Tab, string][]).map(([val, label]) => (
                         <div key={val} className={`seg-item ${tab === val ? 'active' : ''}`} onClick={() => setTab(val)}>
                             {label}
                         </div>
@@ -281,7 +281,7 @@ export default function BudgetsPage() {
                 {tab === 'goals' && (
                 <div className="dash-card">
                     <div className="dash-card-head">
-                        <h3>{Icons.section.savingsGoals} Spořící cíle</h3>
+                        <h3>{Icons.section.savingsGoals} Spořicí cíle</h3>
                         <button className="btn btn-primary btn-sm" onClick={() => setShowGoalForm(!showGoalForm)}>+ Přidat</button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
