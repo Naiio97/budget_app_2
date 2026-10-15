@@ -393,6 +393,8 @@ export default function RozpocetPage() {
         </div>
     </>);
 
+    const monthLabelCz = `${MONTH_NAMES[selectedMonth - 1]} ${selectedYear}`;
+
     const renderExpenses = () => (
         <div className="budget-expenses-split">
             <div className="surface recurring-payments-card">
@@ -606,6 +608,35 @@ export default function RozpocetPage() {
                 </div>
             </div>
 
+            {/* Pravý sloupec: stav plateb + struktura výdajů */}
+            <div className="budget-expenses-aside">
+            {(() => {
+                const paidCount = sortedExpenses.filter(e => e.is_paid).length;
+                const totalCount = sortedExpenses.length;
+                const toPay = sortedExpenses.filter(e => !e.is_paid).reduce((sum, e) => sum + e.my_amount, 0);
+                const donePct = totalCount > 0 ? Math.round((paidCount / totalCount) * 100) : 0;
+                return (
+                    <div className="surface bud-status-card">
+                        <div className="card-head">
+                            <h3>Stav plateb</h3>
+                            <span className="muted small">{monthLabelCz}</span>
+                        </div>
+                        <div className="bud-status-body">
+                            <div className="bud-status-count">
+                                <strong className="num">{paidCount}</strong>
+                                <span>z {totalCount} zaplaceno</span>
+                            </div>
+                            <div className="bud-status-bar"><span style={{ width: `${donePct}%` }} /></div>
+                            {toPay > 0 ? (
+                                <div className="bud-status-chip warn">K zaplacení <strong className="num">{formatCurrency(toPay)}</strong></div>
+                            ) : (
+                                <div className="bud-status-chip pos">✓ Vše zaplaceno</div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* Expense chart */}
             {(budget?.expenses.length ?? 0) > 0 && (() => {
                 const sorted = [...(budget!.expenses)].sort((a, b) => b.my_amount - a.my_amount);
@@ -635,6 +666,7 @@ export default function RozpocetPage() {
                     </div>
                 );
             })()}
+            </div>
         </div>
     );
 

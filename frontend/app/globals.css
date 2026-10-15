@@ -4808,3 +4808,44 @@ body:has(.dash) {
   .tx-table .transaction-item { grid-template-columns: 44px minmax(0, 1fr) auto; }
   .tx-table .tx-cell { display: none; }
 }
+
+/* ══ ROZPOČET — pravidelné platby jako plochý seznam ═══════════════════════ */
+.recurring-payments-list { gap: 0; }
+.bd-card {
+  background: transparent; border: 0; border-bottom: 1px solid var(--border); border-radius: 0;
+}
+.bd-card:last-child { border-bottom: 0; }
+@media (hover: hover) {
+  .bd-card:not(.expanded):hover { background: var(--surface-sunken); }
+}
+.bd-card.expanded { background: var(--surface-sunken); border-radius: 14px; border-bottom-color: transparent; }
+.bd-head { padding: 14px 8px; }
+.bd-head .recurring-name { font-size: 15px; font-weight: 500; }
+.bd-loan-tag {
+  background: var(--accent-soft); border: 0; color: var(--accent);
+  text-transform: lowercase; letter-spacing: 0; font-size: 11px; font-weight: 600; padding: 2px 8px;
+}
+.recurring-status.paid { background: color-mix(in srgb, var(--pos) 16%, transparent); color: var(--pos); }
+.recurring-status.pending { background: var(--surface-sunken); color: var(--text-2); }
+
+/* pravý sloupec (Stav plateb + Struktura) */
+.budget-expenses-aside { display: flex; flex-direction: column; gap: var(--spacing-md); min-height: 0; min-width: 0; }
+.budget-page-fit .budget-expenses-aside { max-height: 100%; }
+.budget-page-fit .budget-expenses-aside .budget-category-panel { flex: 1 1 auto; min-height: 0; max-height: none; }
+.budget-expenses-aside .budget-category-panel { position: static; }
+.bud-status-card { flex: 0 0 auto; }
+.bud-status-body { padding: 4px var(--spacing-lg) var(--spacing-lg); display: flex; flex-direction: column; gap: 12px; }
+.bud-status-count { display: flex; align-items: baseline; gap: 10px; }
+.bud-status-count strong { font-size: 40px; font-weight: 500; letter-spacing: -0.03em; color: var(--text); }
+.bud-status-count span { font-size: 14px; color: var(--text-2); }
+.bud-status-bar { height: 8px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
+.bud-status-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--pos); transition: width 0.5s ease; }
+.bud-status-chip {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px;
+  font-size: 13px; font-weight: 500;
+}
+.bud-status-chip strong { font-weight: 600; }
+.bud-status-chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.bud-status-chip.pos { background: color-mix(in srgb, var(--pos) 16%, transparent); color: var(--pos); }
+.budget-expenses-aside > *,
+.budget-page-fit .budget-expenses-aside .budget-category-panel { align-self: stretch; }
