@@ -5120,7 +5120,10 @@ body:has(.dash) {
 [data-mode="dark"] .seg-link:hover { background: rgba(255,255,255,0.16); color: var(--text); }
 
 .investment-holding-share div { background: #9d92c9; }
-.inv2-donut { position: relative; width: 190px; height: 190px; }
+.inv2-donut { position: relative; width: 240px; height: 240px; }
 .inv2-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-.inv2-donut-center span { font-size: 12px; color: var(--text-3); }
-.inv2-donut-center strong { font-size: 16px; font-weight: 600; color: var(--text); }
+.inv2-donut-center span { font-size: 14px; color: var(--text-3); }
+.inv2-donut-center strong { font-size: 22px; font-weight: 600; color: var(--text); }
+.investment-allocation-row { font-size: 14.5px; padding: 11px 0; }
+.investment-allocation-row em b { font-weight: 600; color: var(--text); margin-right: 10px; }
+.investment-allocation-list { width: 100%; margin-top: 8px; }

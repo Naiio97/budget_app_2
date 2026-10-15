@@ -453,8 +453,8 @@ export default function InvestmentsPage() {
                         {allocationRows.length > 0 ? (
                             <div className="investment-allocation-body">
                                 <div className="inv2-donut">
-                                <PieChart width={190} height={190}>
-                                    <Pie data={allocationRows} cx={95} cy={95} innerRadius={58} outerRadius={84} dataKey="value" strokeWidth={0}>
+                                <PieChart width={240} height={240}>
+                                    <Pie data={allocationRows} cx={120} cy={120} innerRadius={78} outerRadius={110} dataKey="value" strokeWidth={0}>
                                         {allocationRows.map((row) => <Cell key={row.id} fill={row.color} />)}
                                     </Pie>
                                     <Tooltip formatter={(value: number | undefined) => formatCurrency(Number(value ?? 0))} />
@@ -466,7 +466,7 @@ export default function InvestmentsPage() {
                                         <div className="investment-allocation-row" key={row.id}>
                                             <span style={{ background: row.color }} />
                                             <strong>{row.name}</strong>
-                                            <em>{combinedTotal > 0 ? formatPct((row.value / combinedTotal) * 100) : '0 %'}</em>
+                                            <em><b>{formatCurrency(row.value)}</b> {combinedTotal > 0 ? formatPct((row.value / combinedTotal) * 100) : '0 %'}</em>
                                         </div>
                                     ))}
                                 </div>
