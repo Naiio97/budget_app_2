@@ -5070,3 +5070,4 @@ body:has(.dash) {
 .inv2-hero-copy > div { height: auto !important; min-height: 0 !important; justify-content: flex-start !important; }
 .inv2-hero-copy .account-hero-kpi-grid { margin-top: 0 !important; }
 .inv2-hero-copy .account-hero-kpi-grid { flex: none !important; }
+.inv2-hero-copy { align-self: start; padding-top: 8px; }

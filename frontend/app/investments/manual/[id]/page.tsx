@@ -280,6 +280,22 @@ export default function ManualInvestmentDetailPage() {
                                         </div>
                                     </>
                                 )}
+                                {!(account.invested > 0) && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', paddingTop: 'var(--spacing-sm)', borderTop: '1px solid var(--border)' }}>
+                                        <div>
+                                            <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '2px' }}>Pozic</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 500 }}>{account.positions.length}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '2px' }}>Největší podíl</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 500 }}>
+                                                {account.total_value > 0 && account.positions.length > 0
+                                                    ? `${((Math.max(...account.positions.map(x => x.current_value)) / account.total_value) * 100).toFixed(0)} %`
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -293,8 +309,8 @@ export default function ManualInvestmentDetailPage() {
                             <AreaChart data={history} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                                 <defs>
                                     <linearGradient id="manualInvGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#5cb5c9" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#5cb5c9" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="#9d92c9" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#9d92c9" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -305,7 +321,7 @@ export default function ManualInvestmentDetailPage() {
                                     formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
                                     labelFormatter={(l: string) => fmtDate(l)}
                                 />
-                                <Area type="monotone" dataKey="value" stroke="#5cb5c9" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
+                                <Area type="monotone" dataKey="value" stroke="#9d92c9" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
@@ -366,6 +382,7 @@ export default function ManualInvestmentDetailPage() {
                                                     {pos.quantity != null && <span>{pos.quantity} ks</span>}
                                                     {pos.quantity != null && pos.avg_buy_price != null && <span> · nákup {fmt(pos.avg_buy_price, pos.currency)}/ks</span>}
                                                     {pos.note && <span> · {pos.note}</span>}
+                                                    {account.total_value > 0 && <span>{pos.quantity != null ? ' · ' : ''}{((pos.current_value / account.total_value) * 100).toFixed(1)} % účtu</span>}
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
