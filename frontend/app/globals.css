@@ -5071,3 +5071,5 @@ body:has(.dash) {
 .inv2-hero-copy .account-hero-kpi-grid { margin-top: 0 !important; }
 .inv2-hero-copy .account-hero-kpi-grid { flex: none !important; }
 .inv2-hero-copy { align-self: start; padding-top: 8px; }
+.inv2-hero { margin-bottom: var(--spacing-md); }
+.inv2-head + .inv2-hero, .inv2-manage-card + .inv2-hero { margin-top: 0; }
