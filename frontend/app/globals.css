@@ -5073,3 +5073,38 @@ body:has(.dash) {
 .inv2-hero-copy { align-self: start; padding-top: 8px; }
 .inv2-hero { margin-bottom: 0; }
 .inv2-head + .inv2-hero, .inv2-manage-card + .inv2-hero { margin-top: 0; }
+
+/* ══ PŘEHLEDY — KPI karty, graf + pravý sloupec, pruhy ═════════════════════ */
+.rep-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-md); }
+@media (max-width: 1000px) { .rep-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rep-kpi { padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; }
+.rep-kpi-label { font-size: 14px; color: var(--text-2); }
+.rep-kpi-value { font-size: 28px; font-weight: 500; letter-spacing: -0.02em; color: var(--text); }
+.rep-kpi-value.pos { color: var(--pos); }
+.rep-kpi-value.neg { color: var(--neg); }
+.rep-kpi-sub { font-size: 13px; color: var(--text-3); }
+
+.rep-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
+.rep-main, .rep-aside { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
+@media (max-width: 1200px) { .rep-layout { grid-template-columns: minmax(0, 1fr); } }
+.rep-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); }
+@media (max-width: 800px) { .rep-pair { grid-template-columns: minmax(0, 1fr); } }
+
+.rep-bars { display: flex; flex-direction: column; gap: 14px; }
+.rep-bar-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; align-items: center; gap: 14px; font-size: 13.5px; }
+.rep-bar-row.cat { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rep-bar-name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rep-bar-track { height: 8px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; }
+.rep-bar-track > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.rep-bar-track > span.pos { background: var(--pos); }
+.rep-bar-track > span.neg { background: var(--neg); }
+.rep-bar-value { min-width: 56px; text-align: right; font-weight: 500; color: var(--text); }
+.rep-bar-value.pos { color: var(--pos); }
+.rep-bar-value.neg { color: var(--neg); }
+
+.rep-promo { padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: var(--text); }
+.rep-promo strong { font-size: 16px; font-weight: 600; }
+.rep-promo span { font-size: 13.5px; color: var(--text-2); line-height: 1.5; }
+.rep-promo em { font-style: normal; font-size: 13.5px; font-weight: 500; color: var(--accent); margin-top: 6px; }
+.rep-bar-row { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.rep-accounts { display: block; padding: 0; background: none; }
