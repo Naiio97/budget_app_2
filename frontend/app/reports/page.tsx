@@ -165,7 +165,7 @@ export default function ReportsPage() {
                                 </div>
                             ))}
                         </div>
-                        <Link href="/wrapped" className="btn btn-sm roc-pill" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Link href="/wrapped" className="seg-link">
                             {getLineIcon('star', 14)} Roční přehled
                         </Link>
                     </div>
