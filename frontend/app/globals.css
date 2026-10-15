@@ -5150,3 +5150,8 @@ body:has(.dash) {
 .ln-card .loan-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
 .ln-cal-btn { width: 100%; justify-content: center; padding: 11px 16px; border-radius: 14px; }
 .ln-cal-btn { margin-top: 20px; }
+
+/* okno se splátkovým kalendářem */
+.ln-modal { max-width: 780px; display: flex; flex-direction: column; max-height: 88vh; }
+.ln-modal-head { display: flex; align-items: center; gap: 14px; padding: 22px 26px 16px; border-bottom: 1px solid var(--border); }
+.ln-modal-body { overflow-y: auto; overscroll-behavior: contain; padding: 8px 20px 20px; margin: 0; }

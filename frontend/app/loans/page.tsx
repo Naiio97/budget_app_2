@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
@@ -263,6 +264,14 @@ function LoanCard({ loan, color, expanded, onToggle, onEdit, onDelete }: {
         enabled: expanded,
     });
 
+    // Escape zavře okno kalendáře
+    useEffect(() => {
+        if (!expanded) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onToggle(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [expanded, onToggle]);
+
     const toggleMutation = useMutation({
         mutationFn: ({ paymentId, isPaid }: { paymentId: number; isPaid: boolean }) =>
             toggleLoanPayment(loan.id, paymentId, isPaid),
@@ -277,7 +286,7 @@ function LoanCard({ loan, color, expanded, onToggle, onEdit, onDelete }: {
     });
 
     return (
-        <GlassCard className={`ln-card ${expanded ? 'expanded' : ''}`}>
+        <GlassCard className="ln-card">
             <div className="loan-card-head">
                 <span className="ln-icon" style={{ background: color }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></svg>
@@ -344,45 +353,62 @@ function LoanCard({ loan, color, expanded, onToggle, onEdit, onDelete }: {
             </div>
 
             <button className="btn btn-sm ln-cal-btn" onClick={onToggle}>
-                {expanded ? 'Skrýt splátkový kalendář' : 'Zobrazit splátkový kalendář'}
+                Zobrazit splátkový kalendář
             </button>
 
-            {expanded && (
-                <div className="loan-schedule">
-                    {isLoading ? (
-                        <p className="text-secondary" style={{ padding: 'var(--spacing-md)' }}>Načítám kalendář…</p>
-                    ) : (
-                        <div className="loan-schedule-scroll">
-                            <div className="loan-schedule-row loan-schedule-head">
-                                <span>#</span>
-                                <span>Datum</span>
-                                <span style={{ textAlign: 'right' }}>Splátka</span>
-                                <span style={{ textAlign: 'right' }}>Jistina</span>
-                                <span style={{ textAlign: 'right' }}>Úrok</span>
-                                <span style={{ textAlign: 'right' }}>Zůstatek</span>
-                                <span style={{ textAlign: 'center' }}>Zapl.</span>
-                            </div>
-                            {schedule.map(p => (
-                                <div key={p.id} className={`loan-schedule-row ${p.is_paid ? 'paid' : ''}`}>
-                                    <span>{p.installment_number}</span>
-                                    <span>{formatDate(p.due_date)}</span>
-                                    <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.amount, loan.currency)}</span>
-                                    <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.principal_part, loan.currency)}</span>
-                                    <span className="num" style={{ textAlign: 'right', color: 'var(--text-3)' }}>{formatCurrency(p.interest_part, loan.currency)}</span>
-                                    <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.remaining_balance, loan.currency)}</span>
-                                    <span style={{ textAlign: 'center' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={p.is_paid}
-                                            disabled={toggleMutation.isPending}
-                                            onChange={e => toggleMutation.mutate({ paymentId: p.id, isPaid: e.target.checked })}
-                                        />
-                                    </span>
+            {expanded && createPortal(
+                <div className="modal-backdrop tx-modal-overlay" onClick={onToggle}>
+                    <div className="modal ln-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={`Splátkový kalendář — ${loan.name}`}>
+                        <div className="ln-modal-head">
+                            <span className="ln-icon" style={{ background: color }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></svg>
+                            </span>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div className="loan-card-title">{loan.name}</div>
+                                <div className="text-tertiary" style={{ fontSize: 12, marginTop: 2 }}>
+                                    Splátkový kalendář · {loan.paid_count}/{loan.term_months} splátek
                                 </div>
-                            ))}
+                            </div>
+                            <button onClick={onToggle} className="btn btn-icon btn-ghost" aria-label="Zavřít">×</button>
                         </div>
-                    )}
+                        <div className="loan-schedule ln-modal-body">
+            {isLoading ? (
+                <p className="text-secondary" style={{ padding: 'var(--spacing-md)' }}>Načítám kalendář…</p>
+            ) : (
+                <div className="loan-schedule-scroll">
+                    <div className="loan-schedule-row loan-schedule-head">
+                        <span>#</span>
+                        <span>Datum</span>
+                        <span style={{ textAlign: 'right' }}>Splátka</span>
+                        <span style={{ textAlign: 'right' }}>Jistina</span>
+                        <span style={{ textAlign: 'right' }}>Úrok</span>
+                        <span style={{ textAlign: 'right' }}>Zůstatek</span>
+                        <span style={{ textAlign: 'center' }}>Zapl.</span>
+                    </div>
+                    {schedule.map(p => (
+                        <div key={p.id} className={`loan-schedule-row ${p.is_paid ? 'paid' : ''}`}>
+                            <span>{p.installment_number}</span>
+                            <span>{formatDate(p.due_date)}</span>
+                            <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.amount, loan.currency)}</span>
+                            <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.principal_part, loan.currency)}</span>
+                            <span className="num" style={{ textAlign: 'right', color: 'var(--text-3)' }}>{formatCurrency(p.interest_part, loan.currency)}</span>
+                            <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.remaining_balance, loan.currency)}</span>
+                            <span style={{ textAlign: 'center' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={p.is_paid}
+                                    disabled={toggleMutation.isPending}
+                                    onChange={e => toggleMutation.mutate({ paymentId: p.id, isPaid: e.target.checked })}
+                                />
+                            </span>
+                        </div>
+                    ))}
                 </div>
+            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </GlassCard>
     );
