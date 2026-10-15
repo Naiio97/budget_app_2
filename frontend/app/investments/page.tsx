@@ -5,6 +5,7 @@ import { getPositionColor } from '@/lib/positionColors';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
+import SyncButton from '@/components/SyncButton';
 import {
     getInvestmentPortfolio,
     getPortfolioHistory,
@@ -15,6 +16,7 @@ import {
     getManualInvestments,
     getManualInvestmentHistory,
     createManualInvestment,
+    getDashboard,
     InvestmentPortfolio,
     InvestmentPortfolioDetail,
     PortfolioHistory,
@@ -114,6 +116,10 @@ export default function InvestmentsPage() {
     const resultTotal = (detail?.result ?? 0) + manualPnl;
     const resultPct = investedTotal > 0 ? (resultTotal / investedTotal) * 100 : 0;
     const accountCount = (portfolio ? 1 : 0) + manualInvestments.length;
+    const { data: dashData } = useQuery({ queryKey: queryKeys.dashboard, queryFn: () => getDashboard() });
+    const netWorth = dashData?.summary.total_balance ?? combinedTotal;
+    const investShare = netWorth > 0 ? Math.min(100, Math.max(0, (combinedTotal / netWorth) * 100)) : 0;
+    const otherAccounts = (dashData?.accounts ?? []).filter(a => a.type !== 'investment' && !manualInvestments.some(m => m.name === a.name));
 
     const combinedChartData = useMemo<ChartPoint[]>(() => {
         const allDates = new Set<string>();
@@ -334,6 +340,8 @@ export default function InvestmentsPage() {
                     </section>
                 )}
 
+                <div className="inv2-layout">
+                <div className="inv2-main">
                 <section className="surface investment-hero">
                     <div className="investment-hero-copy">
                         <span className="kpi-label">Celková hodnota portfolia</span>
@@ -570,8 +578,19 @@ export default function InvestmentsPage() {
                         </div>
                     </div>
                 </section>
+                </div>
+                <aside className="inv2-aside">
+                    <section className="surface inv2-card inv2-net">
+                        <div className="card-head"><h3>Čisté jmění</h3></div>
+                        <div className="inv2-net-value num">{formatCurrency(netWorth)}</div>
+                        <div className="inv2-net-bar"><span style={{ width: `${investShare}%` }} /></div>
+                        <div className="inv2-net-meta">
+                            <span>Investice {formatPct(investShare)}</span>
+                            <span className="num">{formatCurrency(combinedTotal)}</span>
+                        </div>
+                    </section>
 
-                <section className="surface investment-accounts-card">
+                <section className="surface investment-accounts-card inv2-card">
                     <div className="card-head">
                         <h3>Investiční účty</h3>
                         <button className="btn" onClick={() => setShowNewAccountForm((value) => !value)}>+ Přidat</button>
@@ -599,6 +618,35 @@ export default function InvestmentsPage() {
                         ))}
                     </div>
                 </section>
+
+                    {otherAccounts.length > 0 && (
+                        <section className="surface inv2-card">
+                            <div className="card-head">
+                                <h3>Ostatní účty</h3>
+                                <span className="muted small">{otherAccounts.length}</span>
+                            </div>
+                            <div className="inv2-other">
+                                {otherAccounts.slice(0, 5).map(acc => (
+                                    <div key={acc.id} className="inv2-other-row">
+                                        <span className="inv2-other-avatar">{acc.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+                                        <span className="inv2-other-name">{acc.name}</span>
+                                        <strong className="num">{formatCurrency(acc.balance, acc.currency)}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                            <Link href="/settings" className="inv2-link">+ Propojit účet</Link>
+                        </section>
+                    )}
+
+                    <section className="surface inv2-card inv2-sync">
+                        <div>
+                            <div className="inv2-sync-label">Poslední synchronizace</div>
+                            <strong>{portfolio?.last_synced ? formatDate(portfolio.last_synced) : 'zatím neproběhla'}</strong>
+                        </div>
+                        <SyncButton />
+                    </section>
+                </aside>
+                </div>
             </div>
         </MainLayout>
     );

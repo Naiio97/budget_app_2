@@ -4981,3 +4981,92 @@ body:has(.dash) {
   .bud-hero2 { padding: 20px; }
   .bud-hero2-stats strong { font-size: 22px; }
 }
+
+/* ══ INVESTICE — společné prvky stránek účtů (inv2) ════════════════════════
+   --d-* proměnné jsou i mimo .dash, aby šly použít dash-* komponenty (Sync…). */
+:root {
+  --d-card: rgba(255,255,255,0.06); --d-card-border: rgba(255,255,255,0.10);
+  --d-text: #f5f7fb; --d-muted: rgba(235,240,250,0.66); --d-faint: rgba(235,240,250,0.42);
+  --d-line: rgba(255,255,255,0.07); --d-track: rgba(255,255,255,0.08);
+  --d-accent: #5b9bff; --d-accent-soft: rgba(91,155,255,0.16);
+  --d-pos: #4cc38a; --d-pos-soft: rgba(76,195,138,0.16); --d-neg: #e08a78;
+}
+[data-mode="light"] {
+  --d-card: rgba(255,255,255,0.34); --d-card-border: rgba(255,255,255,0.62);
+  --d-text: #1b2740; --d-muted: #66758c; --d-faint: #98a4b6;
+  --d-line: rgba(30,50,90,0.07); --d-track: rgba(30,50,90,0.06);
+  --d-accent: #2f6fdb; --d-accent-soft: rgba(47,111,219,0.10);
+  --d-pos: #2a8a64; --d-pos-soft: rgba(42,138,100,0.12); --d-neg: #a65a4b;
+}
+
+.inv2-head { display: flex; align-items: center; gap: 16px; margin-bottom: var(--spacing-md); }
+.inv2-head .account-title-block { flex: 1; min-width: 0; }
+.inv2-back {
+  width: 40px; height: 40px; flex-shrink: 0; display: grid; place-items: center; cursor: pointer; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--card-border); color: var(--text);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+}
+.inv2-back:hover { background: var(--accent-soft); color: var(--accent); }
+.inv2-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.inv2-pill {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+  background: var(--surface); border: 1px solid var(--card-border); color: var(--text);
+}
+.inv2-pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--pos); }
+.inv2-manage { gap: 8px; }
+
+.inv2-hero { display: grid; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 32px; padding: 28px 32px; align-items: stretch; }
+.inv2-hero-copy > div { flex-direction: column !important; align-items: flex-start !important; gap: 22px !important; }
+.inv2-hero-copy .account-hero-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; max-width: none !important; width: 100%; }
+.inv2-hero-chart { min-width: 0; display: flex; flex-direction: column; }
+.inv2-hero-chart:empty { display: none; }
+.inv2-hero-chart .card-head { padding: 0 0 12px; border-bottom: 0; }
+.inv2-hero-chart .card-body { padding: 0; }
+.inv2-hero:has(.inv2-hero-chart:empty) { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) { .inv2-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; } }
+
+.inv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
+.inv2-side { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
+@media (max-width: 1100px) { .inv2-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.inv2-api { display: flex; align-items: center; gap: 14px; padding: 18px 22px; }
+.inv2-api-icon { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex-shrink: 0; background: var(--accent-soft); color: var(--accent); }
+.inv2-api div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inv2-api strong { font-size: 15px; font-weight: 600; color: var(--text); }
+.inv2-api span { font-size: 13px; color: var(--text-2); }
+.inv2-api em { font-style: normal; font-size: 12px; color: var(--text-3); }
+
+.inv2-manage-card { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; margin-bottom: var(--spacing-md); }
+.inv2-manage-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.inv2-manage-row label { font-size: 13px; color: var(--text-2); }
+.inv2-manage-row .input { flex: 1; min-width: 200px; }
+.inv2-manage-row.danger { padding-top: 14px; border-top: 1px solid var(--border); justify-content: space-between; font-size: 13px; color: var(--text-2); }
+.inv2-manage-row.danger .btn { color: var(--neg); }
+
+/* přehled investic: dva sloupce */
+.inv2-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
+.inv2-main { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
+.inv2-aside { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
+@media (max-width: 1200px) { .inv2-layout { grid-template-columns: minmax(0, 1fr); } }
+.inv2-card { padding: 0; }
+.inv2-net { padding-bottom: 20px; }
+.inv2-net .card-head { border-bottom: 0; }
+.inv2-net-value { font-size: 30px; font-weight: 500; letter-spacing: -0.02em; padding: 0 var(--spacing-lg); color: var(--text); }
+.inv2-net-bar { height: 8px; border-radius: 999px; background: var(--surface-sunken); overflow: hidden; margin: 14px var(--spacing-lg) 8px; }
+.inv2-net-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.inv2-net-meta { display: flex; justify-content: space-between; padding: 0 var(--spacing-lg); font-size: 13px; color: var(--text-2); }
+.inv2-other { display: flex; flex-direction: column; padding: 0 var(--spacing-lg); }
+.inv2-other-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.inv2-other-row:last-child { border-bottom: 0; }
+.inv2-other-avatar { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: var(--surface-sunken); color: var(--text-2); font-size: 12px; font-weight: 600; }
+.inv2-other-name { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv2-link { display: block; text-align: center; padding: 14px; font-size: 14px; font-weight: 500; color: var(--accent); text-decoration: none; }
+.inv2-sync { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; }
+.inv2-sync-label { font-size: 12.5px; color: var(--text-2); margin-bottom: 2px; }
+.inv2-sync strong { font-size: 15px; font-weight: 600; color: var(--text); }
+
+.inv2-card > .card-head { padding: 18px var(--spacing-lg) 10px; margin-bottom: 0; }
+.inv2-hero-copy { align-self: center; }
+.inv2-hero-copy > div { height: auto !important; min-height: 0 !important; justify-content: flex-start !important; }
+.inv2-hero-copy .account-hero-kpi-grid { margin-top: 0 !important; }
+.inv2-hero-copy .account-hero-kpi-grid { flex: none !important; }
