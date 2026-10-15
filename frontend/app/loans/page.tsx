@@ -38,6 +38,8 @@ const euToIso = (eu: string): string | null => {
     return iso;
 };
 
+const LOAN_COLORS = ['#3b7dd8', '#7a67c4', '#2f9c78', '#c0794d', '#4a9db0'];
+
 const emptyForm = {
     name: '',
     principal: '',
@@ -131,23 +133,43 @@ export default function LoansPage() {
                     </button>
                 </div>
 
-                {/* Summary */}
-                {summary && summary.active_loans > 0 && (
-                    <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <GlassCard>
-                            <div className="stat-label">Měsíční splátky celkem</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{formatCurrency(summary.total_monthly_payment)}</div>
-                        </GlassCard>
-                        <GlassCard>
-                            <div className="stat-label">Zbývá splatit</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem', color: 'var(--warn)' }}>{formatCurrency(summary.total_remaining_balance)}</div>
-                        </GlassCard>
-                        <GlassCard>
-                            <div className="stat-label">Aktivní úvěry</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{summary.active_loans}</div>
-                        </GlassCard>
-                    </div>
-                )}
+                {/* Souhrn */}
+                {summary && summary.active_loans > 0 && (() => {
+                    const active = loans.filter(l => l.remaining_balance > 0);
+                    const total = summary.total_remaining_balance;
+                    return (
+                        <section className="surface ln-hero">
+                            <div className="ln-hero-main">
+                                <div className="ln-hero-label">Zbývá splatit</div>
+                                <div className="ln-hero-value num">{formatCurrency(total)}</div>
+                                <div className="ln-hero-sub">
+                                    z {summary.active_loans} {summary.active_loans === 1 ? 'aktivního úvěru' : summary.active_loans < 5 ? 'aktivních úvěrů' : 'aktivních úvěrů'}
+                                </div>
+                            </div>
+                            <div className="ln-hero-split">
+                                <div className="ln-hero-label">Rozložení dluhu</div>
+                                <div className="ln-split-bar">
+                                    {active.map(l => (
+                                        <span key={l.id} title={l.name} style={{ flexGrow: l.remaining_balance, background: LOAN_COLORS[loans.indexOf(l) % LOAN_COLORS.length] }} />
+                                    ))}
+                                </div>
+                                <div className="ln-split-legend">
+                                    {active.map(l => (
+                                        <span key={l.id}>
+                                            <i style={{ background: LOAN_COLORS[loans.indexOf(l) % LOAN_COLORS.length] }} />
+                                            {l.name} <b className="num">{total > 0 ? ((l.remaining_balance / total) * 100).toFixed(1).replace('.', ',') : 0} %</b>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="ln-hero-side">
+                                <div className="ln-hero-label">Měsíční splátky celkem</div>
+                                <div className="ln-hero-value small num">{formatCurrency(summary.total_monthly_payment)}</div>
+                                <div className="ln-hero-sub">z {summary.active_loans} aktivních úvěrů</div>
+                            </div>
+                        </section>
+                    );
+                })()}
 
                 {/* Add form */}
                 {showForm && (
@@ -207,11 +229,12 @@ export default function LoansPage() {
                         </p>
                     </GlassCard>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                        {loans.map(loan => (
+                    <div className="ln-grid">
+                        {loans.map((loan, index) => (
                             <LoanCard
                                 key={loan.id}
                                 loan={loan}
+                                color={LOAN_COLORS[index % LOAN_COLORS.length]}
                                 expanded={expandedId === loan.id}
                                 onToggle={() => setExpandedId(expandedId === loan.id ? null : loan.id)}
                                 onEdit={() => startEdit(loan)}
@@ -225,8 +248,9 @@ export default function LoansPage() {
     );
 }
 
-function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
+function LoanCard({ loan, color, expanded, onToggle, onEdit, onDelete }: {
     loan: Loan;
+    color: string;
     expanded: boolean;
     onToggle: () => void;
     onEdit: () => void;
@@ -253,9 +277,12 @@ function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
     });
 
     return (
-        <GlassCard>
+        <GlassCard className={`ln-card ${expanded ? 'expanded' : ''}`}>
             <div className="loan-card-head">
-                <div style={{ minWidth: 0 }}>
+                <span className="ln-icon" style={{ background: color }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></svg>
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="loan-card-title">{loan.name}</div>
                     <div className="text-tertiary" style={{ fontSize: 12, marginTop: 2 }}>
                         {formatCurrency(loan.monthly_payment, loan.currency)}/měs · {loan.interest_rate}% p.a. · do {formatDate(loan.end_date)}
@@ -316,7 +343,7 @@ function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
                 </div>
             </div>
 
-            <button className="btn btn-sm" style={{ marginTop: 'var(--spacing-md)' }} onClick={onToggle}>
+            <button className="btn btn-sm ln-cal-btn" onClick={onToggle}>
                 {expanded ? 'Skrýt splátkový kalendář' : 'Zobrazit splátkový kalendář'}
             </button>
 

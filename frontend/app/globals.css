@@ -5127,3 +5127,26 @@ body:has(.dash) {
 .investment-allocation-row { font-size: 14.5px; padding: 11px 0; }
 .investment-allocation-row em b { font-weight: 600; color: var(--text); margin-right: 10px; }
 .investment-allocation-list { width: 100%; margin-top: 8px; }
+
+/* ══ ÚVĚRY — hero a karty ve dvou sloupcích ═══════════════════════════════ */
+.ln-hero { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 1.6fr) minmax(200px, auto); gap: 40px; align-items: center; padding: 26px 32px; }
+.ln-hero-label { font-size: 13px; color: var(--text-2); }
+.ln-hero-value { font-size: clamp(30px, 3vw, 42px); font-weight: 500; letter-spacing: -0.025em; color: var(--text); margin: 4px 0 2px; }
+.ln-hero-value.small { font-size: 30px; }
+.ln-hero-sub { font-size: 13px; color: var(--text-3); }
+.ln-hero-side { padding-left: 32px; border-left: 1px solid var(--border); }
+.ln-split-bar { display: flex; gap: 3px; height: 12px; border-radius: 999px; overflow: hidden; margin: 12px 0 10px; }
+.ln-split-bar > span { min-width: 6px; }
+.ln-split-legend { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; color: var(--text-2); }
+.ln-split-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+.ln-split-legend b { font-weight: 600; color: var(--text); margin-left: 4px; }
+@media (max-width: 1000px) { .ln-hero { grid-template-columns: minmax(0, 1fr); gap: 20px; } .ln-hero-side { padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--border); } }
+
+.ln-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); align-items: start; }
+@media (max-width: 1000px) { .ln-grid { grid-template-columns: minmax(0, 1fr); } }
+.ln-card.expanded { grid-column: 1 / -1; }
+.ln-card .loan-card-head { align-items: center; gap: 14px; }
+.ln-icon { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; flex-shrink: 0; color: #fff; }
+.ln-card .loan-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+.ln-cal-btn { width: 100%; justify-content: center; padding: 11px 16px; border-radius: 14px; }
+.ln-cal-btn { margin-top: 20px; }
