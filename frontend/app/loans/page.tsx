@@ -58,6 +58,8 @@ export default function LoansPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [form, setForm] = useState(emptyForm);
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    // Původní hodnoty upravovaného úvěru — kvůli rozhodnutí, zda přepočítat měsíční splátku
+    const [editOriginal, setEditOriginal] = useState<typeof emptyForm | null>(null);
 
     const { data: loans = [], isLoading } = useQuery<Loan[]>({ queryKey: queryKeys.loans, queryFn: getLoans });
     const { data: summary } = useQuery<LoansSummary>({ queryKey: queryKeys.loansSummary, queryFn: getLoansSummary });
@@ -67,7 +69,7 @@ export default function LoansPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.loansSummary });
     };
 
-    const closeForm = () => { setShowForm(false); setEditingId(null); setForm(emptyForm); };
+    const closeForm = () => { setShowForm(false); setEditingId(null); setEditOriginal(null); setForm(emptyForm); };
 
     const createMutation = useMutation({
         mutationFn: (data: LoanCreateInput) => createLoan(data),
@@ -91,7 +93,7 @@ export default function LoansPage() {
 
     const startEdit = (loan: Loan) => {
         setEditingId(loan.id);
-        setForm({
+        const values = {
             name: loan.name,
             principal: String(loan.principal),
             interest_rate: String(loan.interest_rate),
@@ -99,7 +101,9 @@ export default function LoansPage() {
             monthly_payment: String(loan.monthly_payment),
             start_date: isoToEu(loan.start_date),
             note: loan.note ?? '',
-        });
+        };
+        setForm(values);
+        setEditOriginal(values);
         setShowForm(true);
     };
 
@@ -108,12 +112,21 @@ export default function LoansPage() {
         const term = parseInt(form.term_months);
         const startIso = euToIso(form.start_date);
         if (!form.name.trim() || !(principal > 0) || !(term > 0) || !startIso) return;
+        // Při úpravě: pokud se změnila jistina / úrok / počet splátek a splátku jsem ručně
+        // neměnil, nech ji dopočítat (jinak by zůstala stará částka).
+        let monthlyPayment: number | null = form.monthly_payment ? parseFloat(form.monthly_payment) : null;
+        if (editOriginal && form.monthly_payment === editOriginal.monthly_payment) {
+            const paramsChanged = form.principal !== editOriginal.principal
+                || form.interest_rate !== editOriginal.interest_rate
+                || form.term_months !== editOriginal.term_months;
+            if (paramsChanged) monthlyPayment = null;
+        }
         const data: LoanCreateInput = {
             name: form.name.trim(),
             principal,
             interest_rate: parseFloat(form.interest_rate) || 0,
             term_months: term,
-            monthly_payment: form.monthly_payment ? parseFloat(form.monthly_payment) : null,
+            monthly_payment: monthlyPayment,
             start_date: startIso,
             note: form.note.trim() || null,
         };

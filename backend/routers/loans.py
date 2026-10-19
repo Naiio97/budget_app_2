@@ -372,7 +372,9 @@ async def update_loan(
             needs_regen = True
 
     # If params changed but monthly_payment wasn't explicitly set, recompute annuity.
-    if needs_regen and "monthly_payment" not in data.model_dump(exclude_unset=True):
+    # (prázdná/nulová splátka z formuláře znamená „dopočítat“, ne „nechat původní“)
+    explicit_payment = data.model_dump(exclude_unset=True).get("monthly_payment")
+    if needs_regen and not (explicit_payment and explicit_payment > 0):
         loan.monthly_payment = annuity_payment(loan.principal, loan.interest_rate, loan.term_months)
 
     if needs_regen:
