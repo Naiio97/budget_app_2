@@ -5271,5 +5271,15 @@ body:has(.dash) {
 
 /* dashboard: dva nezávislé sloupce (účty a kategorie pod sebou bez prázdného místa) */
 .dash-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.dash-grid { align-items: start; }
+.dash-grid { align-items: stretch; }
+.dash-col > :last-child { flex: 1 1 auto; }
 @media (max-width: 1100px) { .dash-col { display: contents; } }
+
+/* Poslední transakce vyplní zbytek sloupce (výšku určují ostatní karty) */
+.dash-tx { display: flex; flex-direction: column; }
+.dash-tx-body { position: relative; flex: 1 1 auto; min-height: 260px; }
+.dash-tx-fill { position: absolute; inset: 0; overflow: hidden; }
+@media (max-width: 1100px) {
+  .dash-tx-body { min-height: 0; }
+  .dash-tx-fill { position: static; overflow: visible; }
+}

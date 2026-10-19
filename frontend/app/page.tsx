@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
@@ -13,6 +13,7 @@ import ArrowIcon from '@/components/ArrowIcon';
 import { apiFetch, getDashboard } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
+import type { Transaction } from '@/lib/api';
 
 // ── Payday logic ────────────────────────────────────────────────
 const FIXED_HOLIDAYS: string[] = [
@@ -78,6 +79,57 @@ function getPaydayText(today: Date, payday: Date): string {
   if (diff === 0) return 'Dnes je výplatní den!';
   if (diff === 1) return 'Zítra je výplatní den';
   return `Do výplaty zbývá ${diff} ${diff >= 5 ? 'dní' : diff >= 2 ? 'dny' : 'den'}`;
+}
+
+// Poslední transakce: karta se natáhne na výšku sloupce a ukáže tolik řádků, kolik se
+// vejde — spodní okraje obou sloupců tak sedí bez prázdného místa.
+function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
+  const fillRef = useRef<HTMLDivElement>(null);
+  const [count, setCount] = useState(5);
+  const [height, setHeight] = useState(0);
+  const failAt = useRef(Infinity); // počet řádků, který se už nevešel (platí do změny výšky)
+
+  useEffect(() => {
+    const el = fillRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { failAt.current = Infinity; setHeight(el.clientHeight); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Doladění po vykreslení: přidávej řádky, dokud se vejdou, a přebytečné ubírej.
+  useEffect(() => {
+    const el = fillRef.current;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      // Na úzkých displejích (sloupce pod sebou) se bere pevný počet
+      if (getComputedStyle(el).position === 'static') { setCount(5); return; }
+      const content = el.firstElementChild?.getBoundingClientRect().height ?? 0;
+      if (content > el.clientHeight + 1 && count > 3) {
+        failAt.current = count;
+        setCount(count - 1);
+      } else if (count < transactions.length && count + 1 < failAt.current && el.clientHeight - content > 70) {
+        setCount(count + 1);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [count, height, transactions.length]);
+
+  return (
+    <div className="dash-card dash-tx">
+      <div className="dash-card-head">
+        <h3>Poslední transakce</h3>
+        <Link href="/transactions" className="dash-link">
+          Zobrazit vše <ArrowIcon size={12} />
+        </Link>
+      </div>
+      <div className="dash-tx-body">
+        <div className="dash-tx-fill" ref={fillRef}>
+          <TransactionList transactions={transactions.slice(0, count)} showAccount />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -175,15 +227,7 @@ export default function DashboardPage() {
           <div className="dash-col">
             <NetWorthChart currency={currency} />
 
-            <div className="dash-card dash-tx">
-              <div className="dash-card-head">
-                <h3>Poslední transakce</h3>
-                <Link href="/transactions" className="dash-link">
-                  Zobrazit vše <ArrowIcon size={12} />
-                </Link>
-              </div>
-              <TransactionList transactions={data.recent_transactions} showAccount />
-            </div>
+            <RecentTransactions transactions={data.recent_transactions} />
           </div>
 
           <div className="dash-col">
