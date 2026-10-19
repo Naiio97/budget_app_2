@@ -5239,3 +5239,12 @@ body:has(.dash) {
   .sb-row { grid-template-columns: 38px minmax(0, 1fr) auto; }
   .sb-row-meta { display: none; }
 }
+
+/* okno s formulářem (FormModal) */
+.form-modal { max-width: 600px; display: flex; flex-direction: column; max-height: 90vh; }
+.form-modal-head { display: flex; align-items: center; gap: 14px; padding: 22px 26px 16px; border-bottom: 1px solid var(--border); }
+.form-modal-title { font-size: 18px; font-weight: 600; color: var(--text); }
+.form-modal-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.form-modal-body { padding: 20px 26px 26px; overflow-y: auto; overscroll-behavior: contain; }
+.form-modal .loan-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 560px) { .form-modal .loan-form-grid { grid-template-columns: minmax(0, 1fr); } }

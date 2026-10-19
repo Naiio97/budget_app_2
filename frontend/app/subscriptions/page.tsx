@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
+import FormModal from '@/components/FormModal';
 import { queryKeys } from '@/lib/queryKeys';
 import { LineIcons } from '@/lib/line-icons';
 import {
@@ -42,8 +43,7 @@ type SubscriptionFormState = typeof emptyForm;
 
 // Sdílený formulář pro vytvoření (karta nahoře) i inline editaci v kartě
 // konkrétního předplatného.
-function SubscriptionForm({ title, form, setForm, saving, isEdit, hasError, onSubmit, onCancel }: {
-    title: string;
+function SubscriptionForm({ form, setForm, saving, isEdit, hasError, onSubmit, onCancel }: {
     form: SubscriptionFormState;
     setForm: (f: SubscriptionFormState) => void;
     saving: boolean;
@@ -54,7 +54,6 @@ function SubscriptionForm({ title, form, setForm, saving, isEdit, hasError, onSu
 }) {
     return (
         <>
-            <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{title}</h3>
             <div className="loan-form-grid">
                 <label className="loan-field">
                     <span>Název</span>
@@ -242,8 +241,8 @@ export default function SubscriptionsPage() {
                         >
                             {detecting ? 'Hledám…' : <>{LineIcons.search} Najít v historii</>}
                         </button>
-                        <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : (setEditingId(null), setForm(emptyForm), setShowForm(true)))}>
-                            {showForm ? 'Zrušit' : '+ Přidat ručně'}
+                        <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setShowForm(true); }}>
+                            + Přidat ručně
                         </button>
                     </div>
                 </div>
@@ -329,20 +328,22 @@ export default function SubscriptionsPage() {
                     </GlassCard>
                 )}
 
-                {/* Add form (create only — editace se rozbaluje v kartě předplatného) */}
-                {showForm && (
-                    <GlassCard>
+                {(showForm || editingId != null) && (
+                    <FormModal
+                        title={editingId != null ? 'Upravit předplatné' : 'Nové předplatné'}
+                        subtitle={editingId != null ? form.name : undefined}
+                        onClose={closeForm}
+                    >
                         <SubscriptionForm
-                            title="Nové předplatné"
                             form={form}
                             setForm={setForm}
                             saving={saving}
-                            isEdit={false}
-                            hasError={createMutation.isError}
+                            isEdit={editingId != null}
+                            hasError={editingId != null ? updateMutation.isError : createMutation.isError}
                             onSubmit={submit}
                             onCancel={closeForm}
                         />
-                    </GlassCard>
+                    </FormModal>
                 )}
 
                 {/* Aktivní + zrušená předplatná */}
@@ -357,18 +358,6 @@ export default function SubscriptionsPage() {
                 ) : (() => {
                     const active = subs.filter(s => s.is_active);
                     const cancelled = subs.filter(s => !s.is_active);
-                    const editForm = (sub: Subscription) => (
-                        <SubscriptionForm
-                            title={`Upravit předplatné — ${sub.name}`}
-                            form={form}
-                            setForm={setForm}
-                            saving={saving}
-                            isEdit
-                            hasError={updateMutation.isError}
-                            onSubmit={submit}
-                            onCancel={closeForm}
-                        />
-                    );
                     const handlers = (sub: Subscription) => ({
                         onEdit: () => startEdit(sub),
                         onToggleActive: () => updateMutation.mutate({ id: sub.id, data: { is_active: !sub.is_active } }),
@@ -381,9 +370,7 @@ export default function SubscriptionsPage() {
                                 <>
                                     <h2 className="sb-section-title">Aktivní</h2>
                                     <div className="sb-grid">
-                                        {active.map(sub => editingId === sub.id ? (
-                                            <GlassCard key={sub.id} className="subs-card-editing">{editForm(sub)}</GlassCard>
-                                        ) : (
+                                        {active.map(sub => (
                                             <SubscriptionCard key={sub.id} sub={sub} {...handlers(sub)} />
                                         ))}
                                     </div>
@@ -393,9 +380,7 @@ export default function SubscriptionsPage() {
                                 <>
                                     <h2 className="sb-section-title">Zrušená</h2>
                                     <section className="surface sb-cancelled">
-                                        {cancelled.map(sub => editingId === sub.id ? (
-                                            <div key={sub.id} className="sb-cancelled-edit">{editForm(sub)}</div>
-                                        ) : (
+                                        {cancelled.map(sub => (
                                             <CancelledRow key={sub.id} sub={sub} {...handlers(sub)} />
                                         ))}
                                     </section>

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
+import FormModal from '@/components/FormModal';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import {
@@ -100,7 +101,6 @@ export default function LoansPage() {
             note: loan.note ?? '',
         });
         setShowForm(true);
-        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const submit = () => {
@@ -129,8 +129,8 @@ export default function LoansPage() {
                         <h1>Úvěry</h1>
                         <p className="sub">Přehled splátek, kolik zbývá splatit a do kdy</p>
                     </div>
-                    <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
-                        {showForm ? 'Zrušit' : '+ Přidat úvěr'}
+                    <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setShowForm(true); }}>
+                        + Přidat úvěr
                     </button>
                 </div>
 
@@ -172,52 +172,54 @@ export default function LoansPage() {
                     );
                 })()}
 
-                {/* Add form */}
                 {showForm && (
-                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{editingId != null ? 'Upravit úvěr' : 'Nový úvěr'}</h3>
-                        <div className="loan-form-grid">
-                            <label className="loan-field">
-                                <span>Název</span>
-                                <input className="input" placeholder="Hypotéka" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Jistina (Kč)</span>
-                                <input className="input" type="number" placeholder="2 500 000" value={form.principal} onChange={e => setForm({ ...form, principal: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Úrok (% p.a.)</span>
-                                <input className="input" type="number" step="0.01" placeholder="5.9" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Počet splátek</span>
-                                <input className="input" type="number" placeholder="360" value={form.term_months} onChange={e => setForm({ ...form, term_months: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Měsíční splátka (nepovinné)</span>
-                                <input className="input" type="number" placeholder="dopočítá se" value={form.monthly_payment} onChange={e => setForm({ ...form, monthly_payment: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>První splátka</span>
-                                <input className="input" type="text" inputMode="numeric" placeholder="dd.mm.rrrr" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
-                            </label>
-                            <label className="loan-field loan-field-wide">
-                                <span>Poznámka (nepovinné)</span>
-                                <input className="input" placeholder="Banka, číslo smlouvy…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
-                            </label>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
-                            <button className="btn btn-primary" onClick={submit} disabled={saving}>
-                                {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit úvěr'}
-                            </button>
-                            <button className="btn" onClick={closeForm}>Zrušit</button>
-                        </div>
-                        {saveError && (
-                            <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>
-                                {editingId != null ? 'Nepodařilo se uložit změny.' : 'Nepodařilo se vytvořit úvěr.'}
-                            </p>
-                        )}
-                    </GlassCard>
+                    <FormModal
+                        title={editingId != null ? 'Upravit úvěr' : 'Nový úvěr'}
+                        subtitle={editingId != null ? form.name : 'Zadejte parametry úvěru, splátkový kalendář se dopočítá.'}
+                        onClose={closeForm}
+                    >
+                    <div className="loan-form-grid">
+                        <label className="loan-field">
+                            <span>Název</span>
+                            <input className="input" placeholder="Hypotéka" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Jistina (Kč)</span>
+                            <input className="input" type="number" placeholder="2 500 000" value={form.principal} onChange={e => setForm({ ...form, principal: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Úrok (% p.a.)</span>
+                            <input className="input" type="number" step="0.01" placeholder="5.9" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Počet splátek</span>
+                            <input className="input" type="number" placeholder="360" value={form.term_months} onChange={e => setForm({ ...form, term_months: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Měsíční splátka (nepovinné)</span>
+                            <input className="input" type="number" placeholder="dopočítá se" value={form.monthly_payment} onChange={e => setForm({ ...form, monthly_payment: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>První splátka</span>
+                            <input className="input" type="text" inputMode="numeric" placeholder="dd.mm.rrrr" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
+                        </label>
+                        <label className="loan-field loan-field-wide">
+                            <span>Poznámka (nepovinné)</span>
+                            <input className="input" placeholder="Banka, číslo smlouvy…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
+                        </label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
+                        <button className="btn btn-primary" onClick={submit} disabled={saving}>
+                            {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit úvěr'}
+                        </button>
+                        <button className="btn" onClick={closeForm}>Zrušit</button>
+                    </div>
+                    {saveError && (
+                        <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>
+                            {editingId != null ? 'Nepodařilo se uložit změny.' : 'Nepodařilo se vytvořit úvěr.'}
+                        </p>
+                    )}
+                    </FormModal>
                 )}
 
                 {/* Loans list */}
