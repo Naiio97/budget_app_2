@@ -104,7 +104,7 @@ function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
     const raf = requestAnimationFrame(() => {
       // Na úzkých displejích (sloupce pod sebou) se bere pevný počet
       if (getComputedStyle(el).position === 'static') { setCount(5); return; }
-      const content = el.firstElementChild?.getBoundingClientRect().height ?? 0;
+      const content = (el.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0; // offsetHeight: nezávislé na CSS zoomu
       if (content > el.clientHeight + 1 && count > 3) {
         failAt.current = count;
         setCount(count - 1);
