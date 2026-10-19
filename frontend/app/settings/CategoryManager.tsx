@@ -78,7 +78,7 @@ export default function CategoryManager({ onCategoriesChange, showAdd, setShowAd
 
     return (
         <div className="settings-category-manager">
-            <div className="settings-scroll-list settings-category-list">
+            <div className="set-cat-grid">
                 {activeCategories.map(cat => (
                     <div key={cat.id} className="set-cat-row">
                         {editingId === cat.id ? (

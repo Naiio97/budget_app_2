@@ -7,7 +7,7 @@ import { apiFetch, getDashboard, getInstitutions, connectBank, updateAccount, de
 import { getConsentStatus } from '@/lib/consent';
 import { Icons } from '@/lib/icons';
 import SyncHistoryCard from './SyncHistoryCard';
-import { SurfaceCard, EditIcon, TrashIcon, CloseIcon, EyeIcon, EyeOffIcon, BankIcon } from './shared';
+import { SurfaceCard, EditIcon, UnlinkIcon, CloseIcon, EyeIcon, EyeOffIcon, BankIcon, HourglassIcon } from './shared';
 
 interface Institution { id: string; name: string; logo?: string; bic?: string; }
 
@@ -142,7 +142,7 @@ export default function AccountsTab({ accounts, setAccounts, apiKeysLoaded, refr
 
     return (
         <>
-            <div className="settings-accounts-wrap">
+            <div className="set-2col">
                 <SurfaceCard
                     title="Účty"
                     sub="Přejmenuj, skryj nebo odpoj propojené a manuální účty."
@@ -153,74 +153,70 @@ export default function AccountsTab({ accounts, setAccounts, apiKeysLoaded, refr
                             <button className="btn btn-primary btn-sm" onClick={() => setShowAddManual(true)}>{Icons.action.add} Účet</button>
                         </div>
                     }
-                    className="settings-category-card"
+                    className="set-main-card"
                 >
                     {accounts.length === 0 ? (
                         <div style={{ color: 'var(--text-3)', fontSize: 13 }}>Zatím žádné účty. Přidej přes „+ Banka“ nebo „+ Účet“.</div>
                     ) : (
-                        <div className="settings-scroll-list settings-account-list">
-                            {accounts.map(acc => {
-                                const logo = getBankLogo(acc.institution);
-                                const visible = acc.is_visible !== false;
-                                const consent = acc.type === 'bank' ? getConsentStatus(acc.consent_expires_at) : null;
-                                const needsRenewal = !!consent && (consent.expired || consent.expiringSoon);
-                                return (
-                                    <div key={acc.id} className={`set-acc-row ${visible ? '' : 'is-hidden'}`} style={{ opacity: processingAccount === acc.id ? 0.5 : undefined }}>
-                                        <span className="set-acc-logo" style={logo ? { background: '#fff' } : undefined}>
-                                            {logo ? <Image src={logo} alt={acc.name} width={34} height={34} /> : (acc.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment)}
-                                        </span>
-                                        {editingAccount === acc.id ? (
-                                            <div className="set-acc-edit">
-                                                <input className="input" value={editName} autoFocus onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleRename(acc.id); }} style={{ flex: 1 }} />
-                                                <button className="btn btn-sm btn-primary" onClick={() => handleRename(acc.id)}>OK</button>
-                                                <button className="set-icon-btn" onClick={() => setEditingAccount(null)} title="Zrušit">{CloseIcon}</button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="set-acc-info">
-                                                    <div className="set-acc-name">{acc.name}</div>
-                                                    <div className="set-acc-meta">
-                                                        {acc.institution || acc.type}
-                                                        {consent && (
-                                                            <>
-                                                                {' · '}
-                                                                <span style={{ color: consent.color, fontWeight: needsRenewal ? 600 : undefined }}>
-                                                                    {consent.label}
-                                                                </span>
-                                                            </>
-                                                        )}
-                                                        {acc.last_sync_error && (
-                                                            <>
-                                                                {' · '}
-                                                                <span style={{ color: 'var(--neg)', fontWeight: 600 }} title={acc.last_sync_error}>
-                                                                    sync selhává
-                                                                </span>
-                                                            </>
-                                                        )}
+                        [
+                            { key: 'bank', label: 'Banka', items: accounts.filter(a => a.type === 'bank') },
+                            { key: 'other', label: 'Účet', items: accounts.filter(a => a.type !== 'bank') },
+                        ].filter(g => g.items.length > 0).map(group => (
+                            <div key={group.key} className="set-acc-group">
+                                <div className="set-group-head"><span>{group.label}</span><span>{group.items.length}</span></div>
+                                {group.items.map(acc => {
+                                    const logo = getBankLogo(acc.institution);
+                                    const visible = acc.is_visible !== false;
+                                    const consent = acc.type === 'bank' ? getConsentStatus(acc.consent_expires_at) : null;
+                                    const needsRenewal = !!consent && (consent.expired || consent.expiringSoon);
+                                    return (
+                                        <div key={acc.id} className={`set-acc-row ${visible ? '' : 'is-hidden'}`} style={{ opacity: processingAccount === acc.id ? 0.5 : undefined }}>
+                                            <span className="set-acc-logo" style={logo ? { background: '#fff' } : undefined}>
+                                                {logo ? <Image src={logo} alt={acc.name} width={34} height={34} /> : (acc.type === 'bank' ? Icons.accountType.bank : Icons.accountType.investment)}
+                                            </span>
+                                            {editingAccount === acc.id ? (
+                                                <div className="set-acc-edit">
+                                                    <input className="input" value={editName} autoFocus onChange={e => setEditName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleRename(acc.id); }} style={{ flex: 1 }} />
+                                                    <button className="btn btn-sm btn-primary" onClick={() => handleRename(acc.id)}>OK</button>
+                                                    <button className="set-icon-btn" onClick={() => setEditingAccount(null)} title="Zrušit">{CloseIcon}</button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="set-acc-info">
+                                                        <div className="set-acc-name">
+                                                            {acc.name}
+                                                            {!visible && <span className="set-tag" style={{ marginLeft: 8 }}>Skryto</span>}
+                                                        </div>
+                                                        <div className="set-acc-meta">{acc.institution || acc.type}</div>
                                                     </div>
-                                                </div>
-                                                {!visible && <span className="set-tag">Skryto</span>}
-                                                <div className="set-row-actions">
-                                                    {needsRenewal && acc.institution && (
-                                                        <button className="btn btn-sm btn-primary" onClick={() => handleConnectBank(acc.institution!)} title="Obnovit souhlas banky">
-                                                            Obnovit
-                                                        </button>
+                                                    {consent && (
+                                                        <span className={`set-consent ${needsRenewal ? 'warn' : ''}`} style={needsRenewal ? { color: consent.color } : undefined}>
+                                                            {HourglassIcon}{consent.label}
+                                                        </span>
                                                     )}
-                                                    <button className="set-icon-btn" title="Přejmenovat" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); }}>{EditIcon}</button>
-                                                    <button className="set-icon-btn" title={visible ? 'Skrýt' : 'Zobrazit'} onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)}>{visible ? EyeIcon : EyeOffIcon}</button>
-                                                    <button className="set-icon-btn danger" title="Smazat" onClick={() => handleDeleteAccount(acc.id)}>{TrashIcon}</button>
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
+                                                    {acc.last_sync_error && (
+                                                        <span className="set-consent warn" style={{ color: 'var(--neg)' }} title={acc.last_sync_error}>sync selhává</span>
+                                                    )}
+                                                    <div className="set-row-actions">
+                                                        {needsRenewal && acc.institution && (
+                                                            <button className="btn btn-sm btn-primary" onClick={() => handleConnectBank(acc.institution!)} title="Obnovit souhlas banky">
+                                                                Obnovit
+                                                            </button>
+                                                        )}
+                                                        <button className="set-icon-btn" title="Přejmenovat" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); }}>{EditIcon}</button>
+                                                        <button className="set-icon-btn" title={visible ? 'Skrýt' : 'Zobrazit'} onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)}>{visible ? EyeIcon : EyeOffIcon}</button>
+                                                        <button className="set-icon-btn danger" title="Odpojit / smazat" onClick={() => handleDeleteAccount(acc.id)}>{UnlinkIcon}</button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))
                     )}
                 </SurfaceCard>
-                <div style={{ marginTop: 'var(--spacing-lg)' }}>
-                    <SyncHistoryCard />
-                </div>
+                <SyncHistoryCard />
             </div>
 
             {/* Connect bank modal */}

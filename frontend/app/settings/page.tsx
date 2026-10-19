@@ -10,6 +10,7 @@ import AccountsTab from './AccountsTab';
 import CategoriesTab from './CategoriesTab';
 import AdvancedTab from './AdvancedTab';
 import MenuTab from './MenuTab';
+import { TAB_ICONS } from './shared';
 
 type Tab = 'accounts' | 'categories' | 'menu' | 'advanced';
 
@@ -25,16 +26,6 @@ export default function SettingsPage() {
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [apiKeysLoaded, setApiKeysLoaded] = useState<ApiKeysResponse | null>(null);
     const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
-
-    // Fit-mode (two scrolling columns) is desktop-only; on phones the page
-    // scrolls normally so cards stack instead of fighting over a fixed height.
-    const [isNarrow, setIsNarrow] = useState(false);
-    useEffect(() => {
-        const check = () => setIsNarrow(window.innerWidth <= 1200);
-        check();
-        window.addEventListener('resize', check);
-        return () => window.removeEventListener('resize', check);
-    }, []);
 
     useEffect(() => {
         (async () => {
@@ -63,8 +54,8 @@ export default function SettingsPage() {
     }, [refreshAccounts]);
 
     return (
-        <MainLayout disableScroll={tab === 'categories' && !isNarrow}>
-            <div className={`page-container settings-page ${tab === 'categories' && !isNarrow ? 'settings-page-fit' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+        <MainLayout>
+            <div className="page-container settings-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page head */}
                 <div className="page-head">
@@ -77,8 +68,8 @@ export default function SettingsPage() {
                 {/* Tabs */}
                 <div className="seg" style={{ alignSelf: 'flex-start' }}>
                     {([['accounts', 'Účty'], ['categories', 'Kategorie'], ['menu', 'Menu'], ['advanced', 'Pokročilé']] as [Tab, string][]).map(([val, label]) => (
-                        <div key={val} className={`seg-item ${tab === val ? 'active' : ''}`} onClick={() => setTab(val)}>
-                            {label}
+                        <div key={val} className={`seg-item set-tab ${tab === val ? 'active' : ''}`} onClick={() => setTab(val)}>
+                            {TAB_ICONS[val]}{label}
                         </div>
                     ))}
                 </div>

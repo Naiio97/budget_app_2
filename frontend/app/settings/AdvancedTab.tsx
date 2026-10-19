@@ -167,143 +167,122 @@ export default function AdvancedTab({ syncStatus, setSyncStatus, setAccounts, re
     };
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--spacing-lg)' }}>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-
-                <SurfaceCard title="Synchronizace" sub={`Poslední: ${formatLastSync(syncStatus?.last_sync || null)}`}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <button className="btn btn-primary" onClick={handleSync} disabled={isSyncing} style={{ padding: 12 }}>
-                            {isSyncing ? <>{Icons.status.loading} Synchronizuji...</> : <>{Icons.action.sync} Synchronizovat data</>}
-                        </button>
-                        {syncStatus?.status === 'completed' && (
-                            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                                {syncStatus.accounts_synced} účtů · {syncStatus.transactions_synced} transakcí
-                            </div>
-                        )}
+        <>
+            <div className="set-2col adv">
+                <div className="set-col">
+                    <SurfaceCard
+                        title="Synchronizace"
+                        sub={`Poslední: ${formatLastSync(syncStatus?.last_sync || null)}${syncStatus?.status === 'completed' ? ` · ${syncStatus.accounts_synced} účtů · ${syncStatus.transactions_synced} transakcí` : ''}`}
+                        action={
+                            <button className="btn btn-primary btn-sm" onClick={handleSync} disabled={isSyncing}>
+                                {isSyncing ? <>{Icons.status.loading} Synchronizuji...</> : <>{Icons.action.sync} Synchronizovat data</>}
+                            </button>
+                        }
+                    >
                         {syncError && (
-                            <div style={{ padding: '8px 12px', background: 'color-mix(in srgb, var(--neg) 12%, transparent)', borderRadius: 'var(--radius-sm)', color: 'var(--neg)', fontSize: 13 }}>
-                                {Icons.status.warning} {syncError}
-                            </div>
+                            <div className="set-alert">{Icons.status.warning} {syncError}</div>
                         )}
-                    </div>
-                </SurfaceCard>
+                    </SurfaceCard>
 
-                <SurfaceCard title="API Klíče">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div style={{
-                            padding: 12,
-                            borderRadius: 'var(--radius-sm)',
-                            border: apiKeysLoaded?.has_gocardless ? '0.5px solid color-mix(in srgb, var(--pos) 32%, transparent)' : '0.5px solid var(--border)',
-                            background: apiKeysLoaded?.has_gocardless ? 'color-mix(in srgb, var(--pos) 6%, transparent)' : 'transparent',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <strong style={{ fontSize: 14 }}>{Icons.accountType.bank} GoCardless</strong>
-                                {apiKeysLoaded?.has_gocardless && <span className="chip chip-success" style={{ marginLeft: 'auto' }}>Připojeno</span>}
+                    <SurfaceCard title="API klíče">
+                        <div className="set-key-list">
+                            <div className="set-key">
+                                <div className="set-key-head">
+                                    <strong>{Icons.accountType.bank} GoCardless</strong>
+                                    {apiKeysLoaded?.has_gocardless && <span className="chip chip-success">Připojeno</span>}
+                                    <a href="https://bankaccountdata.gocardless.com/" target="_blank" rel="noreferrer">Získat klíč →</a>
+                                </div>
+                                <input type="text" className="input" placeholder="Secret ID" value={gocardlessId} onChange={e => setGocardlessId(e.target.value)} />
+                                <input type="password" className="input" placeholder="Secret Key" value={gocardlessKey} onChange={e => setGocardlessKey(e.target.value)} />
                             </div>
-                            <div style={{ display: 'grid', gap: 6 }}>
-                                <input type="text" className="input" placeholder="Secret ID" value={gocardlessId} onChange={e => setGocardlessId(e.target.value)} style={{ fontSize: 13 }} />
-                                <input type="password" className="input" placeholder="Secret Key" value={gocardlessKey} onChange={e => setGocardlessKey(e.target.value)} style={{ fontSize: 13 }} />
+                            <div className="set-key">
+                                <div className="set-key-head">
+                                    <strong>{Icons.accountType.investment} Trading 212</strong>
+                                    {apiKeysLoaded?.has_trading212 && <span className="chip chip-success">Připojeno</span>}
+                                    <a href="https://trading212.com" target="_blank" rel="noreferrer">Získat klíč →</a>
+                                </div>
+                                <input type="password" className="input" placeholder="API Key" value={trading212Key} onChange={e => setTrading212Key(e.target.value)} />
                             </div>
-                            <a href="https://bankaccountdata.gocardless.com/" target="_blank" style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginTop: 6, textAlign: 'right' }}>Získat klíč →</a>
+                            <button className="btn set-save-btn" onClick={handleSaveKeys} disabled={savingKeys}>
+                                {savingKeys ? 'Ukládám...' : keysSaved ? '✓ Uloženo' : <>{Icons.action.save} Uložit klíče</>}
+                            </button>
                         </div>
+                    </SurfaceCard>
 
-                        <div style={{
-                            padding: 12,
-                            borderRadius: 'var(--radius-sm)',
-                            border: apiKeysLoaded?.has_trading212 ? '0.5px solid color-mix(in srgb, var(--pos) 32%, transparent)' : '0.5px solid var(--border)',
-                            background: apiKeysLoaded?.has_trading212 ? 'color-mix(in srgb, var(--pos) 6%, transparent)' : 'transparent',
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                <strong style={{ fontSize: 14 }}>{Icons.accountType.investment} Trading 212</strong>
-                                {apiKeysLoaded?.has_trading212 && <span className="chip chip-success" style={{ marginLeft: 'auto' }}>Připojeno</span>}
+                    <SurfaceCard title="Preference">
+                        <div className="set-pref">
+                            <div className="set-pref-row">
+                                <div>
+                                    <div className="set-pref-title">Výchozí měna</div>
+                                    <div className="set-pref-sub">Pro zobrazení celkových zůstatků</div>
+                                </div>
+                                <CustomSelect
+                                    value="CZK"
+                                    onChange={() => {}}
+                                    style={{ width: 'auto', minWidth: 160 }}
+                                    options={[
+                                        { value: 'CZK', label: 'CZK · Koruna' },
+                                        { value: 'EUR', label: 'EUR · Euro' },
+                                        { value: 'USD', label: 'USD · Dolar' },
+                                    ]}
+                                />
                             </div>
-                            <input type="password" className="input" placeholder="API Key" value={trading212Key} onChange={e => setTrading212Key(e.target.value)} style={{ fontSize: 13 }} />
-                            <a href="https://trading212.com" target="_blank" style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginTop: 6, textAlign: 'right' }}>Získat klíč →</a>
+                            <div className="set-pref-row stack">
+                                <div>
+                                    <div className="set-pref-title">Notifikace</div>
+                                    <div className="set-pref-sub">Push upozornění na selhaný sync a končící souhlas banky</div>
+                                </div>
+                                {!pushSupported ? (
+                                    <div className="set-pref-sub">Tenhle prohlížeč push notifikace nepodporuje.</div>
+                                ) : pushSubscribed ? (
+                                    <div className="set-pref-actions">
+                                        <span style={{ fontSize: 13, color: 'var(--pos)' }}>✓ Zapnuté na tomhle zařízení</span>
+                                        <button className="btn btn-sm" onClick={handleTestPush}>Poslat test</button>
+                                        <button className="btn btn-sm" onClick={disablePush} disabled={pushBusy} style={{ color: 'var(--neg)' }}>Vypnout</button>
+                                    </div>
+                                ) : (
+                                    <div className="set-pref-actions">
+                                        <button className="btn" onClick={enablePush} disabled={pushBusy}>
+                                            {pushBusy ? 'Zapínám…' : <>{Icons.status.warning} Zapnout notifikace</>}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                    </SurfaceCard>
+                </div>
 
-                        <button className="btn btn-primary" onClick={handleSaveKeys} disabled={savingKeys}>
-                            {savingKeys ? 'Ukládám...' : keysSaved ? '✓ Uloženo' : <>{Icons.action.save} Uložit klíče</>}
-                        </button>
-                    </div>
-                </SurfaceCard>
-            </div>
+                <div className="set-col">
+                    <SurfaceCard title="Detekce převodů" sub="Pravidla pro automatické označení interních a rodinných převodů">
+                        <div className="set-detect">
+                            <div className="set-detect-block">
+                                <div className="set-detect-title">{Icons.section.familyAccount} Rodinný účet</div>
+                                <FamilyAccountSettings />
+                            </div>
+                            <div className="set-detect-block">
+                                <div className="set-detect-title">{Icons.section.myAccounts} Moje další účty (spořicí, atd.)</div>
+                                <MyAccountPatterns />
+                            </div>
+                            <div className="set-detect-block">
+                                <div className="set-detect-title">{Icons.nav.transactions} Účty vyloučené z interních převodů (kreditka…)</div>
+                                <TransferExcludedAccounts />
+                            </div>
+                        </div>
+                    </SurfaceCard>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
-
-                <SurfaceCard title="Detekce převodů" sub="Pravidla pro automatické označení interních a rodinných převodů">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                        <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{Icons.section.familyAccount} Rodinný účet</div>
-                            <FamilyAccountSettings />
-                        </div>
-                        <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{Icons.section.myAccounts} Moje další účty (spořicí, atd.)</div>
-                            <MyAccountPatterns />
-                        </div>
-                        <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{Icons.nav.transactions} Účty vyloučené z interních převodů (kreditka…)</div>
-                            <TransferExcludedAccounts />
-                        </div>
-                        <div style={{ borderTop: '0.5px solid var(--border)', paddingTop: 14 }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>{Icons.envelope.shared} Pravidla dělení společných nákladů</div>
+                    <SurfaceCard title="Pravidla dělení společných nákladů">
+                        <div className="set-detect">
                             <ShareRulesSettings />
                         </div>
-                        <button className="btn" onClick={handleDetectTransfers} disabled={detecting}>
-                            {detecting ? 'Detekuji...' : <>{Icons.action.search} Detekovat převody nyní</>}
-                        </button>
-                    </div>
-                </SurfaceCard>
-
-                <SurfaceCard title="Preference">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                            <div>
-                                <div style={{ fontWeight: 500, fontSize: 14 }}>Výchozí měna</div>
-                                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Pro zobrazení celkových zůstatků</div>
-                            </div>
-                            <CustomSelect
-                                value="CZK"
-                                onChange={() => {}}
-                                style={{ width: 'auto', minWidth: 160 }}
-                                options={[
-                                    { value: 'CZK', label: 'CZK · Koruna' },
-                                    { value: 'EUR', label: 'EUR · Euro' },
-                                    { value: 'USD', label: 'USD · Dolar' },
-                                ]}
-                            />
-                        </div>
-                    </div>
-                </SurfaceCard>
-
-                <SurfaceCard title="Notifikace" sub="Push upozornění na selhaný sync a končící souhlas banky">
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {!pushSupported ? (
-                            <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-                                Tenhle prohlížeč push notifikace nepodporuje.
-                            </div>
-                        ) : pushSubscribed ? (
-                            <>
-                                <div style={{ fontSize: 13, color: 'var(--pos)' }}>✓ Notifikace jsou na tomhle zařízení zapnuté.</div>
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <button className="btn btn-sm" onClick={handleTestPush}>Poslat test</button>
-                                    <button className="btn btn-sm" onClick={disablePush} disabled={pushBusy} style={{ color: 'var(--neg)' }}>Vypnout</button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div style={{ fontSize: 13, color: 'var(--text-3)' }}>
-                                    Dostaneš upozornění, když sync některého účtu selže nebo když bude souhlas s bankou do 7 dní vypršet.
-                                </div>
-                                <button className="btn btn-primary" onClick={enablePush} disabled={pushBusy}>
-                                    {pushBusy ? 'Zapínám…' : 'Zapnout notifikace'}
-                                </button>
-                            </>
-                        )}
-                    </div>
-                </SurfaceCard>
-
+                    </SurfaceCard>
+                </div>
             </div>
-        </div>
+
+            <div className="set-detect-run">
+                <button className="btn btn-primary" onClick={handleDetectTransfers} disabled={detecting}>
+                    {detecting ? 'Detekuji...' : <>{Icons.action.search} Detekovat převody nyní</>}
+                </button>
+            </div>
+        </>
     );
 }
