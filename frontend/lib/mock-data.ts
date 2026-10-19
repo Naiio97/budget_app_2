@@ -133,7 +133,7 @@ export const MOCK_DASHBOARD: DashboardData = {
         'Zábava': 3000,
         'Ostatní': 7000
     },
-    recent_transactions: generateTransactions(5),
+    recent_transactions: generateTransactions(15),
     accounts: [
         { id: 'acc-1', name: 'Běžný účet', type: 'bank', balance: 25000, currency: 'CZK', institution: 'airbank' },
         { id: 'acc-2', name: 'Spořicí účet', type: 'bank', balance: 20200.50, currency: 'CZK', institution: 'csas' },
