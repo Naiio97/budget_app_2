@@ -5286,7 +5286,7 @@ body:has(.dash) {
 
 /* ══ Velikost rozhraní — celá aplikace je o něco menší než 100 % prohlížeče ═══ */
 :root { --ui-zoom: 0.8; }
-body { zoom: var(--ui-zoom); width: calc(100% / var(--ui-zoom)); }
+body { zoom: var(--ui-zoom); }
 @media (max-width: 1100px) { :root { --ui-zoom: 1; } }
 
 /* ══ NASTAVENÍ — nový vzhled všech záložek ═════════════════════════════════ */
