@@ -5248,3 +5248,8 @@ body:has(.dash) {
 .form-modal-body { padding: 20px 26px 26px; overflow-y: auto; overscroll-behavior: contain; }
 .form-modal .loan-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 560px) { .form-modal .loan-form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* karty úvěrů a předplatných: tři vedle sebe, kolik se vejde (min. ~400 px) */
+.ln-grid, .sb-grid { grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
+@media (max-width: 480px) { .ln-grid, .sb-grid { grid-template-columns: minmax(0, 1fr); } }
+.sb-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
