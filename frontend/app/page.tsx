@@ -172,20 +172,24 @@ export default function DashboardPage() {
         </div>
 
         <div className="dash-grid">
-          <NetWorthChart currency={currency} />
-          <AccountsCard accounts={data.accounts} />
+          <div className="dash-col">
+            <NetWorthChart currency={currency} />
 
-          <div className="dash-card dash-tx">
-            <div className="dash-card-head">
-              <h3>Poslední transakce</h3>
-              <Link href="/transactions" className="dash-link">
-                Zobrazit vše <ArrowIcon size={12} />
-              </Link>
+            <div className="dash-card dash-tx">
+              <div className="dash-card-head">
+                <h3>Poslední transakce</h3>
+                <Link href="/transactions" className="dash-link">
+                  Zobrazit vše <ArrowIcon size={12} />
+                </Link>
+              </div>
+              <TransactionList transactions={data.recent_transactions} showAccount />
             </div>
-            <TransactionList transactions={data.recent_transactions} showAccount />
           </div>
 
-          <CategoryChart categories={data.categories} currency={currency} />
+          <div className="dash-col">
+            <AccountsCard accounts={data.accounts} />
+            <CategoryChart categories={data.categories} currency={currency} />
+          </div>
         </div>
 
       </div>

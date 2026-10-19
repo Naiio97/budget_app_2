@@ -5268,3 +5268,8 @@ body:has(.dash) {
 .ln-card .loan-card-head > div:nth-child(2) { overflow: hidden; }
 .ln-card .loan-card-head .text-tertiary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sb-card-title { min-width: 0; }
+
+/* dashboard: dva nezávislé sloupce (účty a kategorie pod sebou bez prázdného místa) */
+.dash-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.dash-grid { align-items: start; }
+@media (max-width: 1100px) { .dash-col { display: contents; } }
