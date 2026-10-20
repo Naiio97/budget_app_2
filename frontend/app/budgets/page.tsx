@@ -272,7 +272,7 @@ export default function BudgetsPage() {
                                 <div className="bud-pace-note">zbývá {daysLeft} {daysLeft === 1 ? 'den' : daysLeft >= 2 && daysLeft <= 4 ? 'dny' : 'dní'} do konce měsíce</div>
                             </div>
                         )}
-                        <AccountsCard accounts={accounts} />
+                        <AccountsCard accounts={accounts} hideWithDrawer />
                     </aside>
                 </div>
                 </>)}

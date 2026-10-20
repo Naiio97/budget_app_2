@@ -1,7 +1,8 @@
 'use client';
 
+import { avatarColor, avatarInitials } from '@/lib/account-avatar';
+import KorunaMark from '@/components/KorunaMark';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { signOut } from 'next-auth/react';
@@ -121,10 +122,9 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const pages = NAV_PAGES.map(p => ({ ...p, icon: NAV_EMOJI[p.href] }));
     const menuPages = pages.filter(p => placements[p.href] === 'menu');
     const quickPages = pages.filter(p => placements[p.href] === 'quick');
-    // Horní lišta: pár hlavních záložek, zbytek pod „Další"
-    const PRIMARY_HREFS = ['/', '/transactions', '/rozpocet', '/investments'];
-    const primaryPages = menuPages.filter(p => PRIMARY_HREFS.includes(p.href));
-    const morePages = [...menuPages.filter(p => !PRIMARY_HREFS.includes(p.href)), ...quickPages];
+    // Horní lišta: všechny stránky z „Menu"; pod „Další" jen „Rychlé akce"
+    const primaryPages = menuPages;
+    const morePages = quickPages;
     const activeMorePage = morePages.find(p => p.href === pathname);
 
     // Drawer (hamburger) ukazuje všechno nescryté + Nastavení, ať se uživatel
@@ -230,23 +230,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         await signOut({ redirectTo: '/login' });
     };
 
-    const getBankLogo = (institution: string | undefined) => {
-        if (!institution) return null;
-        const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const inst = normalize(institution);
-        let logoFile = '';
-        if (inst.includes('airbank')) logoFile = 'airbank';
-        else if (inst.includes('csas') || inst.includes('cesk') || inst.includes('sporitelna')) logoFile = 'csas';
-        else if (inst.includes('trading212')) logoFile = 'trading212';
-        else if (inst.includes('kb') || inst.includes('komercni')) logoFile = 'kb';
-        else if (inst.includes('moneta')) logoFile = 'moneta';
-        else if (inst.includes('raiffeisen') || (inst.includes('rb') && !inst.includes('airbank'))) logoFile = 'rb';
-        else if (inst.includes('fio')) logoFile = 'fio';
-        else if (inst.includes('csob')) logoFile = 'csob';
-        else if (inst.includes('revolut')) logoFile = 'revolut';
-        return logoFile ? `/logos/${logoFile}.png` : null;
-    };
-
     const getAccountHref = (account: { id: string; type: string }) => {
         if (account.type === 'investment') return '/investments/trading212';
         if (account.type === 'manual_investment' || account.id.startsWith('manual-inv-'))
@@ -255,15 +238,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             return `/manual-account/${account.id.replace('manual-', '')}`;
         return `/accounts/${account.id}`;
     };
-
-    const getAccentColor = (type: string) => {
-        if (type === 'bank') return 'linear-gradient(135deg, #1e40c4, #0b2eb0)';
-        if (type === 'investment' || type === 'manual_investment') return 'linear-gradient(135deg, #5e5ce6, #3634a3)';
-        return 'linear-gradient(135deg, #10b981, #059669)';
-    };
-
-    const getInitials = (name: string) =>
-        name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
     const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
 
@@ -274,7 +248,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             {/* Appbar — desktop only */}
             <header className="appbar">
                 <Link href="/" className="appbar-logo">
-                    <span className="appbar-logo-mark">K</span>
+                    <span className="appbar-logo-mark"><KorunaMark size={19} /></span>
                     <span>Koruna</span>
                 </Link>
                 <nav className="appbar-nav">
@@ -420,6 +394,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <div className="mobile-tools-head">
                                 <div>
                                     <div className="mobile-tools-title-row">
+                                        <span className="appbar-logo-mark"><KorunaMark size={17} /></span>
                                         <strong>Menu</strong>
                                         <button
                                             type="button"
@@ -475,7 +450,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     {accounts.length === 0 ? (
                                         <div className="mobile-empty">Žádné účty</div>
                                     ) : accounts.map((account) => {
-                                        const logoUrl = getBankLogo(account.institution);
                                         const consent = getConsentStatus(account.consent_expires_at);
                                         const consentWarning = consent && (consent.expired || consent.expiringSoon);
                                         const syncBroken = !consentWarning && !!account.last_sync_error;
@@ -486,15 +460,9 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                                 className="mobile-account-row"
                                                 onClick={() => setIsMobileToolsOpen(false)}
                                             >
-                                                {logoUrl ? (
-                                                    <span className="mobile-account-logo bank">
-                                                        <Image src={logoUrl} alt={account.institution || account.name} width={28} height={28} />
-                                                    </span>
-                                                ) : (
-                                                    <span className="mobile-account-logo" style={{ background: getAccentColor(account.type) }}>
-                                                        {getInitials(account.name)}
-                                                    </span>
-                                                )}
+                                                <span className="mobile-account-logo" style={{ background: avatarColor(account.name) }}>
+                                                    {avatarInitials(account.name)}
+                                                </span>
                                                 <span className="mobile-account-copy">
                                                     <strong>{account.name}</strong>
                                                     {consentWarning ? (

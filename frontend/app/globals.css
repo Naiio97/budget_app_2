@@ -2940,6 +2940,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .month-nav-row > :nth-child(3) { width: 95px !important; flex-shrink: 0; }
 
   .desktop-nav { display: none; }
+  .hide-with-drawer { display: none !important; }
 
   .mobile-tools-overlay {
     display: block;
@@ -2959,25 +2960,33 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     pointer-events: auto;
   }
 
+  /* Plovoucí skleněný panel — stejný jazyk jako appbar a bottom-nav */
   .mobile-tools-drawer {
     display: flex;
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    top: calc(12px + env(safe-area-inset-top));
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
     z-index: 350;
-    width: min(340px, calc(100vw - 34px));
+    width: min(340px, calc(100vw - 46px));
     max-width: calc(100vw / var(--ui-zoom, 1));
     flex-direction: column;
     gap: 14px;
-    padding: calc(18px + env(safe-area-inset-top)) 16px calc(84px + env(safe-area-inset-bottom));
-    background: var(--surface-strong);
-    border-left: 0.5px solid var(--border);
-    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.18);
-    transform: translateX(100%);
+    padding: 18px 16px;
+    background: rgba(248, 250, 253, 0.96);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: none;
+    border-radius: 28px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14), inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
+    transform: translateX(calc(100% + 24px));
     transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.2, 1);
     overflow-y: auto;
     overflow-x: hidden;
+  }
+  [data-mode="dark"] .mobile-tools-drawer {
+    background: rgba(36, 36, 40, 0.97);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), inset 0 0.5px 0 rgba(255, 255, 255, 0.09);
   }
 
   .mobile-tools-drawer.open {
@@ -3004,6 +3013,19 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     align-items: center;
     gap: 8px;
   }
+
+  /* Logo v hlavičce: přebít `.mobile-tools-head span` (popisek „N účtů"), které
+     jinak dlaždici udělá block s odsazením a šedou barvou. Výška = tlačítka vedle. */
+  .mobile-tools-head .appbar-logo-mark {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    margin: 0 2px 0 0;
+    color: #fff;
+    font-size: inherit;
+    flex-shrink: 0;
+  }
+  .mobile-tools-head .appbar-logo-mark svg { width: 20px; height: 20px; }
 
   .mobile-tools-head span {
     display: block;
@@ -3106,10 +3128,10 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     height: 36px;
     place-items: center;
     overflow: hidden;
-    border-radius: 10px;
+    border-radius: 11px;
     color: #fff;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
   }
 
   .mobile-account-logo.bank {

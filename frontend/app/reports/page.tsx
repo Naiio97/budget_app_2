@@ -348,7 +348,7 @@ export default function ReportsPage() {
                     </div>
 
                     <aside className="rep-aside">
-                        <div className="dash rep-accounts"><AccountsCard accounts={accounts} /></div>
+                        <div className="dash rep-accounts hide-with-drawer"><AccountsCard accounts={accounts} /></div>
                         <Link href="/wrapped" className="surface rep-promo">
                             <strong>Máte úspory. Velký přehled.</strong>
                             <span>Zobrazte si celý rok — příjmy, výdaje, nejlepší měsíce i vývoj úspor.</span>

@@ -617,7 +617,7 @@ export default function InvestmentsPage() {
                 </section>
 
                     {otherAccounts.length > 0 && (
-                        <section className="surface inv2-card">
+                        <section className="surface inv2-card hide-with-drawer">
                             <div className="card-head">
                                 <h3>Ostatní účty</h3>
                                 <span className="muted small">{otherAccounts.length}</span>

@@ -4,23 +4,8 @@ import Link from 'next/link';
 import type { Account } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { getConsentStatus } from '@/lib/consent';
+import { avatarColor, avatarInitials } from '@/lib/account-avatar';
 import SyncButton from './SyncButton';
-
-// Tlumené barvy avatarů — přiřazují se podle názvu, aby byl účet pokaždé stejný.
-const AVATAR_COLORS = ['#3b7dd8', '#6b7586', '#24303f', '#2f9c78', '#7a67c4', '#c0794d', '#4a9db0'];
-
-function hash(text: string): number {
-    let h = 0;
-    for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
-    return h;
-}
-
-function initials(name: string): string {
-    const words = name.trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return '?';
-    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-    return (words[0][0] + words[1][0]).toUpperCase();
-}
 
 // Rozpoznání podle částí kódu banky (GoCardless: „CESKA_SPORITELNA_GIBACZPX", „AIRBANK_AIRACZPP")
 const BANK_NAMES: Array<[string, string]> = [
@@ -66,11 +51,12 @@ function accountHref(account: { id: string; type: string }): string {
 
 const MAX_SHOWN = 6;
 
-export default function AccountsCard({ accounts }: { accounts: Account[] }) {
+// hideWithDrawer: tam, kde je seznam účtů i v bočním menu (≤1200 px), se karta schová
+export default function AccountsCard({ accounts, hideWithDrawer = false }: { accounts: Account[]; hideWithDrawer?: boolean }) {
     const shown = accounts.slice(0, MAX_SHOWN);
 
     return (
-        <div className="dash-card dash-accounts">
+        <div className={`dash-card dash-accounts${hideWithDrawer ? ' hide-with-drawer' : ''}`}>
             <div className="dash-card-head">
                 <h3>Vaše účty</h3>
                 <div className="dash-head-tools">
@@ -86,8 +72,8 @@ export default function AccountsCard({ accounts }: { accounts: Account[] }) {
                     const syncBroken = !consentWarning && !!acc.last_sync_error;
                     return (
                         <Link key={acc.id} href={accountHref(acc)} className="dash-acc">
-                            <span className="dash-avatar" style={{ background: AVATAR_COLORS[hash(acc.name) % AVATAR_COLORS.length] }}>
-                                {initials(acc.name)}
+                            <span className="dash-avatar" style={{ background: avatarColor(acc.name) }}>
+                                {avatarInitials(acc.name)}
                             </span>
                             <span className="dash-acc-text">
                                 <span className="dash-acc-name">{acc.name}</span>

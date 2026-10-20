@@ -231,7 +231,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="dash-col">
-            <AccountsCard accounts={data.accounts} />
+            <AccountsCard accounts={data.accounts} hideWithDrawer />
             <CategoryChart categories={data.categories} currency={currency} />
           </div>
         </div>
