@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -233,6 +233,18 @@ export default function AccountDetailPage() {
     const legacyColor = THEMES.find(t => t.id === legacyThemeId)?.color ?? null;
     const themeColor = (accountId ? accountColors[accountId] : undefined) ?? legacyColor;
     const themeId = THEMES.find(t => t.color === themeColor)?.id ?? (themeColor ? 'custom' : 'default');
+    // Nádech barvy účtu přes celé pozadí stránky (včetně pruhu za horním menu) —
+    // kreslí ho `html[data-page-tint] body::before` v globals.css
+    useEffect(() => {
+        if (!themeColor) return;
+        const root = document.documentElement;
+        root.style.setProperty('--page-tint', themeColor);
+        root.setAttribute('data-page-tint', '');
+        return () => {
+            root.style.removeProperty('--page-tint');
+            root.removeAttribute('data-page-tint');
+        };
+    }, [themeColor]);
     const selectTheme = (id: string) => {
         const color = THEMES.find(t => t.id === id)?.color ?? null;
         if (!accountId) return;
@@ -306,27 +318,11 @@ export default function AccountDetailPage() {
     const monthExpense = Math.abs(thisMonthTx.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const monthNet = monthIncome - monthExpense;
 
-    const pageBgStyle: React.CSSProperties = themeColor ? {
-        position: 'relative',
-    } : {};
-    const heroBgStyle: React.CSSProperties = themeColor
-        ? { padding: '24px 28px', backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${themeColor} 24%, transparent), transparent 65%)` }
-        : { padding: '24px 28px' };
+    const heroBgStyle: React.CSSProperties = { padding: '24px 28px' };
 
     return (
         <MainLayout>
-            <div className="page-container account-detail-page" style={pageBgStyle}>
-                {/* Soft full-bleed background tint */}
-                {themeColor && (
-                    <div style={{
-                        position: 'absolute',
-                        top: -20, left: -40, right: -40,
-                        height: 520,
-                        background: `radial-gradient(ellipse at 30% 0%, color-mix(in srgb, ${themeColor} 26%, transparent), transparent 65%)`,
-                        pointerEvents: 'none',
-                        zIndex: 0,
-                    }} />
-                )}
+            <div className="page-container account-detail-page">
 
                 <div className="page-stack" style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 

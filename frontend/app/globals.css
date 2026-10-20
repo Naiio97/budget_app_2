@@ -5503,3 +5503,19 @@ body { zoom: var(--ui-zoom); }
   padding: 7px 10px; border-radius: 10px; cursor: pointer;
 }
 .set-color-reset:disabled { opacity: 0.5; cursor: default; }
+
+/* Nádech barvy účtu přes celé pozadí (detail účtu) — fixní vrstva za obsahem, od
+   úplného horního okraje, takže prosvítá i skrz sklo horního menu. */
+/* body jako vlastní stacking kontext: z-index:-1 se pak kreslí nad pozadím body, pod obsahem */
+html[data-page-tint] body { isolation: isolate; }
+html[data-page-tint] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(130% 75% at 22% 0%,
+    color-mix(in srgb, var(--page-tint) 34%, transparent) 0%,
+    color-mix(in srgb, var(--page-tint) 12%, transparent) 50%,
+    transparent 80%);
+}
