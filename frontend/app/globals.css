@@ -5119,6 +5119,12 @@ body:has(.dash) {
 .rep-kpi-value.pos { color: var(--pos); }
 .rep-kpi-value.neg { color: var(--neg); }
 .rep-kpi-sub { font-size: 13px; color: var(--text-3); }
+/* Telefon: menší padding a písmo, ať se částka v kartě vejde (např. „−462 137 Kč") */
+@media (max-width: 680px) {
+  .rep-kpi { padding: 16px; }
+  .rep-kpi-label { font-size: 13px; }
+  .rep-kpi-value { font-size: clamp(17px, 5vw, 22px); white-space: nowrap; }
+}
 
 .rep-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
 .rep-main, .rep-aside { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
