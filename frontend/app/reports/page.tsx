@@ -134,7 +134,7 @@ export default function ReportsPage() {
 
     return (
         <MainLayout>
-            <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+            <div className="page-container page-stack" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page header */}
                 <div className="page-head">

@@ -286,7 +286,7 @@ export default function Trading212DetailPage() {
 
     return (
         <MainLayout>
-            <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+            <div className="page-container page-stack" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page head */}
                 <div className="account-detail-head inv2-head">

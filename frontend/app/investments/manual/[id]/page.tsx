@@ -212,7 +212,7 @@ export default function ManualInvestmentDetailPage() {
 
     return (
         <MainLayout>
-            <div className="page-container" style={{ gap: 'var(--spacing-lg)' }}>
+            <div className="page-container page-stack" style={{ gap: 'var(--spacing-lg)' }}>
                 {/* Header */}
                 <header className="account-detail-head inv2-head">
                     <button type="button" onClick={() => router.back()} className="inv2-back" aria-label="Zpět">

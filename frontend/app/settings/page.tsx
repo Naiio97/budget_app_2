@@ -55,7 +55,7 @@ export default function SettingsPage() {
 
     return (
         <MainLayout>
-            <div className="page-container settings-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+            <div className="page-container page-stack settings-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page head */}
                 <div className="page-head">

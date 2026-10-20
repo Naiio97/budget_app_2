@@ -3541,8 +3541,10 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     height: auto;
     overflow: visible;
   }
+  /* Místo pod spodní lištou už dává .main-content (72px + safe area); další
+     padding by se sčetl na ~160px prázdna pod posledním blokem. */
   .settings-page {
-    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+    padding-bottom: var(--spacing-md);
   }
   /* `.surface` carries 24px padding by default and `.card-head` /
    * `.card-body` add even more inside it — fine on desktop, suffocating
@@ -5067,6 +5069,8 @@ body:has(.dash) {
 /* přehled investic: dva sloupce */
 .inv2-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
 .inv2-main { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
+/* Rozestupy řídí jen gap — vlastní margin-bottom karet (main-grid, feed-grid, projekce) by je zdvojil */
+.inv2-main > * { margin-bottom: 0; }
 .inv2-aside { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
 @media (max-width: 1200px) { .inv2-layout { grid-template-columns: minmax(0, 1fr); } }
 .inv2-card { padding: 0; }
@@ -5419,3 +5423,15 @@ body { zoom: var(--ui-zoom); }
 .set-rule-cat { width: 132px; min-width: 0; padding: 8px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 560px) { .seg-item.set-tab { padding: 7px 11px; } .seg-item.set-tab svg { display: none; } }
 @media (hover: none) { .set-cat-row .set-row-actions { opacity: 1; position: static; transform: none; background: transparent; padding: 0; } }
+
+/* ══ TELEFON — jednotné svislé rozestupy mezi bloky ══════════════════════
+   Jen do 680 px (desktop a tablet beze změny). Bloky na úrovni stránky i
+   sloupce karet mají všude stejnou mezeru --spacing-md (16 px); dřív se
+   střídalo 12 / 14 / 20 / 24 px podle stránky. */
+@media (max-width: 680px) {
+  .page-stack { gap: var(--spacing-md) !important; }
+  .dash { gap: var(--spacing-md); }
+  .dash-kpis, .dash-col,
+  .bud-kpis, .bud-layout, .bud-list, .bud-aside { gap: var(--spacing-md); }
+  .investment-header { margin-bottom: var(--spacing-md); }
+}

@@ -315,7 +315,7 @@ export default function AccountDetailPage() {
                     }} />
                 )}
 
-                <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                <div className="page-stack" style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* ── Page head ── */}
                 <div className="account-detail-head">
