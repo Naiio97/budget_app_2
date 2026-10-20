@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
 import GlassCard from '@/components/GlassCard';
+import FormModal from '@/components/FormModal';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import {
@@ -38,6 +40,8 @@ const euToIso = (eu: string): string | null => {
     return iso;
 };
 
+const LOAN_COLORS = ['#3b7dd8', '#7a67c4', '#2f9c78', '#c0794d', '#4a9db0'];
+
 const emptyForm = {
     name: '',
     principal: '',
@@ -54,6 +58,8 @@ export default function LoansPage() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [form, setForm] = useState(emptyForm);
     const [expandedId, setExpandedId] = useState<number | null>(null);
+    // Původní hodnoty upravovaného úvěru — kvůli rozhodnutí, zda přepočítat měsíční splátku
+    const [editOriginal, setEditOriginal] = useState<typeof emptyForm | null>(null);
 
     const { data: loans = [], isLoading } = useQuery<Loan[]>({ queryKey: queryKeys.loans, queryFn: getLoans });
     const { data: summary } = useQuery<LoansSummary>({ queryKey: queryKeys.loansSummary, queryFn: getLoansSummary });
@@ -63,7 +69,7 @@ export default function LoansPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.loansSummary });
     };
 
-    const closeForm = () => { setShowForm(false); setEditingId(null); setForm(emptyForm); };
+    const closeForm = () => { setShowForm(false); setEditingId(null); setEditOriginal(null); setForm(emptyForm); };
 
     const createMutation = useMutation({
         mutationFn: (data: LoanCreateInput) => createLoan(data),
@@ -87,7 +93,7 @@ export default function LoansPage() {
 
     const startEdit = (loan: Loan) => {
         setEditingId(loan.id);
-        setForm({
+        const values = {
             name: loan.name,
             principal: String(loan.principal),
             interest_rate: String(loan.interest_rate),
@@ -95,9 +101,10 @@ export default function LoansPage() {
             monthly_payment: String(loan.monthly_payment),
             start_date: isoToEu(loan.start_date),
             note: loan.note ?? '',
-        });
+        };
+        setForm(values);
+        setEditOriginal(values);
         setShowForm(true);
-        if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const submit = () => {
@@ -105,12 +112,21 @@ export default function LoansPage() {
         const term = parseInt(form.term_months);
         const startIso = euToIso(form.start_date);
         if (!form.name.trim() || !(principal > 0) || !(term > 0) || !startIso) return;
+        // Při úpravě: pokud se změnila jistina / úrok / počet splátek a splátku jsem ručně
+        // neměnil, nech ji dopočítat (jinak by zůstala stará částka).
+        let monthlyPayment: number | null = form.monthly_payment ? parseFloat(form.monthly_payment) : null;
+        if (editOriginal && form.monthly_payment === editOriginal.monthly_payment) {
+            const paramsChanged = form.principal !== editOriginal.principal
+                || form.interest_rate !== editOriginal.interest_rate
+                || form.term_months !== editOriginal.term_months;
+            if (paramsChanged) monthlyPayment = null;
+        }
         const data: LoanCreateInput = {
             name: form.name.trim(),
             principal,
             interest_rate: parseFloat(form.interest_rate) || 0,
             term_months: term,
-            monthly_payment: form.monthly_payment ? parseFloat(form.monthly_payment) : null,
+            monthly_payment: monthlyPayment,
             start_date: startIso,
             note: form.note.trim() || null,
         };
@@ -126,75 +142,97 @@ export default function LoansPage() {
                         <h1>Úvěry</h1>
                         <p className="sub">Přehled splátek, kolik zbývá splatit a do kdy</p>
                     </div>
-                    <button className="btn btn-primary" onClick={() => (showForm ? closeForm() : setShowForm(true))}>
-                        {showForm ? 'Zrušit' : '+ Přidat úvěr'}
+                    <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setShowForm(true); }}>
+                        + Přidat úvěr
                     </button>
                 </div>
 
-                {/* Summary */}
-                {summary && summary.active_loans > 0 && (
-                    <div className="dashboard-grid" style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <GlassCard>
-                            <div className="stat-label">Měsíční splátky celkem</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{formatCurrency(summary.total_monthly_payment)}</div>
-                        </GlassCard>
-                        <GlassCard>
-                            <div className="stat-label">Zbývá splatit</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem', color: 'var(--warn)' }}>{formatCurrency(summary.total_remaining_balance)}</div>
-                        </GlassCard>
-                        <GlassCard>
-                            <div className="stat-label">Aktivní úvěry</div>
-                            <div className="stat-value" style={{ fontSize: '1.8rem' }}>{summary.active_loans}</div>
-                        </GlassCard>
-                    </div>
-                )}
+                {/* Souhrn */}
+                {summary && summary.active_loans > 0 && (() => {
+                    const active = loans.filter(l => l.remaining_balance > 0);
+                    const total = summary.total_remaining_balance;
+                    return (
+                        <section className="surface ln-hero">
+                            <div className="ln-hero-main">
+                                <div className="ln-hero-label">Zbývá splatit</div>
+                                <div className="ln-hero-value num">{formatCurrency(total)}</div>
+                                <div className="ln-hero-sub">
+                                    z {summary.active_loans} {summary.active_loans === 1 ? 'aktivního úvěru' : summary.active_loans < 5 ? 'aktivních úvěrů' : 'aktivních úvěrů'}
+                                </div>
+                            </div>
+                            <div className="ln-hero-split">
+                                <div className="ln-hero-label">Rozložení dluhu</div>
+                                <div className="ln-split-bar">
+                                    {active.map(l => (
+                                        <span key={l.id} title={l.name} style={{ flexGrow: l.remaining_balance, background: LOAN_COLORS[loans.indexOf(l) % LOAN_COLORS.length] }} />
+                                    ))}
+                                </div>
+                                <div className="ln-split-legend">
+                                    {active.map(l => (
+                                        <span key={l.id}>
+                                            <i style={{ background: LOAN_COLORS[loans.indexOf(l) % LOAN_COLORS.length] }} />
+                                            {l.name} <b className="num">{total > 0 ? ((l.remaining_balance / total) * 100).toFixed(1).replace('.', ',') : 0} %</b>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="ln-hero-side">
+                                <div className="ln-hero-label">Měsíční splátky celkem</div>
+                                <div className="ln-hero-value small num">{formatCurrency(summary.total_monthly_payment)}</div>
+                                <div className="ln-hero-sub">z {summary.active_loans} aktivních úvěrů</div>
+                            </div>
+                        </section>
+                    );
+                })()}
 
-                {/* Add form */}
                 {showForm && (
-                    <GlassCard style={{ marginBottom: 'var(--spacing-lg)' }}>
-                        <h3 style={{ marginBottom: 'var(--spacing-md)' }}>{editingId != null ? 'Upravit úvěr' : 'Nový úvěr'}</h3>
-                        <div className="loan-form-grid">
-                            <label className="loan-field">
-                                <span>Název</span>
-                                <input className="input" placeholder="Hypotéka" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Jistina (Kč)</span>
-                                <input className="input" type="number" placeholder="2 500 000" value={form.principal} onChange={e => setForm({ ...form, principal: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Úrok (% p.a.)</span>
-                                <input className="input" type="number" step="0.01" placeholder="5.9" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Počet splátek</span>
-                                <input className="input" type="number" placeholder="360" value={form.term_months} onChange={e => setForm({ ...form, term_months: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>Měsíční splátka (nepovinné)</span>
-                                <input className="input" type="number" placeholder="dopočítá se" value={form.monthly_payment} onChange={e => setForm({ ...form, monthly_payment: e.target.value })} />
-                            </label>
-                            <label className="loan-field">
-                                <span>První splátka</span>
-                                <input className="input" type="text" inputMode="numeric" placeholder="dd.mm.rrrr" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
-                            </label>
-                            <label className="loan-field loan-field-wide">
-                                <span>Poznámka (nepovinné)</span>
-                                <input className="input" placeholder="Banka, číslo smlouvy…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
-                            </label>
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
-                            <button className="btn btn-primary" onClick={submit} disabled={saving}>
-                                {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit úvěr'}
-                            </button>
-                            <button className="btn" onClick={closeForm}>Zrušit</button>
-                        </div>
-                        {saveError && (
-                            <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>
-                                {editingId != null ? 'Nepodařilo se uložit změny.' : 'Nepodařilo se vytvořit úvěr.'}
-                            </p>
-                        )}
-                    </GlassCard>
+                    <FormModal
+                        title={editingId != null ? 'Upravit úvěr' : 'Nový úvěr'}
+                        subtitle={editingId != null ? form.name : 'Zadejte parametry úvěru, splátkový kalendář se dopočítá.'}
+                        onClose={closeForm}
+                    >
+                    <div className="loan-form-grid">
+                        <label className="loan-field">
+                            <span>Název</span>
+                            <input className="input" placeholder="Hypotéka" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Jistina (Kč)</span>
+                            <input className="input" type="number" placeholder="2 500 000" value={form.principal} onChange={e => setForm({ ...form, principal: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Úrok (% p.a.)</span>
+                            <input className="input" type="number" step="0.01" placeholder="5.9" value={form.interest_rate} onChange={e => setForm({ ...form, interest_rate: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Počet splátek</span>
+                            <input className="input" type="number" placeholder="360" value={form.term_months} onChange={e => setForm({ ...form, term_months: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>Měsíční splátka (nepovinné)</span>
+                            <input className="input" type="number" placeholder="dopočítá se" value={form.monthly_payment} onChange={e => setForm({ ...form, monthly_payment: e.target.value })} />
+                        </label>
+                        <label className="loan-field">
+                            <span>První splátka</span>
+                            <input className="input" type="text" inputMode="numeric" placeholder="dd.mm.rrrr" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
+                        </label>
+                        <label className="loan-field loan-field-wide">
+                            <span>Poznámka (nepovinné)</span>
+                            <input className="input" placeholder="Banka, číslo smlouvy…" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
+                        </label>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 'var(--spacing-md)' }}>
+                        <button className="btn btn-primary" onClick={submit} disabled={saving}>
+                            {saving ? 'Ukládám…' : editingId != null ? 'Uložit změny' : 'Vytvořit úvěr'}
+                        </button>
+                        <button className="btn" onClick={closeForm}>Zrušit</button>
+                    </div>
+                    {saveError && (
+                        <p style={{ color: 'var(--neg)', marginTop: 8, fontSize: 13 }}>
+                            {editingId != null ? 'Nepodařilo se uložit změny.' : 'Nepodařilo se vytvořit úvěr.'}
+                        </p>
+                    )}
+                    </FormModal>
                 )}
 
                 {/* Loans list */}
@@ -207,11 +245,12 @@ export default function LoansPage() {
                         </p>
                     </GlassCard>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                        {loans.map(loan => (
+                    <div className="ln-grid">
+                        {loans.map((loan, index) => (
                             <LoanCard
                                 key={loan.id}
                                 loan={loan}
+                                color={LOAN_COLORS[index % LOAN_COLORS.length]}
                                 expanded={expandedId === loan.id}
                                 onToggle={() => setExpandedId(expandedId === loan.id ? null : loan.id)}
                                 onEdit={() => startEdit(loan)}
@@ -225,8 +264,9 @@ export default function LoansPage() {
     );
 }
 
-function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
+function LoanCard({ loan, color, expanded, onToggle, onEdit, onDelete }: {
     loan: Loan;
+    color: string;
     expanded: boolean;
     onToggle: () => void;
     onEdit: () => void;
@@ -238,6 +278,14 @@ function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
         queryFn: () => getLoanSchedule(loan.id),
         enabled: expanded,
     });
+
+    // Escape zavře okno kalendáře
+    useEffect(() => {
+        if (!expanded) return;
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onToggle(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [expanded, onToggle]);
 
     const toggleMutation = useMutation({
         mutationFn: ({ paymentId, isPaid }: { paymentId: number; isPaid: boolean }) =>
@@ -253,9 +301,12 @@ function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
     });
 
     return (
-        <GlassCard>
+        <GlassCard className="ln-card">
             <div className="loan-card-head">
-                <div style={{ minWidth: 0 }}>
+                <span className="ln-icon" style={{ background: color }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></svg>
+                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
                     <div className="loan-card-title">{loan.name}</div>
                     <div className="text-tertiary" style={{ fontSize: 12, marginTop: 2 }}>
                         {formatCurrency(loan.monthly_payment, loan.currency)}/měs · {loan.interest_rate}% p.a. · do {formatDate(loan.end_date)}
@@ -316,46 +367,63 @@ function LoanCard({ loan, expanded, onToggle, onEdit, onDelete }: {
                 </div>
             </div>
 
-            <button className="btn btn-sm" style={{ marginTop: 'var(--spacing-md)' }} onClick={onToggle}>
-                {expanded ? 'Skrýt splátkový kalendář' : 'Zobrazit splátkový kalendář'}
+            <button className="btn btn-sm ln-cal-btn" onClick={onToggle}>
+                Zobrazit splátkový kalendář
             </button>
 
-            {expanded && (
-                <div className="loan-schedule">
-                    {isLoading ? (
-                        <p className="text-secondary" style={{ padding: 'var(--spacing-md)' }}>Načítám kalendář…</p>
-                    ) : (
-                        <div className="loan-schedule-scroll">
-                            <div className="loan-schedule-row loan-schedule-head">
-                                <span>#</span>
-                                <span>Datum</span>
-                                <span style={{ textAlign: 'right' }}>Splátka</span>
-                                <span style={{ textAlign: 'right' }}>Jistina</span>
-                                <span style={{ textAlign: 'right' }}>Úrok</span>
-                                <span style={{ textAlign: 'right' }}>Zůstatek</span>
-                                <span style={{ textAlign: 'center' }}>Zapl.</span>
-                            </div>
-                            {schedule.map(p => (
-                                <div key={p.id} className={`loan-schedule-row ${p.is_paid ? 'paid' : ''}`}>
-                                    <span>{p.installment_number}</span>
-                                    <span>{formatDate(p.due_date)}</span>
-                                    <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.amount, loan.currency)}</span>
-                                    <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.principal_part, loan.currency)}</span>
-                                    <span className="num" style={{ textAlign: 'right', color: 'var(--text-3)' }}>{formatCurrency(p.interest_part, loan.currency)}</span>
-                                    <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.remaining_balance, loan.currency)}</span>
-                                    <span style={{ textAlign: 'center' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={p.is_paid}
-                                            disabled={toggleMutation.isPending}
-                                            onChange={e => toggleMutation.mutate({ paymentId: p.id, isPaid: e.target.checked })}
-                                        />
-                                    </span>
+            {expanded && createPortal(
+                <div className="modal-backdrop tx-modal-overlay" onClick={onToggle}>
+                    <div className="modal ln-modal" onClick={e => e.stopPropagation()} role="dialog" aria-label={`Splátkový kalendář — ${loan.name}`}>
+                        <div className="ln-modal-head">
+                            <span className="ln-icon" style={{ background: color }}>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></svg>
+                            </span>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div className="loan-card-title">{loan.name}</div>
+                                <div className="text-tertiary" style={{ fontSize: 12, marginTop: 2 }}>
+                                    Splátkový kalendář · {loan.paid_count}/{loan.term_months} splátek
                                 </div>
-                            ))}
+                            </div>
+                            <button onClick={onToggle} className="btn btn-icon btn-ghost" aria-label="Zavřít">×</button>
                         </div>
-                    )}
+                        <div className="loan-schedule ln-modal-body">
+            {isLoading ? (
+                <p className="text-secondary" style={{ padding: 'var(--spacing-md)' }}>Načítám kalendář…</p>
+            ) : (
+                <div className="loan-schedule-scroll">
+                    <div className="loan-schedule-row loan-schedule-head">
+                        <span>#</span>
+                        <span>Datum</span>
+                        <span style={{ textAlign: 'right' }}>Splátka</span>
+                        <span style={{ textAlign: 'right' }}>Jistina</span>
+                        <span style={{ textAlign: 'right' }}>Úrok</span>
+                        <span style={{ textAlign: 'right' }}>Zůstatek</span>
+                        <span style={{ textAlign: 'center' }}>Zapl.</span>
+                    </div>
+                    {schedule.map(p => (
+                        <div key={p.id} className={`loan-schedule-row ${p.is_paid ? 'paid' : ''}`}>
+                            <span>{p.installment_number}</span>
+                            <span>{formatDate(p.due_date)}</span>
+                            <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.amount, loan.currency)}</span>
+                            <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.principal_part, loan.currency)}</span>
+                            <span className="num" style={{ textAlign: 'right', color: 'var(--text-3)' }}>{formatCurrency(p.interest_part, loan.currency)}</span>
+                            <span className="num" style={{ textAlign: 'right' }}>{formatCurrency(p.remaining_balance, loan.currency)}</span>
+                            <span style={{ textAlign: 'center' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={p.is_paid}
+                                    disabled={toggleMutation.isPending}
+                                    onChange={e => toggleMutation.mutate({ paymentId: p.id, isPaid: e.target.checked })}
+                                />
+                            </span>
+                        </div>
+                    ))}
                 </div>
+            )}
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </GlassCard>
     );

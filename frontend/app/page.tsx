@@ -2,15 +2,18 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import TransactionList from '@/components/TransactionList';
 import NetWorthChart from '@/components/NetWorthChart';
 import CategoryChart from '@/components/CategoryChart';
-import { getDashboard } from '@/lib/api';
+import AccountsCard from '@/components/AccountsCard';
+import ArrowIcon from '@/components/ArrowIcon';
+import { apiFetch, getDashboard } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { queryKeys } from '@/lib/queryKeys';
+import type { Transaction } from '@/lib/api';
 
 // ── Payday logic ────────────────────────────────────────────────
 const FIXED_HOLIDAYS: string[] = [
@@ -78,11 +81,69 @@ function getPaydayText(today: Date, payday: Date): string {
   return `Do výplaty zbývá ${diff} ${diff >= 5 ? 'dní' : diff >= 2 ? 'dny' : 'den'}`;
 }
 
+// Poslední transakce: karta se natáhne na výšku sloupce a ukáže tolik řádků, kolik se
+// vejde — spodní okraje obou sloupců tak sedí bez prázdného místa.
+function RecentTransactions({ transactions }: { transactions: Transaction[] }) {
+  const fillRef = useRef<HTMLDivElement>(null);
+  const [count, setCount] = useState(5);
+  const [height, setHeight] = useState(0);
+  const failAt = useRef(Infinity); // počet řádků, který se už nevešel (platí do změny výšky)
+
+  useEffect(() => {
+    const el = fillRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => { failAt.current = Infinity; setHeight(el.clientHeight); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Doladění po vykreslení: přidávej řádky, dokud se vejdou, a přebytečné ubírej.
+  useEffect(() => {
+    const el = fillRef.current;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      // Na úzkých displejích (sloupce pod sebou) se bere pevný počet
+      if (getComputedStyle(el).position === 'static') { setCount(5); return; }
+      const content = (el.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0; // offsetHeight: nezávislé na CSS zoomu
+      if (content > el.clientHeight + 1 && count > 3) {
+        failAt.current = count;
+        setCount(count - 1);
+      } else if (count < transactions.length && count + 1 < failAt.current && el.clientHeight - content > 70) {
+        setCount(count + 1);
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [count, height, transactions.length]);
+
+  return (
+    <div className="dash-card dash-tx">
+      <div className="dash-card-head">
+        <h3>Poslední transakce</h3>
+        <Link href="/transactions" className="dash-link">
+          Zobrazit vše <ArrowIcon size={12} />
+        </Link>
+      </div>
+      <div className="dash-tx-body">
+        <div className="dash-tx-fill" ref={fillRef}>
+          <TransactionList transactions={transactions.slice(0, count)} showAccount />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.dashboard,
     // Wrap so React Query's context object isn't passed as `includeHidden`.
     queryFn: () => getDashboard(),
+  });
+
+  // Aktuální výplatní období z backendu (stejné jako v rozpočtu) — počet dní do výplaty.
+  const { data: period } = useQuery<{ year_month: string; start: string; end: string }>({
+    queryKey: ['salaryPeriodCurrent'],
+    queryFn: () => apiFetch('/salary-period/current').then(r => r.json()),
+    staleTime: 5 * 60 * 1000,
   });
 
   const [now, setNow] = useState(() => new Date());
@@ -99,97 +160,79 @@ export default function DashboardPage() {
     );
   }
 
-  const savingsRate = data.monthly.income > 0
-    ? Math.round((data.monthly.savings / data.monthly.income) * 100)
-    : 0;
+  const { income, expenses, savings } = data.monthly;
+  const currency = data.summary.currency;
+  const coverage = expenses > 0 ? Math.round((income / expenses) * 100) : null;
+  const gap = expenses - income;
+  const totalWorth = data.summary.total_balance;
+  const investShare = totalWorth > 0 ? (data.summary.investment_balance / totalWorth) * 100 : 0;
+  const paydayText = period?.end
+    ? getPaydayText(now, new Date(period.end + 'T00:00:00'))
+    : getPaydayText(now, getNextPayday(now));
 
   return (
     <MainLayout>
-      <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+      <div className="page-container dash">
 
         {/* Page header */}
         <div className="page-head">
           <div>
-            <h1>{now ? `${getGreeting(now.getHours())}, Nicolas.` : 'Načítám…'}</h1>
-            <div className="sub">
-              {now && (
-                <>
-                  {formatDayLabel(now)}
-                  {' · '}
-                  {getPaydayText(now, getNextPayday(now))}
-                </>
-              )}
-            </div>
+            <div className="dash-eyebrow">{formatDayLabel(now)}</div>
+            <h1>Vaše finance, přehledně.</h1>
+            <div className="sub">{getGreeting(now.getHours())}, Nicolasi. Vše důležité máte na dosah.</div>
           </div>
         </div>
 
-        {/* KPI row — 3 cards */}
-        <div className="grid-3">
-          <div className="surface kpi">
-            <div className="kpi-label">Příjmy tento měsíc</div>
-            <div className="kpi-value num" style={{ color: 'var(--pos)' }}>
-              {formatCurrency(data.monthly.income)}
+        {/* KPI row */}
+        <div className="dash-kpis">
+          <Link href="/transactions" className="dash-card dash-kpi">
+            <div className="dash-kpi-top"><span>Příjmy</span><ArrowIcon /></div>
+            <div className="dash-kpi-value num">{formatCurrency(income, currency)}</div>
+            <div className="dash-kpi-sub">
+              {coverage != null ? `Příjmy pokryly ${coverage} % výdajů.` : 'Zatím žádné výdaje.'}
             </div>
-            <div className="kpi-sub">
-              <span>celkem přijato</span>
+          </Link>
+          <Link href="/transactions" className="dash-card dash-kpi">
+            <div className="dash-kpi-top"><span>Výdaje</span><ArrowIcon /></div>
+            <div className="dash-kpi-value num">{formatCurrency(expenses, currency)}</div>
+            <div className="dash-kpi-sub">
+              {gap > 0
+                ? `O ${formatCurrency(gap, currency)} více než příjmy`
+                : `O ${formatCurrency(-gap, currency)} méně než příjmy`}
             </div>
-          </div>
-          <div className="surface kpi">
-            <div className="kpi-label">Výdaje tento měsíc</div>
-            <div className="kpi-value num">
-              {formatCurrency(data.monthly.expenses)}
+          </Link>
+          <Link href="/investments" className="dash-card dash-kpi">
+            <div className="dash-kpi-top"><span>Investice</span><ArrowIcon /></div>
+            <div className="dash-kpi-value num">{formatCurrency(data.summary.investment_balance, currency)}</div>
+            <div className="dash-kpi-sub">{investShare.toFixed(1).replace('.', ',')} % vašeho čistého jmění.</div>
+          </Link>
+          <Link href="/rozpocet" className="dash-card dash-kpi">
+            <div className="dash-kpi-top">
+              <span className="dash-kpi-label-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z" />
+                </svg>
+                Měsíční bilance
+              </span>
+              <ArrowIcon />
             </div>
-            <div className="kpi-sub">
-              <span>celkem utraceno</span>
+            <div className={`dash-kpi-value num ${savings >= 0 ? 'pos' : 'neg'}`}>
+              {savings < 0 ? '−' : ''}{formatCurrency(Math.abs(savings), currency)}
             </div>
-          </div>
-          <div className="surface kpi">
-            <div className="kpi-label">Úspora</div>
-            <div className="kpi-value num" style={{ color: data.monthly.savings >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
-              {formatCurrency(data.monthly.savings)}
-            </div>
-            <div className="kpi-sub">
-              {savingsRate > 0 && (
-                <span className="chip chip-accent">{savingsRate} % z příjmu</span>
-              )}
-            </div>
-          </div>
+            <div className="dash-kpi-sub">{paydayText}</div>
+          </Link>
         </div>
 
-        {/* Net worth chart */}
-        <div className="surface">
-          <div className="card-head">
-            <h3>Vývoj majetku</h3>
-          </div>
-          <div className="card-body">
-            <NetWorthChart currency={data.summary.currency} />
-          </div>
-        </div>
+        <div className="dash-grid">
+          <div className="dash-col">
+            <NetWorthChart currency={currency} />
 
-        {/* Bottom row: recent transactions + category breakdown */}
-        <div className="grid-2">
-          {/* Recent transactions */}
-          <div className="surface">
-            <div className="card-head">
-              <h3>Poslední transakce</h3>
-              <Link href="/transactions" className="btn btn-ghost btn-sm">
-                Zobrazit vše →
-              </Link>
-            </div>
-            <div className="card-body-nopad">
-              <TransactionList transactions={data.recent_transactions} showAccount />
-            </div>
+            <RecentTransactions transactions={data.recent_transactions} />
           </div>
 
-          {/* Category breakdown */}
-          <div className="surface">
-            <div className="card-head">
-              <h3>Výdaje podle kategorií</h3>
-              <span className="muted" style={{ fontSize: 12 }}>Tento měsíc</span>
-            </div>
-            <div className="card-body">
-              <CategoryChart categories={data.categories} currency={data.summary.currency} />
-            </div>
+          <div className="dash-col">
+            <AccountsCard accounts={data.accounts} hideWithDrawer />
+            <CategoryChart categories={data.categories} currency={currency} />
           </div>
         </div>
 

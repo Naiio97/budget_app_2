@@ -145,7 +145,7 @@ async def get_dashboard(
     if not include_hidden:
         tx_q = tx_q.where(AccountModel.is_visible == True)
     tx_result = await db.execute(
-        tx_q.order_by(TransactionModel.date.desc()).limit(5)
+        tx_q.order_by(TransactionModel.date.desc()).limit(15)
     )
     recent_tx_rows = tx_result.all()
 

@@ -117,9 +117,8 @@ export default function SalaryEstimateCard({ workMonth, workMonthName, refreshBu
     };
 
     const salaryCfgField = (field: 'base_monthly' | 'prumer' | 'prumer_quarter', label: string, numeric: boolean) => (
-        <div className="plan-row" key={field}>
+        <div className="plan-row plan-row--flat" key={field}>
             <span className="plan-label">{label}</span>
-            <span className="plan-row-spacer" />
             <input type={numeric ? 'number' : 'text'} className="plan-input plan-amount" placeholder={numeric ? '0' : 'RRRR-Q1'}
                 value={salaryCfgEdit[field] ?? (salaryConfig?.[field] == null ? '' : String(salaryConfig[field]))}
                 onChange={(e) => setSalaryCfgEdit(p => ({ ...p, [field]: e.target.value }))}
@@ -154,19 +153,18 @@ export default function SalaryEstimateCard({ workMonth, workMonthName, refreshBu
                 {salaryCfgField('base_monthly', 'Měsíční mzda', true)}
                 {salaryCfgField('prumer', 'Průměr náhrady (Kč/h)', true)}
                 {salaryCfgField('prumer_quarter', 'Kvartál průměru', false)}
-            </div>
-            <div className="plan-rows">
-                <div className="plan-row">
+                <div className="plan-row plan-row--flat">
                     <span className="plan-label">Roční bonus (Kč)</span>
-                    <span className="plan-row-spacer" />
                     <input type="number" className="plan-input plan-amount" placeholder="0"
                         value={salaryBonus} onChange={(e) => setSalaryBonus(e.target.value)} />
                 </div>
+            </div>
+            <div className="plan-rows salary-actions-wrap">
                 <input ref={salaryFileRef} type="file" accept=".xlsx" style={{ display: 'none' }}
                     onChange={(e) => { setSalaryFile(e.target.files?.[0] ?? null); e.target.value = ''; }} />
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="salary-actions">
                     <button className="btn btn-sm" onClick={() => salaryFileRef.current?.click()}
-                        style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {salaryFile ? salaryFile.name : 'Nahrát timesheet (.xlsx)'}
                     </button>
                     <button className="btn btn-primary btn-sm" disabled={!salaryFile || salaryUploading} onClick={computeSalaryEstimate}>

@@ -1,12 +1,14 @@
 'use client';
 
+import { avatarColor, avatarInitials } from '@/lib/account-avatar';
+import KorunaMark from '@/components/KorunaMark';
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { ReactNode, useState, useEffect, useRef } from 'react';
+import { ReactNode, useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { signOut } from 'next-auth/react';
-import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { syncData, getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { getSyncStatus, SyncStatus, clearBackendTokenCache } from '@/lib/api';
+import { useSync } from '@/lib/use-sync';
 import { formatCurrency } from '@/lib/format';
 import { useAccounts } from '@/contexts/AccountsContext';
 import { getConsentStatus } from '@/lib/consent';
@@ -54,6 +56,21 @@ interface MainLayoutProps {
 // světlý ve světlém; iOS podle jasu barvy zvolí i barvu textu hodin). Držíme ho
 // v obou režimech — prohlížeč i PWA. Bez něj iOS spadne na defaultní světlou lištu.
 const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
+const THEME_EVENT = 'koruna-theme-change';
+
+function subscribeTheme(onChange: () => void) {
+    window.addEventListener(THEME_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+        window.removeEventListener(THEME_EVENT, onChange);
+        window.removeEventListener('storage', onChange);
+    };
+}
+
+function readTheme(): 'dark' | 'light' {
+    return localStorage.getItem('theme') === 'light' ? 'light' : 'dark';
+}
+
 function applyThemeToDocument(mode: 'dark' | 'light') {
     document.documentElement.setAttribute('data-mode', mode);
     let meta = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement | null;
@@ -67,16 +84,20 @@ function applyThemeToDocument(mode: 'dark' | 'light') {
 
 export default function MainLayout({ children, disableScroll = false }: MainLayoutProps) {
     const pathname = usePathname();
-    const [isSyncing, setIsSyncing] = useState(false);
     const [isCompactNavOpen, setIsCompactNavOpen] = useState(false);
     const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [hasMounted, setHasMounted] = useState(false);
-    const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+    // false na serveru a při hydrataci, true v prohlížeči — bez setState v efektu
+    const hasMounted = useSyncExternalStore(() => () => {}, () => true, () => false);
+    const theme = useSyncExternalStore(subscribeTheme, readTheme, () => 'dark' as const);
     const [navHidden, setNavHidden] = useState(false);
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const userMenuRef = useRef<HTMLDivElement>(null);
+    const [isMoreOpen, setIsMoreOpen] = useState(false);
+    const moreRef = useRef<HTMLDivElement>(null);
     const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
-    const queryClient = useQueryClient();
+    const { sync: handleSync, isSyncing } = useSync();
 
     const { data: syncStatus } = useQuery<SyncStatus>({
         queryKey: queryKeys.syncStatus,
@@ -101,6 +122,10 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const pages = NAV_PAGES.map(p => ({ ...p, icon: NAV_EMOJI[p.href] }));
     const menuPages = pages.filter(p => placements[p.href] === 'menu');
     const quickPages = pages.filter(p => placements[p.href] === 'quick');
+    // Horní lišta: všechny stránky z „Menu"; pod „Další" jen „Rychlé akce"
+    const primaryPages = menuPages;
+    const morePages = quickPages;
+    const activeMorePage = morePages.find(p => p.href === pathname);
 
     // Drawer (hamburger) ukazuje všechno nescryté + Nastavení, ať se uživatel
     // vždycky dostane všude i bez appbaru.
@@ -115,18 +140,14 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const bottomNavItems = menuPages.slice(0, 4);
 
     useEffect(() => {
-        setHasMounted(true);
-        const saved = localStorage.getItem('theme') as 'dark' | 'light' | null;
-        const initial = saved ?? 'dark';
-        setTheme(initial);
-        applyThemeToDocument(initial);
-    }, []);
+        applyThemeToDocument(theme);
+    }, [theme]);
 
     const toggleTheme = () => {
         const next = theme === 'dark' ? 'light' : 'dark';
-        setTheme(next);
         localStorage.setItem('theme', next);
         applyThemeToDocument(next);
+        window.dispatchEvent(new Event(THEME_EVENT));
     };
 
     useEffect(() => {
@@ -136,11 +157,15 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    useEffect(() => {
+    const [lastPathname, setLastPathname] = useState(pathname);
+    if (lastPathname !== pathname) {
+        setLastPathname(pathname);
         setIsCompactNavOpen(false);
         setIsMobileToolsOpen(false);
+        setIsUserMenuOpen(false);
+        setIsMoreOpen(false);
         setNavHidden(false);
-    }, [pathname]);
+    }
 
     // Instagram-style bottom nav: hide on scroll down, reveal on scroll up.
     useEffect(() => {
@@ -164,6 +189,34 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         return () => el.removeEventListener('scroll', onScroll);
     }, [isMobile]);
 
+    useEffect(() => {
+        if (!isUserMenuOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setIsUserMenuOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsUserMenuOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [isUserMenuOpen]);
+
+    useEffect(() => {
+        if (!isMoreOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (moreRef.current && !moreRef.current.contains(e.target as Node)) setIsMoreOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsMoreOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [isMoreOpen]);
+
     const handleLogout = async () => {
         clearBackendTokenCache();
         // Clear the idle/session clock so the next login starts a fresh hour.
@@ -177,53 +230,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
         await signOut({ redirectTo: '/login' });
     };
 
-    const handleSync = async () => {
-        if (isSyncing) return;
-        setIsSyncing(true);
-        try {
-            const result = await syncData();
-            if (result.failed_accounts && result.failed_accounts.length > 0) {
-                alert(`Sync se nepovedl pro: ${result.failed_accounts.join(', ')}. Zkontroluj připojení banky v Nastavení.`);
-            }
-            await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
-            queryClient.invalidateQueries({ queryKey: queryKeys.budgetOverview });
-            queryClient.invalidateQueries({ queryKey: queryKeys.budgets });
-            queryClient.invalidateQueries({ queryKey: queryKeys.investmentPortfolio });
-            queryClient.invalidateQueries({ queryKey: queryKeys.portfolioDetail });
-            queryClient.invalidateQueries({ queryKey: queryKeys.portfolioPositions });
-            queryClient.invalidateQueries({ queryKey: queryKeys.dividends });
-            queryClient.invalidateQueries({ queryKey: ['portfolio-history'] });
-            queryClient.invalidateQueries({ queryKey: ['transactions'] });
-            queryClient.invalidateQueries({ queryKey: ['budget-transactions'] });
-            queryClient.invalidateQueries({ queryKey: queryKeys.syncStatus });
-            queryClient.invalidateQueries({ queryKey: queryKeys.pies });
-        } catch (error) {
-            console.error('Sync failed:', error);
-            alert('Synchronizace selhala. Zkontrolujte logy nebo nastavení.');
-        } finally {
-            // I selhaný běh se zapisuje do historie — obnovit vždy
-            queryClient.invalidateQueries({ queryKey: queryKeys.syncHistory });
-            setIsSyncing(false);
-        }
-    };
-
-    const getBankLogo = (institution: string | undefined) => {
-        if (!institution) return null;
-        const normalize = (str: string) => str.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const inst = normalize(institution);
-        let logoFile = '';
-        if (inst.includes('airbank')) logoFile = 'airbank';
-        else if (inst.includes('csas') || inst.includes('cesk') || inst.includes('sporitelna')) logoFile = 'csas';
-        else if (inst.includes('trading212')) logoFile = 'trading212';
-        else if (inst.includes('kb') || inst.includes('komercni')) logoFile = 'kb';
-        else if (inst.includes('moneta')) logoFile = 'moneta';
-        else if (inst.includes('raiffeisen') || (inst.includes('rb') && !inst.includes('airbank'))) logoFile = 'rb';
-        else if (inst.includes('fio')) logoFile = 'fio';
-        else if (inst.includes('csob')) logoFile = 'csob';
-        else if (inst.includes('revolut')) logoFile = 'revolut';
-        return logoFile ? `/logos/${logoFile}.png` : null;
-    };
-
     const getAccountHref = (account: { id: string; type: string }) => {
         if (account.type === 'investment') return '/investments/trading212';
         if (account.type === 'manual_investment' || account.id.startsWith('manual-inv-'))
@@ -232,15 +238,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             return `/manual-account/${account.id.replace('manual-', '')}`;
         return `/accounts/${account.id}`;
     };
-
-    const getAccentColor = (type: string) => {
-        if (type === 'bank') return 'linear-gradient(135deg, #1e40c4, #0b2eb0)';
-        if (type === 'investment' || type === 'manual_investment') return 'linear-gradient(135deg, #5e5ce6, #3634a3)';
-        return 'linear-gradient(135deg, #10b981, #059669)';
-    };
-
-    const getInitials = (name: string) =>
-        name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
     const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
 
@@ -251,11 +248,11 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
             {/* Appbar — desktop only */}
             <header className="appbar">
                 <Link href="/" className="appbar-logo">
-                    <span className="appbar-logo-mark">K</span>
+                    <span className="appbar-logo-mark"><KorunaMark size={19} /></span>
                     <span>Koruna</span>
                 </Link>
                 <nav className="appbar-nav">
-                    {menuPages.map((item) => (
+                    {primaryPages.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
@@ -265,6 +262,42 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <span>{item.label}</span>
                         </Link>
                     ))}
+                    {activeMorePage && (
+                        <Link href={activeMorePage.href} className="appbar-nav-item active">
+                            {APPBAR_ICONS[activeMorePage.href]}
+                            <span>{activeMorePage.label}</span>
+                        </Link>
+                    )}
+                    {morePages.length > 0 && (
+                        <div className="appbar-more" ref={moreRef}>
+                            <button
+                                className={`appbar-nav-item ${isMoreOpen ? 'active' : ''}`}
+                                onClick={() => setIsMoreOpen(o => !o)}
+                                aria-expanded={isMoreOpen}
+                                aria-haspopup="menu"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+                                    <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+                                </svg>
+                                <span>Další</span>
+                            </button>
+                            {isMoreOpen && (
+                                <div className="user-menu more-menu" role="menu">
+                                    {morePages.map(item => (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            role="menuitem"
+                                            className={`user-menu-item ${pathname === item.href ? 'current' : ''}`}
+                                            onClick={() => setIsMoreOpen(false)}
+                                        >
+                                            <span>{APPBAR_ICONS[item.href]}</span><span>{item.label}</span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </nav>
                 <span className="appbar-divider" aria-hidden />
                 <button
@@ -282,6 +315,35 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                 >
                     {theme === 'dark' ? SunIcon : MoonIcon}
                 </button>
+                <div className="appbar-user" ref={userMenuRef}>
+                    <button
+                        className="appbar-avatar"
+                        onClick={() => setIsUserMenuOpen(o => !o)}
+                        aria-label="Nabídka účtu"
+                        aria-expanded={isUserMenuOpen}
+                    >
+                        NB
+                    </button>
+                    {isUserMenuOpen && (
+                        <div className="user-menu" role="menu">
+                            <button className="user-menu-item" role="menuitem" onClick={() => { handleSync(); setIsUserMenuOpen(false); }} disabled={isSyncing}>
+                                <span>{SyncIcon}</span><span>{isSyncing ? 'Synchronizuji…' : 'Synchronizovat'}</span>
+                            </button>
+                            <Link href="/settings" className="user-menu-item" role="menuitem" onClick={() => setIsUserMenuOpen(false)}>
+                                <span>{APPBAR_ICONS['/settings']}</span><span>Nastavení</span>
+                            </Link>
+                            {syncStatus && syncStatus.status !== 'never' && syncStatus.last_sync && (
+                                <div className="user-menu-note">
+                                    Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}
+                                    {' · '}{syncStatus.syncs_today}/4 dnes
+                                </div>
+                            )}
+                            <button className="user-menu-item danger" role="menuitem" onClick={handleLogout}>
+                                <span>↩</span><span>Odhlásit se</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
             </header>
 
             <div ref={layoutRef} className={`layout ${hasMounted && disableScroll ? 'layout-no-scroll' : ''}`}>
@@ -321,116 +383,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                     {children}
                 </main>
 
-                {/* Right panel — same on every page, scrolls with content */}
-                <aside className="right-panel">
-
-                    {/* Net worth hero */}
-                    <div className="surface kpi">
-                        <div className="kpi-label">Čisté jmění</div>
-                        <div className="kpi-value num" style={{ fontSize: '1.6rem', marginTop: 4 }}>
-                            {formatCurrency(totalBalance)}
-                        </div>
-                        <div className="kpi-sub">
-                            <span className="muted" style={{ fontSize: 12 }}>
-                                {accounts.length} {accounts.length === 1 ? 'účet' : accounts.length < 5 ? 'účty' : 'účtů'}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Accounts list */}
-                    <div className="surface">
-                        <div className="card-head">
-                            <h4>Účty</h4>
-                            <span className="muted">{accounts.length}</span>
-                        </div>
-                        <div style={{ padding: '8px var(--spacing-md) var(--spacing-md)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                            {accounts.length === 0 ? (
-                                <div style={{ padding: '12px 0', color: 'var(--text-3)', fontSize: 13, textAlign: 'center' }}>
-                                    Žádné účty
-                                </div>
-                            ) : (
-                                accounts.map((account) => {
-                                    const logoUrl = getBankLogo(account.institution);
-                                    const href = getAccountHref(account);
-                                    const consent = getConsentStatus(account.consent_expires_at);
-                                    const consentWarning = consent && (consent.expired || consent.expiringSoon);
-                                    const syncBroken = !consentWarning && !!account.last_sync_error;
-                                    return (
-                                        <Link key={account.id} href={href} className="acc-card">
-                                            {logoUrl ? (
-                                                <div className="acc-logo" style={{ background: '#fff', padding: 4, overflow: 'hidden' }}>
-                                                    <Image src={logoUrl} alt={account.institution || account.name} width={32} height={32} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                                </div>
-                                            ) : (
-                                                <div className="acc-logo" style={{ background: getAccentColor(account.type), fontSize: 11 }}>
-                                                    {getInitials(account.name)}
-                                                </div>
-                                            )}
-                                            <div style={{ minWidth: 0, flex: 1 }}>
-                                                <div className="acc-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.name}</div>
-                                                {consentWarning ? (
-                                                    <div className="acc-balance" style={{ color: consent.color, fontWeight: 600 }} title={consent.label}>
-                                                        {consent.shortLabel}
-                                                    </div>
-                                                ) : syncBroken ? (
-                                                    <div className="acc-balance" style={{ color: 'var(--warn)', fontWeight: 600 }} title={account.last_sync_error ?? undefined}>
-                                                        sync selhává
-                                                    </div>
-                                                ) : (
-                                                    <div className="acc-balance">{account.currency}</div>
-                                                )}
-                                            </div>
-                                            <div className="num" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', flexShrink: 0, color: account.balance < 0 ? 'var(--neg)' : 'var(--text)' }}>
-                                                {formatCurrency(account.balance, account.currency)}
-                                            </div>
-                                        </Link>
-                                    );
-                                })
-                            )}
-                            <Link href="/settings" className="btn btn-ghost btn-sm" style={{ justifyContent: 'center', marginTop: 4 }}>
-                                + Propojit účet
-                            </Link>
-                        </div>
-                    </div>
-
-                    {/* Quick actions */}
-                    <div className="surface">
-                        <div className="card-head"><h4>Rychlé akce</h4></div>
-                        <div style={{ padding: 'var(--spacing-sm)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <button className="btn btn-sm" onClick={handleSync} disabled={isSyncing}
-                                style={{ justifyContent: 'flex-start' }}>
-                                {isSyncing
-                                    ? <><span style={{ width: 13, height: 13, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} /><span>Sync...</span></>
-                                    : <><span>{SyncIcon}</span><span>Sync</span></>
-                                }
-                            </button>
-                            <Link href="/settings" className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                <span>{APPBAR_ICONS['/settings']}</span><span>Nastavení</span>
-                            </Link>
-                            {quickPages.map((item) => (
-                                <Link key={item.href} href={item.href} className="btn btn-sm" style={{ justifyContent: 'flex-start', textDecoration: 'none' }}>
-                                    <span>{APPBAR_ICONS[item.href]}</span><span>{item.label}</span>
-                                </Link>
-                            ))}
-                            <button className="btn btn-sm" onClick={handleLogout}
-                                style={{ justifyContent: 'center', gridColumn: '1 / -1', color: 'var(--neg)' }}>
-                                <span>↩</span><span>Odhlásit se</span>
-                            </button>
-                        </div>
-                        {syncStatus && syncStatus.status !== 'never' && (
-                            <div style={{ padding: '0 var(--spacing-sm) var(--spacing-sm)', fontSize: 11, color: 'var(--text-3)', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {syncStatus.last_sync && (
-                                    <span>Poslední sync: {new Date(syncStatus.last_sync).toLocaleString('cs-CZ', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'numeric' })}</span>
-                                )}
-                                <span style={{ color: syncStatus.syncs_today >= 4 ? 'var(--neg)' : syncStatus.syncs_today >= 3 ? 'var(--warn)' : 'var(--text-3)', fontWeight: syncStatus.syncs_today >= 3 ? 600 : undefined }}>
-                                    {syncStatus.syncs_today}/4 dnes{syncStatus.syncs_today >= 4 && ' — denní limit'}
-                                </span>
-                            </div>
-                        )}
-                    </div>
-
-                </aside>
-
                 {/* Mobile bottom navigation */}
                 {isMobile && (
                     <>
@@ -442,6 +394,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                             <div className="mobile-tools-head">
                                 <div>
                                     <div className="mobile-tools-title-row">
+                                        <span className="appbar-logo-mark"><KorunaMark size={17} /></span>
                                         <strong>Menu</strong>
                                         <button
                                             type="button"
@@ -497,7 +450,6 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                     {accounts.length === 0 ? (
                                         <div className="mobile-empty">Žádné účty</div>
                                     ) : accounts.map((account) => {
-                                        const logoUrl = getBankLogo(account.institution);
                                         const consent = getConsentStatus(account.consent_expires_at);
                                         const consentWarning = consent && (consent.expired || consent.expiringSoon);
                                         const syncBroken = !consentWarning && !!account.last_sync_error;
@@ -508,15 +460,9 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                                 className="mobile-account-row"
                                                 onClick={() => setIsMobileToolsOpen(false)}
                                             >
-                                                {logoUrl ? (
-                                                    <span className="mobile-account-logo bank">
-                                                        <Image src={logoUrl} alt={account.institution || account.name} width={28} height={28} />
-                                                    </span>
-                                                ) : (
-                                                    <span className="mobile-account-logo" style={{ background: getAccentColor(account.type) }}>
-                                                        {getInitials(account.name)}
-                                                    </span>
-                                                )}
+                                                <span className="mobile-account-logo" style={{ background: avatarColor(account.name) }}>
+                                                    {avatarInitials(account.name)}
+                                                </span>
                                                 <span className="mobile-account-copy">
                                                     <strong>{account.name}</strong>
                                                     {consentWarning ? (

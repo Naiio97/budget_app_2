@@ -10,7 +10,7 @@ import { useMemo, useSyncExternalStore } from 'react';
 export type NavPlacement = 'menu' | 'quick' | 'hidden';
 
 export const NAV_PAGES: { href: string; label: string }[] = [
-    { href: '/', label: 'Dashboard' },
+    { href: '/', label: 'Přehled' },
     { href: '/transactions', label: 'Transakce' },
     { href: '/rozpocet', label: 'Rozpočet' },
     { href: '/budgets', label: 'Rozpočty' },

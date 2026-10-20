@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState, useSyncExternalStore } from "react";
 import { enterDemo } from "@/lib/demo-mode";
 import { clearBackendTokenCache } from "@/lib/api";
+import BackendReady from "@/components/BackendLoading";
+import KorunaMark from "@/components/KorunaMark";
 import "./login.css";
 
 type Mode = "login" | "register";
@@ -61,7 +63,13 @@ function getTimeoutNotice(): string | null {
     return null;
 }
 
-export default function LoginPage() {
+function LoginForm() {
+    // Přihlášení nemá hlavní šablonu, která motiv nastavuje — použij uložený motiv (výchozí tmavý)
+    useEffect(() => {
+        const saved = localStorage.getItem('theme');
+        document.documentElement.setAttribute('data-mode', saved === 'light' ? 'light' : 'dark');
+    }, []);
+
     const router = useRouter();
     const [mode, setMode] = useState<Mode>("login");
     const [email, setEmail] = useState("");
@@ -149,6 +157,7 @@ export default function LoginPage() {
     return (
         <div className="login-screen">
             <div className="login-card">
+                <span className="appbar-logo-mark login-logo"><KorunaMark size={32} /></span>
                 <h1 className="login-title">Koruna</h1>
                 <p className="login-sub">Osobní finance</p>
 
@@ -249,5 +258,14 @@ export default function LoginPage() {
                 </p>
             </div>
         </div>
+    );
+}
+
+// Login se ukáže, až backend i databáze odpovídají (cold start Azure kontejnerů).
+export default function LoginPage() {
+    return (
+        <BackendReady>
+            <LoginForm />
+        </BackendReady>
     );
 }

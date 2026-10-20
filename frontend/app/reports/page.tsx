@@ -7,11 +7,11 @@ import MainLayout from '@/components/MainLayout';
 import PageLoader from '@/components/PageLoader';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-    LineChart, Line
 } from 'recharts';
 import { queryKeys } from '@/lib/queryKeys';
 import { getLineIcon } from '@/lib/line-icons';
-import { apiFetch } from '@/lib/api';
+import AccountsCard from '@/components/AccountsCard';
+import { apiFetch, getDashboard } from '@/lib/api';
 
 interface MonthlyTotal {
     month: string;
@@ -33,21 +33,7 @@ interface MonthlyReport {
     currency: string;
 }
 
-interface Category {
-    id: number;
-    name: string;
-    color: string;
-    icon?: string;
-}
-
-const FALLBACK_COLORS: Record<string, string> = {
-    'Restaurant': '#ef4444', 'Food': '#ef4444', 'Transport': '#f97316', 'Utilities': '#eab308',
-    'Entertainment': '#22c55e', 'Shopping': '#14b8a6', 'Investment': '#3b82f6',
-    'Dividend': '#8b5cf6', 'Salary': '#10b981', 'Subscription': '#030303',
-    'Installments': '#4b4c95', 'Insurance': '#e5c52a', 'Supermarkets': '#e69eb0',
-    'ATM': '#f28f64', 'Other': '#6b7280',
-};
-
+const MUTED_PALETTE = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba', '#8fb36a', '#d4b36a', '#6f86c9', '#b98a6a'];
 const formatMoney = (amount: number) =>
     new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
 
@@ -67,51 +53,17 @@ export default function ReportsPage() {
         queryFn: () => apiFetch(`/dashboard/monthly-report?months=${months}&full_amounts=${fullAmounts}`).then(r => r.json()),
     });
 
-    const { data: categoriesData = [] } = useQuery<Category[]>({
-        queryKey: queryKeys.categories,
-        queryFn: () => apiFetch(`/categories/`).then(r => r.json()).then(d => Array.isArray(d) ? d : []),
-        staleTime: 5 * 60 * 1000,
-    });
+    const { data: dashData } = useQuery({ queryKey: queryKeys.dashboard, queryFn: () => getDashboard() });
+    const accounts = dashData?.accounts ?? [];
 
-    const categoryColors: Record<string, string> = useMemo(() =>
-        categoriesData.reduce((acc, cat) => {
-            acc[cat.name] = cat.color || FALLBACK_COLORS[cat.name] || '#6b7280';
-            return acc;
-        }, { ...FALLBACK_COLORS } as Record<string, string>),
-        [categoriesData]
-    );
-
-    // Per-month breakdown with one line per top-5 category. Lines are easier to read
-    // than stacked bars/areas — you can compare categories at a glance.
-    const { categoryTrendData, trendCategories } = useMemo(() => {
-        if (!report) return { categoryTrendData: [], trendCategories: [] as string[] };
-
+    // Top 5 kategorií za období — jen kvůli stabilním barvám v přehledu.
+    const trendCategories = useMemo(() => {
+        if (!report) return [] as string[];
         const totals = new Map<string, number>();
         for (const item of report.category_breakdown) {
             totals.set(item.category, (totals.get(item.category) || 0) + item.amount);
         }
-        const top = Array.from(totals.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5)
-            .map(([name]) => name);
-        const topSet = new Set(top);
-
-        const monthMap: Record<string, Record<string, number>> = {};
-        for (const item of report.category_breakdown) {
-            if (!topSet.has(item.category)) continue;
-            if (!monthMap[item.month]) monthMap[item.month] = {};
-            monthMap[item.month][item.category] = item.amount;
-        }
-
-        const data = report.monthly_totals.map(m => {
-            const row: Record<string, number | string> = { month: formatMonth(m.month) };
-            for (const cat of top) {
-                row[cat] = monthMap[m.month]?.[cat] ?? 0;
-            }
-            return row;
-        });
-
-        return { categoryTrendData: data, trendCategories: top };
+        return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name]) => name);
     }, [report]);
 
     // Savings rate trend (per month)
@@ -133,6 +85,17 @@ export default function ReportsPage() {
         }
         return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
     }, [report]);
+
+    // Tlumená paleta nového stylu pro kategorie, které se v grafech skutečně zobrazují,
+    // přidělená podle abecedy — stejná kategorie má v obou grafech stejnou barvu a barvy
+    // se neopakují (nepoužívají se křiklavé barvy z databáze).
+    const categoryColors: Record<string, string> = useMemo(() => {
+        const shown = Array.from(new Set([...topCategoriesAgg.map(([name]) => name), ...trendCategories])).sort();
+        return shown.reduce((acc, name, i) => {
+            acc[name] = MUTED_PALETTE[i % MUTED_PALETTE.length];
+            return acc;
+        }, {} as Record<string, string>);
+    }, [topCategoriesAgg, trendCategories]);
 
     if (loading) {
         return (
@@ -171,7 +134,7 @@ export default function ReportsPage() {
 
     return (
         <MainLayout>
-            <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+            <div className="page-container page-stack" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page header */}
                 <div className="page-head">
@@ -202,181 +165,120 @@ export default function ReportsPage() {
                                 </div>
                             ))}
                         </div>
-                        <Link href="/wrapped" className="btn btn-sm roc-pill" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Link href="/wrapped" className="seg-link">
                             {getLineIcon('star', 14)} Roční přehled
                         </Link>
                     </div>
                 </div>
 
-                {/* Hero KPI strip */}
-                <section className="surface" style={{ padding: '24px 28px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 24 }}>
-                        <div>
-                            <div className="kpi-label">Příjmy · {months} měsíců</div>
-                            <div className="num" style={{ fontSize: 28, fontWeight: 700, color: 'var(--pos)', letterSpacing: '-0.03em', marginTop: 4 }}>
-                                +{formatMoney(totalIncome)}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>průměr {formatMoney(avgIncome)}/měsíc</div>
+                {/* KPI karty */}
+                <div className="rep-kpis">
+                    <div className="surface rep-kpi">
+                        <div className="rep-kpi-label">Příjmy</div>
+                        <div className="rep-kpi-value num pos">+{formatMoney(totalIncome)}</div>
+                        <div className="rep-kpi-sub">průměr {formatMoney(avgIncome)}/měsíc</div>
+                    </div>
+                    <div className="surface rep-kpi">
+                        <div className="rep-kpi-label">Výdaje</div>
+                        <div className="rep-kpi-value num neg">−{formatMoney(totalExpenses)}</div>
+                        <div className="rep-kpi-sub">průměr {formatMoney(avgExpenses)}/měsíc</div>
+                    </div>
+                    <div className="surface rep-kpi">
+                        <div className="rep-kpi-label">Úspora celkem</div>
+                        <div className={`rep-kpi-value num ${totalSavings >= 0 ? 'pos' : 'neg'}`}>
+                            {totalSavings >= 0 ? '+' : ''}{formatMoney(totalSavings)}
                         </div>
-                        <div>
-                            <div className="kpi-label">Výdaje · {months} měsíců</div>
-                            <div className="num" style={{ fontSize: 28, fontWeight: 700, color: 'var(--neg)', letterSpacing: '-0.03em', marginTop: 4 }}>
-                                -{formatMoney(totalExpenses)}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>průměr {formatMoney(avgExpenses)}/měsíc</div>
+                        <div className="rep-kpi-sub">{overallSavingsRate} % z příjmu</div>
+                    </div>
+                    <div className="surface rep-kpi">
+                        <div className="rep-kpi-label">Výdaje vs. min. měsíc</div>
+                        <div className={`rep-kpi-value num ${momExpensesChange == null ? '' : momExpensesChange > 0 ? 'neg' : 'pos'}`}>
+                            {momExpensesChange == null ? '—' : `${momExpensesChange > 0 ? '+' : ''}${momExpensesChange} %`}
                         </div>
-                        <div>
-                            <div className="kpi-label">Úspora celkem</div>
-                            <div className="num" style={{ fontSize: 28, fontWeight: 700, color: totalSavings >= 0 ? 'var(--pos)' : 'var(--neg)', letterSpacing: '-0.03em', marginTop: 4 }}>
-                                {totalSavings >= 0 ? '+' : ''}{formatMoney(totalSavings)}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
-                                {overallSavingsRate}% z příjmu
-                            </div>
-                        </div>
-                        <div>
-                            <div className="kpi-label">Výdaje vs. min. měsíc</div>
-                            <div className="num" style={{
-                                fontSize: 28, fontWeight: 700, letterSpacing: '-0.03em', marginTop: 4,
-                                color: momExpensesChange == null ? 'var(--text-3)' : momExpensesChange > 0 ? 'var(--neg)' : 'var(--pos)',
-                            }}>
-                                {momExpensesChange == null ? '—' : `${momExpensesChange > 0 ? '+' : ''}${momExpensesChange}%`}
-                            </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
-                                {last && prev ? `${formatMonth(last.month)} vs ${formatMonth(prev.month)}` : 'málo dat'}
-                            </div>
+                        <div className="rep-kpi-sub">
+                            {last && prev ? `${formatMonth(last.month)} vs ${formatMonth(prev.month)}` : 'málo dat'}
                         </div>
                     </div>
-                </section>
+                </div>
 
-                {/* Income vs Expenses bar chart */}
-                <section className="surface">
-                    <div className="card-head">
-                        <h3>Příjmy vs. výdaje</h3>
-                        <span className="muted" style={{ fontSize: 12 }}>{months} měsíců zpět</span>
-                    </div>
-                    <div className="card-body">
-                        <div style={{ height: 280 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={totals.map(m => ({ ...m, month: formatMonth(m.month) }))}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                                    <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
-                                    <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={42} axisLine={false} tickLine={false} />
-                                    <Tooltip
-                                        contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
-                                        formatter={(value, name) => [formatMoney(Number(value)), name === 'income' ? 'Příjmy' : 'Výdaje']}
-                                    />
-                                    <Legend wrapperStyle={{ fontSize: '0.8rem' }} formatter={(value) => value === 'income' ? 'Příjmy' : 'Výdaje'} />
-                                    <Bar dataKey="income" fill="var(--pos)" radius={[6, 6, 0, 0]} />
-                                    <Bar dataKey="expenses" fill="var(--neg)" radius={[6, 6, 0, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Two-column row: savings trend + top categories */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 'var(--spacing-lg)' }} className="reports-insight-grid">
-                    <section className="surface">
-                        <div className="card-head">
-                            <h3>Trend úspory</h3>
-                            <span className="muted" style={{ fontSize: 12 }}>% z příjmu / měsíc</span>
-                        </div>
-                        <div className="card-body">
-                            <div style={{ height: 220 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={savingsTrend}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                                        <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
-                                        <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${v}%`} width={40} axisLine={false} tickLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
-                                            formatter={(value, name, item) => {
-                                                const balance = item?.payload?.balance ?? 0;
-                                                return [`${value}%  (${formatMoney(balance)})`, 'Úspora'];
-                                            }}
-                                        />
-                                        <Line type="monotone" dataKey="rate" stroke="var(--pos)" strokeWidth={3} dot={{ r: 4, fill: 'var(--pos)' }} activeDot={{ r: 6 }} />
-                                    </LineChart>
-                                </ResponsiveContainer>
+                <div className="rep-layout">
+                    <div className="rep-main">
+                        {/* Příjmy vs. výdaje */}
+                        <section className="surface">
+                            <div className="card-head">
+                                <h3>Příjmy vs. výdaje</h3>
+                                <span className="muted" style={{ fontSize: 12 }}>{months} měsíců zpět</span>
                             </div>
-                        </div>
-                    </section>
+                            <div className="card-body">
+                                <div style={{ height: 280 }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={totals.map(m => ({ ...m, month: formatMonth(m.month) }))} barGap={6}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                                            <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
+                                            <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={42} axisLine={false} tickLine={false} />
+                                            <Tooltip
+                                                cursor={{ fill: 'var(--surface-sunken)' }}
+                                                contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
+                                                formatter={(value, name) => [formatMoney(Number(value)), name === 'income' ? 'Příjmy' : 'Výdaje']}
+                                            />
+                                            <Legend wrapperStyle={{ fontSize: '0.8rem' }} iconType="circle" formatter={(value) => value === 'income' ? 'Příjmy' : 'Výdaje'} />
+                                            <Bar dataKey="income" fill="#7fbf9e" radius={[8, 8, 0, 0]} maxBarSize={44} />
+                                            <Bar dataKey="expenses" fill="#6a9fd0" radius={[8, 8, 0, 0]} maxBarSize={44} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </section>
 
-                    <section className="surface">
-                        <div className="card-head">
-                            <h3>Top kategorie</h3>
-                            <span className="muted" style={{ fontSize: 12 }}>Celkem za období</span>
-                        </div>
-                        <div className="card-body">
-                            {topCategoriesAgg.length === 0 ? (
-                                <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Žádné výdaje.</div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    {topCategoriesAgg.map(([name, amount]) => {
-                                        const max = topCategoriesAgg[0][1];
-                                        const color = categoryColors[name] || '#6b7280';
+                        {/* Úspora po měsících + top kategorie */}
+                        <div className="rep-pair">
+                            <section className="surface">
+                                <div className="card-head">
+                                    <h3>Kolik z příjmů zůstává?</h3>
+                                    <span className="muted" style={{ fontSize: 12 }}>% z příjmu</span>
+                                </div>
+                                <div className="card-body rep-bars">
+                                    {savingsTrend.map(m => {
+                                        const pct = Math.max(-100, Math.min(100, m.rate));
                                         return (
-                                            <div key={name}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-                                                    <span style={{ color: 'var(--text)', fontWeight: 500 }}>{name}</span>
-                                                    <span className="num" style={{ color: 'var(--text-2)' }}>{formatMoney(amount)}</span>
-                                                </div>
-                                                <div style={{ height: 6, borderRadius: 999, background: 'var(--surface-sunken)', overflow: 'hidden' }}>
-                                                    <div style={{ height: '100%', width: `${(amount / max) * 100}%`, background: color, borderRadius: 999 }} />
-                                                </div>
+                                            <div key={m.month} className="rep-bar-row">
+                                                <span className="rep-bar-name">{m.month}</span>
+                                                <span className="rep-bar-track">
+                                                    <span className={m.rate >= 0 ? 'pos' : 'neg'} style={{ width: `${Math.abs(pct)}%` }} />
+                                                </span>
+                                                <span className={`rep-bar-value num ${m.rate >= 0 ? 'pos' : 'neg'}`}>{m.rate} %</span>
                                             </div>
                                         );
                                     })}
                                 </div>
-                            )}
+                            </section>
+
+                            <section className="surface">
+                                <div className="card-head">
+                                    <h3>Za co utrácíte nejvíc</h3>
+                                    <span className="muted" style={{ fontSize: 12 }}>celkem za období</span>
+                                </div>
+                                <div className="card-body rep-bars">
+                                    {topCategoriesAgg.length === 0 ? (
+                                        <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Žádné výdaje.</div>
+                                    ) : topCategoriesAgg.map(([name, amount]) => {
+                                        const max = topCategoriesAgg[0][1];
+                                        return (
+                                            <div key={name} className="rep-bar-row cat">
+                                                <span className="rep-bar-name">{name}</span>
+                                                <span className="rep-bar-track">
+                                                    <span style={{ width: `${(amount / max) * 100}%`, background: categoryColors[name] || '#6b7280' }} />
+                                                </span>
+                                                <span className="rep-bar-value num">{formatMoney(amount)}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </section>
                         </div>
-                    </section>
-                </div>
 
-                {/* Multi-line: trend per top-5 category — easier to read than stacked area */}
-                <section className="surface">
-                    <div className="card-head">
-                        <h3>Kategorie po měsících</h3>
-                        <span className="muted" style={{ fontSize: 12 }}>Top 5 kategorií · vývoj</span>
-                    </div>
-                    <div className="card-body">
-                        {trendCategories.length === 0 ? (
-                            <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-xl)' }}>
-                                Žádné výdaje k zobrazení.
-                            </div>
-                        ) : (
-                            <div style={{ height: 320 }}>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={categoryTrendData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                                        <XAxis dataKey="month" stroke="var(--text-3)" fontSize={11} axisLine={false} tickLine={false} />
-                                        <YAxis stroke="var(--text-3)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} width={42} axisLine={false} tickLine={false} />
-                                        <Tooltip
-                                            contentStyle={{ background: 'var(--surface-strong)', border: '0.5px solid var(--border-strong)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}
-                                            formatter={(value, name) => [formatMoney(Number(value)), name as string]}
-                                        />
-                                        <Legend wrapperStyle={{ fontSize: '0.8rem', paddingTop: 8 }} iconType="circle" />
-                                        {trendCategories.map(cat => (
-                                            <Line
-                                                key={cat}
-                                                type="monotone"
-                                                dataKey={cat}
-                                                stroke={categoryColors[cat] || '#6b7280'}
-                                                strokeWidth={2.5}
-                                                dot={{ r: 3 }}
-                                                activeDot={{ r: 5 }}
-                                            />
-                                        ))}
-                                    </LineChart>
-                                </ResponsiveContainer>
-                            </div>
-                        )}
-                    </div>
-                </section>
-
-                {/* Monthly table */}
-                <section className="surface">
+                        {/* Detail po měsících */}
+                        <section className="surface">
                     <div className="card-head">
                         <h3>Detail po měsících</h3>
                     </div>
@@ -442,7 +344,18 @@ export default function ReportsPage() {
                             );
                         })}
                     </div>
-                </section>
+                        </section>
+                    </div>
+
+                    <aside className="rep-aside">
+                        <div className="dash rep-accounts hide-with-drawer"><AccountsCard accounts={accounts} /></div>
+                        <Link href="/wrapped" className="surface rep-promo">
+                            <strong>Máte úspory. Velký přehled.</strong>
+                            <span>Zobrazte si celý rok — příjmy, výdaje, nejlepší měsíce i vývoj úspor.</span>
+                            <em>Podrobnější statistiky →</em>
+                        </Link>
+                    </aside>
+                </div>
 
             </div>
         </MainLayout>

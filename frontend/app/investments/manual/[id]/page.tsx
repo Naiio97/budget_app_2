@@ -11,6 +11,8 @@ import {
     createManualInvestmentPosition,
     updateManualInvestmentPosition,
     deleteManualInvestmentPosition,
+    updateManualInvestment,
+    deleteManualInvestment,
     ManualInvestmentPosition,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -29,7 +31,7 @@ import {
     Cell,
 } from 'recharts';
 
-const COLORS = ['#2dd4bf', '#818cf8', '#fb923c', '#34d399', '#f472b6', '#60a5fa', '#facc15', '#a78bfa'];
+const COLORS = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba'];
 
 type PositionForm = {
     name: string;
@@ -87,6 +89,26 @@ export default function ManualInvestmentDetailPage() {
     // Per-position color overrides (localStorage). Map position id → hex color.
     const [colorVersion, setColorVersion] = useState(0);
     const [colorPickerForId, setColorPickerForId] = useState<number | null>(null);
+    const [showManage, setShowManage] = useState(false);
+    const [renameValue, setRenameValue] = useState('');
+
+    const renameMutation = useMutation({
+        mutationFn: (name: string) => updateManualInvestment(id, { name }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: queryKeys.manualInvestment(id) });
+            qc.invalidateQueries({ queryKey: queryKeys.manualInvestments });
+            qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+            setShowManage(false);
+        },
+    });
+    const deleteAccountMutation = useMutation({
+        mutationFn: () => deleteManualInvestment(id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: queryKeys.manualInvestments });
+            qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+            router.push('/investments');
+        },
+    });
 
     const { data: account, isLoading } = useQuery({
         queryKey: queryKeys.manualInvestment(id),
@@ -190,23 +212,50 @@ export default function ManualInvestmentDetailPage() {
 
     return (
         <MainLayout>
-            <div className="page-container">
+            <div className="page-container page-stack" style={{ gap: 'var(--spacing-lg)' }}>
                 {/* Header */}
-                <header className="account-detail-head" style={{ marginBottom: 'var(--spacing-xl)' }}>
+                <header className="account-detail-head inv2-head">
+                    <button type="button" onClick={() => router.back()} className="inv2-back" aria-label="Zpět">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 18-6-6 6-6" /></svg>
+                    </button>
                     <div className="account-title-block">
                         <h1>{account.name}</h1>
                         <div className="account-detail-sub">Investiční účet · spravováno ručně</div>
                     </div>
-                    <button onClick={() => router.back()} className="btn account-back-btn">← Zpět</button>
+                    <div className="inv2-actions">
+                        <button type="button" className="btn inv2-manage"
+                            onClick={() => { setRenameValue(account.name); setShowManage(v => !v); }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
+                            Spravovat účet
+                        </button>
+                    </div>
                 </header>
-                {/* Two-column layout: left = summary + pie, right = positions */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-lg)', marginBottom: 'var(--spacing-lg)', alignItems: 'start' }}>
 
-                    {/* Left column */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+                {showManage && (
+                    <section className="surface inv2-manage-card">
+                        <div className="inv2-manage-row">
+                            <label>Název účtu</label>
+                            <input className="input" value={renameValue} onChange={e => setRenameValue(e.target.value)} />
+                            <button className="btn btn-primary" disabled={!renameValue.trim() || renameValue.trim() === account.name || renameMutation.isPending}
+                                onClick={() => renameMutation.mutate(renameValue.trim())}>
+                                {renameMutation.isPending ? 'Ukládám…' : 'Přejmenovat'}
+                            </button>
+                        </div>
+                        <div className="inv2-manage-row danger">
+                            <span>Smazat účet i se všemi pozicemi a historií hodnoty.</span>
+                            <button className="btn" disabled={deleteAccountMutation.isPending}
+                                onClick={() => { if (confirm(`Smazat účet "${account.name}" včetně všech pozic?`)) deleteAccountMutation.mutate(); }}>
+                                Smazat účet
+                            </button>
+                        </div>
+                    </section>
+                )}
 
+                {/* Hero: hodnota + graf */}
+                <section className="surface inv2-hero">
+                    <div className="inv2-hero-copy">
                         {/* Summary */}
-                        <GlassCard>
+                        <div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
                                 <div>
                                     <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Celková hodnota</div>
@@ -231,38 +280,58 @@ export default function ManualInvestmentDetailPage() {
                                         </div>
                                     </>
                                 )}
-                            </div>
-                        </GlassCard>
-
-                        {/* Allocation pie */}
-                        {pieData.length > 0 && (
-                            <GlassCard>
-                                <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Alokace</h3>
-                                <ResponsiveContainer width="100%" height={180}>
-                                    <PieChart>
-                                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} dataKey="value" strokeWidth={0}>
-                                            {pieData.map((p, i) => <Cell key={p.id} fill={colorForIndex(p.id, i)} />)}
-                                        </Pie>
-                                        <Tooltip
-                                            contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
-                                            formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
-                                    {pieData.map((p, i) => (
-                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                                            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: colorForIndex(p.id, i), flexShrink: 0 }} />
-                                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                                            <span className="text-secondary">{account.total_value ? ((p.value / account.total_value) * 100).toFixed(1) : 0} %</span>
+                                {!(account.invested > 0) && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-md)', paddingTop: 'var(--spacing-sm)', borderTop: '1px solid var(--border)' }}>
+                                        <div>
+                                            <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '2px' }}>Pozic</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 500 }}>{account.positions.length}</div>
                                         </div>
-                                    ))}
-                                </div>
-                            </GlassCard>
-                        )}
+                                        <div>
+                                            <div className="text-secondary" style={{ fontSize: '0.75rem', marginBottom: '2px' }}>Největší podíl</div>
+                                            <div style={{ fontSize: '1rem', fontWeight: 500 }}>
+                                                {account.total_value > 0 && account.positions.length > 0
+                                                    ? `${((Math.max(...account.positions.map(x => x.current_value)) / account.total_value) * 100).toFixed(0)} %`
+                                                    : '—'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                    </div>{/* end left column */}
+                    </div>
+                    <div className="inv2-hero-chart">
+                {/* Value history chart */}
+                {history.length > 1 && (
+                    <div>
+                        <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Vývoj hodnoty</h3>
+                        <ResponsiveContainer width="100%" height={220}>
+                            <AreaChart data={history} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="manualInvGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#9d92c9" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#9d92c9" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                <YAxis tickFormatter={v => fmt(v, account.currency)} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
+                                <Tooltip
+                                    contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                    formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
+                                    labelFormatter={(l: string) => fmtDate(l)}
+                                />
+                                <Area type="monotone" dataKey="value" stroke="#9d92c9" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                )}
 
+                    </div>
+                </section>
+
+                {/* Pozice + alokace */}
+                <div className="inv2-grid">
                     {/* Right column: Positions */}
                     <GlassCard>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-md)' }}>
@@ -313,6 +382,7 @@ export default function ManualInvestmentDetailPage() {
                                                     {pos.quantity != null && <span>{pos.quantity} ks</span>}
                                                     {pos.quantity != null && pos.avg_buy_price != null && <span> · nákup {fmt(pos.avg_buy_price, pos.currency)}/ks</span>}
                                                     {pos.note && <span> · {pos.note}</span>}
+                                                    {account.total_value > 0 && <span>{pos.quantity != null ? ' · ' : ''}{((pos.current_value / account.total_value) * 100).toFixed(1)} % účtu</span>}
                                                 </div>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -398,33 +468,36 @@ export default function ManualInvestmentDetailPage() {
                         </div>
                     </GlassCard>
 
-                </div>{/* end two-column layout */}
+                    <div className="inv2-side">
+                        {/* Allocation pie */}
+                        {pieData.length > 0 && (
+                            <GlassCard>
+                                <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Alokace</h3>
+                                <ResponsiveContainer width="100%" height={180}>
+                                    <PieChart>
+                                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} dataKey="value" strokeWidth={0}>
+                                            {pieData.map((p, i) => <Cell key={p.id} fill={colorForIndex(p.id, i)} />)}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                            formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+                                    {pieData.map((p, i) => (
+                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
+                                            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: colorForIndex(p.id, i), flexShrink: 0 }} />
+                                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                                            <span className="text-secondary">{account.total_value ? ((p.value / account.total_value) * 100).toFixed(1) : 0} %</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </GlassCard>
+                        )}
 
-                {/* Value history chart */}
-                {history.length > 1 && (
-                    <GlassCard>
-                        <h3 style={{ margin: '0 0 var(--spacing-md)' }}>Vývoj hodnoty</h3>
-                        <ResponsiveContainer width="100%" height={220}>
-                            <AreaChart data={history} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                                <defs>
-                                    <linearGradient id="manualInvGrad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                                <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                                <YAxis tickFormatter={v => fmt(v, account.currency)} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
-                                <Tooltip
-                                    contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
-                                    formatter={(v: number | undefined) => [fmt(v ?? 0, account.currency), 'Hodnota']}
-                                    labelFormatter={(l: string) => fmtDate(l)}
-                                />
-                                <Area type="monotone" dataKey="value" stroke="#2dd4bf" strokeWidth={2} fill="url(#manualInvGrad)" dot={false} />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </GlassCard>
-                )}
+                    </div>
+                </div>
 
             </div>
         </MainLayout>

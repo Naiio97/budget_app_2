@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import MainLayout from '@/components/MainLayout';
+import SyncButton from '@/components/SyncButton';
 import PageLoader from '@/components/PageLoader';
 import {
     getInvestmentPortfolio,
@@ -35,7 +36,7 @@ import {
 import { POSITION_COLOR_PALETTE, PositionScope, getPositionColor, setPositionColor } from '@/lib/positionColors';
 
 const PERIODS = ['1W', '1M', '3M', '6M', '1Y', 'ALL'];
-const FALLBACK_PALETTE = ['#34c759', '#007aff', '#ff9f0a', '#5e5ce6', '#ff3b30', '#30b0c7', '#af52de', '#64d2ff'];
+const FALLBACK_PALETTE = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba'];
 
 function cleanTicker(ticker: string) {
     return ticker.replace('_US_EQ', '').replace('_EQ', '');
@@ -285,10 +286,13 @@ export default function Trading212DetailPage() {
 
     return (
         <MainLayout>
-            <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+            <div className="page-container page-stack" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
 
                 {/* Page head */}
-                <div className="account-detail-head">
+                <div className="account-detail-head inv2-head">
+                    <button type="button" onClick={() => router.back()} className="inv2-back" aria-label="Zpět">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 18-6-6 6-6" /></svg>
+                    </button>
                     <div className="account-title-block">
                         <h1>Trading 212</h1>
                         <div className="account-detail-sub">
@@ -296,11 +300,15 @@ export default function Trading212DetailPage() {
                             {portfolio.last_synced && <> · {formatDate(portfolio.last_synced)}</>}
                         </div>
                     </div>
-                    <button onClick={() => router.back()} className="btn account-back-btn">← Zpět</button>
+                    <div className="inv2-actions">
+                        <span className="inv2-pill"><i />Synchronizováno přes API</span>
+                        <SyncButton />
+                    </div>
                 </div>
 
-                {/* Hero */}
-                <section className="surface" style={{ padding: '24px 28px' }}>
+                {/* Hero: čísla + graf v jedné kartě */}
+                <section className="surface inv2-hero">
+                    <div className="inv2-hero-copy">
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-lg)', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                         <div style={{ minWidth: 0 }}>
                             <div className="kpi-label">Celková hodnota</div>
@@ -328,10 +336,8 @@ export default function Trading212DetailPage() {
                             </div>
                         </div>
                     </div>
-                </section>
-
-                {/* History chart */}
-                <section className="surface">
+                                    </div>
+                    <div className="inv2-hero-chart">
                     <div className="card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h3 style={{ margin: 0 }}>Vývoj hodnoty</h3>
                         <div className="seg">
@@ -375,10 +381,65 @@ export default function Trading212DetailPage() {
                             </div>
                         )}
                     </div>
+                                    </div>
                 </section>
 
-                {/* Allocation (incl. pie results) + positions, side by side */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--spacing-lg)', alignItems: 'stretch' }}>
+                {/* Pozice + rozložení */}
+                <div className="inv2-grid">
+                    <section className="surface">
+                        <div className="card-head">
+                            <h3>Pozice</h3>
+                            <span className="muted" style={{ fontSize: 12 }}>
+                                {positions.length} {czPlural(positions.length, 'pozice', 'pozice', 'pozic')}
+                            </span>
+                        </div>
+                        <div className="card-body-nopad">
+                            {positions.length === 0 ? (
+                                <div style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>Žádné pozice.</div>
+                            ) : (
+                                <div>
+                                    {[...positions].sort((a, b) => b.value_czk - a.value_czk).map((pos, i) => {
+                                        const ticker = cleanTicker(pos.ticker);
+                                        const color = colorFor('t212', ticker, i);
+                                        return (
+                                            <div key={pos.ticker} style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '36px minmax(0, 1fr) auto auto',
+                                                gap: 12, alignItems: 'center',
+                                                padding: '10px var(--spacing-lg)',
+                                                borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
+                                            }}>
+                                                <div style={{
+                                                    width: 32, height: 32, borderRadius: 8,
+                                                    background: color + '22',
+                                                    color,
+                                                    display: 'grid', placeItems: 'center',
+                                                    fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
+                                                }}>{ticker.slice(0, 3).toUpperCase()}</div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontWeight: 600, fontSize: 14 }}>{ticker}</div>
+                                                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                                                        {pos.quantity.toFixed(pos.quantity < 1 ? 4 : 2)} ks · prům. {formatCurrency(pos.average_price_eur, 'EUR')}
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div className="num" style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(pos.value_czk)}</div>
+                                                    <div className="num" style={{
+                                                        fontSize: 12,
+                                                        color: pos.ppl_czk >= 0 ? 'var(--pos)' : 'var(--neg)',
+                                                    }}>
+                                                        {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)} ({pos.ppl_pct >= 0 ? '+' : ''}{formatPct(pos.ppl_pct)})
+                                                    </div>
+                                                </div>
+                                                {renderSwatch('t212', ticker, color)}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                    <div className="inv2-side">
                     <section className="surface">
                         <div className="card-head">
                             <h3>Rozložení</h3>
@@ -437,60 +498,17 @@ export default function Trading212DetailPage() {
                             )}
                         </div>
                     </section>
-
-                    <section className="surface">
-                        <div className="card-head">
-                            <h3>Pozice</h3>
-                            <span className="muted" style={{ fontSize: 12 }}>
-                                {positions.length} {czPlural(positions.length, 'pozice', 'pozice', 'pozic')}
+                        <section className="surface inv2-api">
+                            <span className="inv2-api-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /><circle cx="12" cy="12" r="3" /></svg>
                             </span>
-                        </div>
-                        <div className="card-body-nopad">
-                            {positions.length === 0 ? (
-                                <div style={{ padding: 'var(--spacing-xl)', textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>Žádné pozice.</div>
-                            ) : (
-                                <div>
-                                    {[...positions].sort((a, b) => b.value_czk - a.value_czk).map((pos, i) => {
-                                        const ticker = cleanTicker(pos.ticker);
-                                        const color = colorFor('t212', ticker, i);
-                                        return (
-                                            <div key={pos.ticker} style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: '36px minmax(0, 1fr) auto auto',
-                                                gap: 12, alignItems: 'center',
-                                                padding: '10px var(--spacing-lg)',
-                                                borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
-                                            }}>
-                                                <div style={{
-                                                    width: 32, height: 32, borderRadius: 8,
-                                                    background: color + '22',
-                                                    color,
-                                                    display: 'grid', placeItems: 'center',
-                                                    fontSize: 11, fontWeight: 700, letterSpacing: '0.02em',
-                                                }}>{ticker.slice(0, 3).toUpperCase()}</div>
-                                                <div style={{ minWidth: 0 }}>
-                                                    <div style={{ fontWeight: 600, fontSize: 14 }}>{ticker}</div>
-                                                    <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                                                        {pos.quantity.toFixed(pos.quantity < 1 ? 4 : 2)} ks · prům. {formatCurrency(pos.average_price_eur, 'EUR')}
-                                                    </div>
-                                                </div>
-                                                <div style={{ textAlign: 'right' }}>
-                                                    <div className="num" style={{ fontWeight: 600, fontSize: 14 }}>{formatCurrency(pos.value_czk)}</div>
-                                                    <div className="num" style={{
-                                                        fontSize: 12,
-                                                        color: pos.ppl_czk >= 0 ? 'var(--pos)' : 'var(--neg)',
-                                                    }}>
-                                                        {pos.ppl_czk >= 0 ? '+' : ''}{formatCurrency(pos.ppl_czk)} ({pos.ppl_pct >= 0 ? '+' : ''}{formatPct(pos.ppl_pct)})
-                                                    </div>
-                                                </div>
-                                                {renderSwatch('t212', ticker, color)}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </section>
+                            <div>
+                                <strong>Propojeno přes API</strong>
+                                <span>Automatická synchronizace</span>
+                                {portfolio.last_synced && <em>Poslední synchronizace {formatDate(portfolio.last_synced)}</em>}
+                            </div>
+                        </section>
+                    </div>
                 </div>
 
                 {/* Recent transactions + dividends */}

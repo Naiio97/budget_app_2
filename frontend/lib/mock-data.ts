@@ -133,7 +133,7 @@ export const MOCK_DASHBOARD: DashboardData = {
         'Zábava': 3000,
         'Ostatní': 7000
     },
-    recent_transactions: generateTransactions(5),
+    recent_transactions: generateTransactions(15),
     accounts: [
         { id: 'acc-1', name: 'Běžný účet', type: 'bank', balance: 25000, currency: 'CZK', institution: 'airbank' },
         { id: 'acc-2', name: 'Spořicí účet', type: 'bank', balance: 20200.50, currency: 'CZK', institution: 'csas' },
@@ -644,8 +644,8 @@ export const MOCK_MY_ACCOUNT_PATTERNS = {
 
 export const MOCK_POSITIONS = {
     positions: [
-        { ticker: 'VWCE', quantity: 50, average_price_eur: 95, current_price_eur: 110, value_czk: 137500, invested_czk: 118750, ppl_czk: 18750, ppl_pct: 15.8 },
-        { ticker: 'AAPL', quantity: 10, average_price_eur: 150, current_price_eur: 180, value_czk: 45000, invested_czk: 37500, ppl_czk: 7500, ppl_pct: 20 },
+        { ticker: 'VWCE', quantity: 50, average_price_eur: 95, current_price_eur: 110, value_czk: 72800, invested_czk: 62300, ppl_czk: 10500, ppl_pct: 16.9 },
+        { ticker: 'AAPL', quantity: 10, average_price_eur: 150, current_price_eur: 180, value_czk: 31200, invested_czk: 25700, ppl_czk: 5500, ppl_pct: 21.4 },
     ],
     currency: 'CZK',
 };
@@ -654,10 +654,10 @@ export const MOCK_PIES: { pies: Pie[]; currency: string } = {
     pies: [
         {
             id: 1, name: 'Růst', icon: '📈', goal: 500000,
-            invested_czk: 200000, value_czk: 240000, result_czk: 40000, result_pct: 20,
+            invested_czk: 88000, value_czk: 104000, result_czk: 16000, result_pct: 18.2,
             instruments: [
-                { ticker: 'VWCE', current_share: 70, value_czk: 168000, result_czk: 25000 },
-                { ticker: 'AAPL', current_share: 30, value_czk: 72000, result_czk: 15000 },
+                { ticker: 'VWCE', current_share: 70, value_czk: 72800, result_czk: 10500 },
+                { ticker: 'AAPL', current_share: 30, value_czk: 31200, result_czk: 5500 },
             ],
         },
     ],
@@ -779,6 +779,13 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/sync/history')) return MOCK_SYNC_HISTORY;
     if (path.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 };
     if (path.startsWith('/settings/salary-config')) return MOCK_SALARY_CONFIG;
+    if (path.startsWith('/salary-period/current')) {
+        const now = new Date();
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const next = new Date(now.getFullYear(), now.getMonth() + 1, 8);
+        const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return { year_month: ym, start: `${ym}-08`, end: iso(next) };
+    }
     if (path === '/salary-estimate' || path === '/salary-estimate/') return [MOCK_SALARY_ESTIMATE];
     if (path.startsWith('/salary-estimate/')) return MOCK_SALARY_ESTIMATE;
     if (path.startsWith('/settings/api-keys')) return MOCK_API_KEYS;
@@ -819,8 +826,15 @@ export function dispatchDemoGet(path: string): unknown | undefined {
         return MOCK_ANNUAL_OVERVIEW(year);
     }
     if (path.startsWith('/manual-investments/') && path.includes('/history')) return [];
-    if (path.startsWith('/manual-investments/')) return MOCK_MANUAL_INVESTMENTS;
-    if (path.startsWith('/manual-accounts/')) return MOCK_MANUAL_ACCOUNTS;
+    if (path.startsWith('/manual-investments/')) {
+        // bez id = seznam, s id = jeden účet
+        const id = path.slice('/manual-investments/'.length).split('?')[0];
+        return id ? (MOCK_MANUAL_INVESTMENTS.find(a => String(a.id) === id) ?? MOCK_MANUAL_INVESTMENTS[0]) : MOCK_MANUAL_INVESTMENTS;
+    }
+    if (path.startsWith('/manual-accounts/')) {
+        const id = path.slice('/manual-accounts/'.length).split('?')[0];
+        return id ? (MOCK_MANUAL_ACCOUNTS.find(a => String(a.id) === id) ?? MOCK_MANUAL_ACCOUNTS[0]) : MOCK_MANUAL_ACCOUNTS;
+    }
     if (path.startsWith('/contacts/')) return MOCK_CONTACTS;
     if (path.startsWith('/loans/summary')) return MOCK_LOANS_SUMMARY;
     if (path.match(/^\/loans\/\d+\/schedule/)) return MOCK_LOAN_SCHEDULE;

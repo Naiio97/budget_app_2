@@ -10,11 +10,10 @@ import { formatCurrency, formatDateFull, formatAccount, getDisplayName, type Cat
 // Detail transakce — bottom sheet / modal. Vlastní stav (detail, tagy,
 // rozdělení nákladů, vypořádání) drží tady; do seznamu se změny propisují
 // přes onPatchTx / onContactSaved, aby zůstal v sync bez refetche.
-export default function TransactionDetailModal({ tx, categories, categoryIcons, categoryColors, counterpartySuggestions, updatingCategory, onCategorySelect, onPatchTx, onContactSaved, onClose }: {
+export default function TransactionDetailModal({ tx, categories, categoryIcons, counterpartySuggestions, updatingCategory, onCategorySelect, onPatchTx, onContactSaved, onClose }: {
     tx: Transaction;
     categories: Category[];
     categoryIcons: Record<string, string>;
-    categoryColors: Record<string, string>;
     counterpartySuggestions: string[];
     updatingCategory: boolean;
     onCategorySelect: (txId: string, category: string) => void;
@@ -61,10 +60,10 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
     const onSheetTouchEnd = () => {
         if (sheetDragStartY.current === null) return;
         sheetDragStartY.current = null;
-        setSheetDrag(prev => {
-            if (prev.y > 110) onClose();
-            return { y: 0, dragging: false };
-        });
+        // onClose nesmí běžet v updater funkci setState — ta se spouští při renderu
+        // a zavření by měnilo stav rodiče (TransactionList) uprostřed renderu.
+        if (sheetDrag.y > 110) onClose();
+        setSheetDrag({ y: 0, dragging: false });
     };
 
     // Close on Escape + lock body scroll while open
@@ -135,8 +134,9 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                             apply_retroactively: true,
                         });
                     } catch (err) {
-                        // duplicate rule etc. — the split itself is already saved
-                        console.error('Failed to create share rule:', err);
+                        // Duplicate rule etc. — the split itself is already saved. console.warn,
+                        // ne error: tohle je očekávaný stav a error by vyvolal Next dev overlay.
+                        console.warn('Share rule not created:', err);
                     }
                 }
             }
@@ -239,20 +239,14 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                     <button onClick={() => onClose()} className="btn btn-icon btn-ghost tx-modal-close"
                         aria-label="Zavřít">{getLineIcon('close', 16)}</button>
 
-                    {(() => {
-                        const catColor = categoryColors[tx.category || 'Other'];
-                        return (
-                            <div style={{
-                                width: 64, height: 64, borderRadius: 18, margin: '0 auto 10px',
-                                display: 'grid', placeItems: 'center',
-                                fontSize: '1.8rem', lineHeight: 1,
-                                background: catColor ? catColor + '22' : 'var(--surface-sunken)',
-                                color: catColor || undefined,
-                            }}>
-                                {getCategoryIcon(categoryIcons[tx.category || 'Other'], 32)}
-                            </div>
-                        );
-                    })()}
+                    <div style={{
+                        width: 64, height: 64, borderRadius: 20, margin: '0 auto 10px',
+                        display: 'grid', placeItems: 'center',
+                        fontSize: '1.8rem', lineHeight: 1,
+                        background: 'var(--surface-sunken)', color: 'var(--text-2)',
+                    }}>
+                        {getCategoryIcon(categoryIcons[tx.category || 'Other'], 32)}
+                    </div>
                     <div style={{ fontSize: 14, color: 'var(--text-2)', marginBottom: 4, fontWeight: 500 }}>
                         {getDisplayName(tx)}
                     </div>
@@ -283,15 +277,11 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                             <dd style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 {updatingCategory
                                     ? <span style={{ color: 'var(--text-3)' }}>Ukládám…</span>
-                                    : (() => {
-                                        const catColor = categoryColors[tx.category || 'Other'];
-                                        return (
-                                            <span className={`chip ${catColor ? '' : 'chip-accent'}`}
-                                                style={catColor ? { background: catColor + '22', color: catColor } : undefined}>
-                                                {getCategoryIcon(categoryIcons[tx.category || 'Other'], 13)} {tx.category || 'Other'}
-                                            </span>
-                                        );
-                                    })()
+                                    : (
+                                        <span className="chip chip-accent">
+                                            {getCategoryIcon(categoryIcons[tx.category || 'Other'], 13)} {tx.category || 'Other'}
+                                        </span>
+                                    )
                                 }
                                 <span style={{ color: 'var(--text-3)', display: 'inline-flex' }}>{getLineIcon('edit', 13)}</span>
                             </dd>
@@ -307,10 +297,7 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                                     <button key={cat.name}
                                         onClick={() => { onCategorySelect(tx.id, cat.name); setModalPickingCategory(false); }}
                                         className={`chip ${tx.category === cat.name ? 'chip-accent' : ''}`}
-                                        style={{
-                                            cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4,
-                                            ...(tx.category !== cat.name && cat.color ? { background: cat.color + '22', color: cat.color } : {}),
-                                        }}>
+                                        style={{ cursor: 'pointer', border: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}>
                                         {getCategoryIcon(cat.icon, 13)} {cat.name}
                                     </button>
                                 ))}

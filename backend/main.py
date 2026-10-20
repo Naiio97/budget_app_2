@@ -118,6 +118,27 @@ async def root():
     return {"message": "Budget Tracker API", "status": "running"}
 
 
+@app.get("/api/health")
+async def api_health():
+    """Liveness — odpoví hned, jakmile běží kontejner (bez dotazu do DB).
+    Používá loading obrazovka při cold startu."""
+    return {"status": "ok"}
+
+
+@app.get("/api/health/db")
+async def api_health_db(db: AsyncSession = Depends(get_db)):
+    """Readiness — 200 až když projde SELECT 1 do databáze, jinak 503."""
+    try:
+        await db.execute(text("SELECT 1"))
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        logger.warning(f"DB health check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "database": "disconnected"},
+        )
+
+
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)):
     """Healthcheck — ověří skutečné spojení s databází přes SELECT 1."""

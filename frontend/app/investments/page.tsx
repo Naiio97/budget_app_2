@@ -5,6 +5,7 @@ import { getPositionColor } from '@/lib/positionColors';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import MainLayout from '@/components/MainLayout';
+import SyncButton from '@/components/SyncButton';
 import {
     getInvestmentPortfolio,
     getPortfolioHistory,
@@ -15,6 +16,7 @@ import {
     getManualInvestments,
     getManualInvestmentHistory,
     createManualInvestment,
+    getDashboard,
     InvestmentPortfolio,
     InvestmentPortfolioDetail,
     PortfolioHistory,
@@ -27,8 +29,11 @@ import { queryKeys } from '@/lib/queryKeys';
 import {
     Area,
     AreaChart,
+    Bar,
+    BarChart,
     CartesianGrid,
     Cell,
+    Legend,
     Pie,
     PieChart,
     ResponsiveContainer,
@@ -114,6 +119,10 @@ export default function InvestmentsPage() {
     const resultTotal = (detail?.result ?? 0) + manualPnl;
     const resultPct = investedTotal > 0 ? (resultTotal / investedTotal) * 100 : 0;
     const accountCount = (portfolio ? 1 : 0) + manualInvestments.length;
+    const { data: dashData } = useQuery({ queryKey: queryKeys.dashboard, queryFn: () => getDashboard() });
+    const netWorth = dashData?.summary.total_balance ?? combinedTotal;
+    const investShare = netWorth > 0 ? Math.min(100, Math.max(0, (combinedTotal / netWorth) * 100)) : 0;
+    const otherAccounts = (dashData?.accounts ?? []).filter(a => a.type !== 'investment' && !manualInvestments.some(m => m.name === a.name));
 
     const combinedChartData = useMemo<ChartPoint[]>(() => {
         const allDates = new Set<string>();
@@ -334,6 +343,8 @@ export default function InvestmentsPage() {
                     </section>
                 )}
 
+                <div className="inv2-layout">
+                <div className="inv2-main">
                 <section className="surface investment-hero">
                     <div className="investment-hero-copy">
                         <span className="kpi-label">Celková hodnota portfolia</span>
@@ -382,15 +393,15 @@ export default function InvestmentsPage() {
                                 <AreaChart data={combinedChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="investmentValueFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="var(--pos)" stopOpacity={0.24} />
-                                            <stop offset="95%" stopColor="var(--pos)" stopOpacity={0} />
+                                            <stop offset="0%" stopColor="#4a86d8" stopOpacity={0.32} />
+                                            <stop offset="95%" stopColor="#4a86d8" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="4 7" stroke="var(--border)" vertical={false} />
                                     <XAxis dataKey="date" tickFormatter={formatAxisDate} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} height={24} tickMargin={2} />
                                     <YAxis tickFormatter={formatShortMoney} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} width={54} />
                                     <Tooltip content={<InvestmentTooltip />} />
-                                    <Area type="monotone" dataKey="value" stroke="var(--text)" strokeWidth={2.5} fill="url(#investmentValueFill)" />
+                                    <Area type="monotone" dataKey="value" stroke="#4a86d8" strokeWidth={2.5} fill="url(#investmentValueFill)" />
                                 </AreaChart>
                             </ResponsiveContainer>
                         ) : (
@@ -441,18 +452,21 @@ export default function InvestmentsPage() {
                         </div>
                         {allocationRows.length > 0 ? (
                             <div className="investment-allocation-body">
-                                <PieChart width={190} height={190}>
-                                    <Pie data={allocationRows} cx={95} cy={95} innerRadius={58} outerRadius={84} dataKey="value" strokeWidth={0}>
+                                <div className="inv2-donut">
+                                <PieChart width={240} height={240}>
+                                    <Pie data={allocationRows} cx={120} cy={120} innerRadius={78} outerRadius={110} dataKey="value" strokeWidth={0}>
                                         {allocationRows.map((row) => <Cell key={row.id} fill={row.color} />)}
                                     </Pie>
                                     <Tooltip formatter={(value: number | undefined) => formatCurrency(Number(value ?? 0))} />
                                 </PieChart>
+                                    <div className="inv2-donut-center"><span>Celkem</span><strong>{formatCurrency(combinedTotal)}</strong></div>
+                                </div>
                                 <div className="investment-allocation-list">
                                     {allocationRows.map((row) => (
                                         <div className="investment-allocation-row" key={row.id}>
                                             <span style={{ background: row.color }} />
                                             <strong>{row.name}</strong>
-                                            <em>{combinedTotal > 0 ? formatPct((row.value / combinedTotal) * 100) : '0 %'}</em>
+                                            <em><b>{formatCurrency(row.value)}</b> {combinedTotal > 0 ? formatPct((row.value / combinedTotal) * 100) : '0 %'}</em>
                                         </div>
                                     ))}
                                 </div>
@@ -533,24 +547,15 @@ export default function InvestmentsPage() {
 
                         <div className="investment-projection-chart">
                             <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={projectionData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="projectionInvestedFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
-                                            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.05} />
-                                        </linearGradient>
-                                        <linearGradient id="projectionGainsFill" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="var(--pos)" stopOpacity={0.28} />
-                                            <stop offset="100%" stopColor="var(--pos)" stopOpacity={0.07} />
-                                        </linearGradient>
-                                    </defs>
+                                <BarChart data={projectionData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }} barCategoryGap="14%">
                                     <CartesianGrid strokeDasharray="4 7" stroke="var(--border)" vertical={false} />
-                                    <XAxis dataKey="year" tickFormatter={(year: number) => year === 0 ? 'Dnes' : `+${year}r`} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                                    <XAxis dataKey="year" tickFormatter={(year: number) => year === 0 ? 'Dnes' : `${year}`} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} />
                                     <YAxis tickFormatter={formatShortMoney} tick={{ fill: 'var(--text-3)', fontSize: 12 }} axisLine={false} tickLine={false} width={54} />
-                                    <Tooltip content={<ProjectionTooltip />} />
-                                    <Area type="monotone" dataKey="invested" stackId="1" stroke="var(--accent)" strokeWidth={1.7} fill="url(#projectionInvestedFill)" />
-                                    <Area type="monotone" dataKey="gains" stackId="1" stroke="var(--pos)" strokeWidth={1.7} fill="url(#projectionGainsFill)" />
-                                </AreaChart>
+                                    <Tooltip cursor={{ fill: 'var(--surface-sunken)' }} content={<ProjectionTooltip />} />
+                                    <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} formatter={(v) => v === 'invested' ? 'Vloženo' : 'Výnos'} />
+                                    <Bar dataKey="invested" stackId="p" fill="#4a86d8" />
+                                    <Bar dataKey="gains" stackId="p" fill="#2f9c78" radius={[4, 4, 0, 0]} />
+                                </BarChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
@@ -570,8 +575,19 @@ export default function InvestmentsPage() {
                         </div>
                     </div>
                 </section>
+                </div>
+                <aside className="inv2-aside">
+                    <section className="surface inv2-card inv2-net">
+                        <div className="card-head"><h3>Čisté jmění</h3></div>
+                        <div className="inv2-net-value num">{formatCurrency(netWorth)}</div>
+                        <div className="inv2-net-bar"><span style={{ width: `${investShare}%` }} /></div>
+                        <div className="inv2-net-meta">
+                            <span>Investice {formatPct(investShare)}</span>
+                            <span className="num">{formatCurrency(combinedTotal)}</span>
+                        </div>
+                    </section>
 
-                <section className="surface investment-accounts-card">
+                <section className="surface investment-accounts-card inv2-card">
                     <div className="card-head">
                         <h3>Investiční účty</h3>
                         <button className="btn" onClick={() => setShowNewAccountForm((value) => !value)}>+ Přidat</button>
@@ -599,6 +615,35 @@ export default function InvestmentsPage() {
                         ))}
                     </div>
                 </section>
+
+                    {otherAccounts.length > 0 && (
+                        <section className="surface inv2-card hide-with-drawer">
+                            <div className="card-head">
+                                <h3>Ostatní účty</h3>
+                                <span className="muted small">{otherAccounts.length}</span>
+                            </div>
+                            <div className="inv2-other">
+                                {otherAccounts.slice(0, 5).map(acc => (
+                                    <div key={acc.id} className="inv2-other-row">
+                                        <span className="inv2-other-avatar">{acc.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}</span>
+                                        <span className="inv2-other-name">{acc.name}</span>
+                                        <strong className="num">{formatCurrency(acc.balance, acc.currency)}</strong>
+                                    </div>
+                                ))}
+                            </div>
+                            <Link href="/settings" className="inv2-link">+ Propojit účet</Link>
+                        </section>
+                    )}
+
+                    <section className="surface inv2-card inv2-sync">
+                        <div>
+                            <div className="inv2-sync-label">Poslední synchronizace</div>
+                            <strong>{portfolio?.last_synced ? formatDate(portfolio.last_synced) : 'zatím neproběhla'}</strong>
+                        </div>
+                        <SyncButton />
+                    </section>
+                </aside>
+                </div>
             </div>
         </MainLayout>
     );
@@ -658,7 +703,7 @@ function cleanTicker(ticker: string) {
 }
 
 function allocationColor(index: number) {
-    const colors = ['#34c759', '#007aff', '#ff9f0a', '#5e5ce6', '#ff3b30', '#30b0c7', '#af52de', '#64d2ff'];
+    const colors = ['#6a9fd0', '#b8a56a', '#9d92c9', '#7fbf9e', '#d09a8a', '#7fb8c4', '#c58fb0', '#a3acba'];
     return colors[index % colors.length];
 }
 

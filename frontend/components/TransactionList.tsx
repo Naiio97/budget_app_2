@@ -8,12 +8,14 @@ import { Icons } from '@/lib/icons';
 import { getCategoryIcon } from '@/lib/category-icons';
 import { getLineIcon } from '@/lib/line-icons';
 import TransactionDetailModal from './TransactionDetailModal';
-import { formatCurrency, getDisplayName, type Category } from './transaction-format';
+import { categoryLabel, formatCurrency, getDisplayName, type Category } from './transaction-format';
 
 interface TransactionListProps {
     transactions: Transaction[];
     showAccount?: boolean;
     onCategoryChange?: (id: string, newCategory: string) => void;
+    /** 'table' = sloupce Transakce / Kategorie / Účet / Částka (desktop), 'list' = původní seznam */
+    variant?: 'list' | 'table';
 }
 
 // Fallback icons for special categories
@@ -28,7 +30,8 @@ const FALLBACK_COLORS: Record<string, string> = {
     'Family Transfer': '#6b7280',
 };
 
-export default function TransactionList({ transactions: initialTransactions, showAccount = false, onCategoryChange }: TransactionListProps) {
+export default function TransactionList({ transactions: initialTransactions, showAccount = false, onCategoryChange, variant = 'list' }: TransactionListProps) {
+    const isTable = variant === 'table';
     const queryClient = useQueryClient();
     const [transactions, setTransactions] = useState(initialTransactions);
     const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -188,7 +191,6 @@ export default function TransactionList({ transactions: initialTransactions, sho
                 tx={modalTx}
                 categories={categories}
                 categoryIcons={categoryIcons}
-                categoryColors={categoryColors}
                 counterpartySuggestions={counterpartySuggestions}
                 updatingCategory={updatingId === modalTx.id}
                 onCategorySelect={handleCategorySelect}
@@ -200,7 +202,15 @@ export default function TransactionList({ transactions: initialTransactions, sho
         )}
 
         {/* Grouped transaction list */}
-        <div className="transaction-list">
+        <div className={`transaction-list${isTable ? ' tx-table' : ''}`}>
+            {isTable && (
+                <div className="tx-table-head" aria-hidden>
+                    <span className="tx-th-name">Transakce</span>
+                    <span>Kategorie</span>
+                    <span>Účet</span>
+                    <span className="tx-th-amount">Částka</span>
+                </div>
+            )}
             {sortedDates.map(date => {
                 const dayTxs = groupedByDate[date];
                 const { income, expense } = getDailySummary(dayTxs);
@@ -258,15 +268,17 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             {getDisplayName(tx)}
                                         </div>
                                         <div className="transaction-meta">
-                                            <span className="tx-category-label">
-                                                {tx.category || 'Other'}
-                                            </span>
+                                            {!isTable && (
+                                                <span className="tx-category-label">
+                                                    {tx.category || 'Other'}
+                                                </span>
+                                            )}
                                             {(tx.tags ?? []).map(tag => (
                                                 <span key={tag.id} className="tx-tag-label" style={{ color: tag.color ?? 'var(--text-3)' }}>
                                                     #{tag.name}
                                                 </span>
                                             ))}
-                                            {showAccount && tx.account_name && (
+                                            {!isTable && showAccount && tx.account_name && (
                                                 <span className="tx-account-label">• {tx.account_name}</span>
                                             )}
                                             {tx.my_share_amount != null && tx.amount < 0 && (
@@ -277,6 +289,12 @@ export default function TransactionList({ transactions: initialTransactions, sho
                                             )}
                                         </div>
                                     </div>
+                                    {isTable && (
+                                        <>
+                                            <div className="tx-cell">{categoryLabel(tx.category)}</div>
+                                            <div className="tx-cell">{tx.account_name ?? ''}</div>
+                                        </>
+                                    )}
                                     <div className={`transaction-amount ${tx.amount >= 0 ? 'income' : 'expense'}`}
                                         style={updatingId === tx.id ? { opacity: 0.5 } : undefined}>
                                         {tx.amount >= 0 ? '+' : ''}{formatCurrency(tx.amount, tx.currency)}

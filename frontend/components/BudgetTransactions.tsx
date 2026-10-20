@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TransactionList from '@/components/TransactionList';
 import { Budget, Transaction, PaginatedResponse, getTransactions } from '@/lib/api';
@@ -19,8 +20,11 @@ function currentMonthRange(): { date_from: string; date_to: string } {
     };
 }
 
+const PREVIEW = 5;
+
 export default function BudgetTransactions({ budget }: { budget: Budget }) {
     const queryClient = useQueryClient();
+    const [showAll, setShowAll] = useState(false);
     const { date_from, date_to } = currentMonthRange();
 
     const { data, isLoading, isError } = useQuery<PaginatedResponse<Transaction>>({
@@ -50,15 +54,23 @@ export default function BudgetTransactions({ budget }: { budget: Budget }) {
         return <p style={{ fontSize: 13, color: 'var(--neg)', margin: 0 }}>Transakce se nepodařilo načíst.</p>;
     }
     if (data.items.length === 0) {
-        return <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Tento měsíc tu zatím nejsou žádné transakce.</p>;
+        return <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Tento měsíc tu zatím nejsou žádné platby.</p>;
     }
 
+    const shown = showAll ? data.items : data.items.slice(0, PREVIEW);
+
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div className="card-body-nopad">
-                <TransactionList transactions={data.items} showAccount onCategoryChange={handleCategoryChange} />
+        <div className="bud-tx">
+            <div className="bud-tx-head">
+                <h4>Poslední platby v rozpočtu</h4>
+                {data.items.length > PREVIEW && (
+                    <button type="button" className="dash-link bud-tx-toggle" onClick={() => setShowAll(v => !v)}>
+                        {showAll ? 'Zobrazit méně' : `Zobrazit vše (${data.total})`}
+                    </button>
+                )}
             </div>
-            {data.total > data.items.length && (
+            <TransactionList transactions={shown} showAccount variant="table" onCategoryChange={handleCategoryChange} />
+            {showAll && data.total > data.items.length && (
                 <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
                     Zobrazeno {data.items.length} z {data.total} transakcí
                 </span>
