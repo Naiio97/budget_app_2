@@ -4159,10 +4159,11 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     place-items: end stretch;
     padding: 0 !important;
   }
-  .tx-modal-card {
+  /* .modal.tx-modal-card — vyšší specificita, jinak ho přebije skleněné .modal (28px) níž v souboru */
+  .modal.tx-modal-card {
     min-width: 0;
     max-width: none;
-    border-radius: 22px 22px 0 0;
+    border-radius: 28px 28px 0 0;
     border-bottom: none;
     animation: tx-sheet-up 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }

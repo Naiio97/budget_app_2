@@ -60,10 +60,10 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
     const onSheetTouchEnd = () => {
         if (sheetDragStartY.current === null) return;
         sheetDragStartY.current = null;
-        setSheetDrag(prev => {
-            if (prev.y > 110) onClose();
-            return { y: 0, dragging: false };
-        });
+        // onClose nesmí běžet v updater funkci setState — ta se spouští při renderu
+        // a zavření by měnilo stav rodiče (TransactionList) uprostřed renderu.
+        if (sheetDrag.y > 110) onClose();
+        setSheetDrag({ y: 0, dragging: false });
     };
 
     // Close on Escape + lock body scroll while open
@@ -134,8 +134,9 @@ export default function TransactionDetailModal({ tx, categories, categoryIcons, 
                             apply_retroactively: true,
                         });
                     } catch (err) {
-                        // duplicate rule etc. — the split itself is already saved
-                        console.error('Failed to create share rule:', err);
+                        // Duplicate rule etc. — the split itself is already saved. console.warn,
+                        // ne error: tohle je očekávaný stav a error by vyvolal Next dev overlay.
+                        console.warn('Share rule not created:', err);
                     }
                 }
             }
