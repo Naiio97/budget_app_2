@@ -1370,6 +1370,10 @@ select.input {
   color: var(--neg);
 }
 .plan-row-spacer { width: 28px; }
+/* Řádek bez akčního sloupce (odhad výplaty) — název | částka */
+.plan-row--flat { grid-template-columns: minmax(0, 1fr) 112px; }
+.salary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.salary-actions .btn { max-width: 100%; }
 .plan-add-btn {
   display: inline-flex;
   align-items: center;
@@ -3327,6 +3331,12 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     min-height: 40px;
     height: 40px;
   }
+  .plan-row--flat { grid-template-columns: minmax(0, 1fr) 128px; }
+  .plan-rows { gap: 6px; }
+  .salary-actions-wrap { margin-top: 4px; }
+  /* Tlačítka timesheetu na telefonu: rovnoměrná dvojice přes celou šířku */
+  .salary-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .salary-actions .btn { width: 100%; min-height: 40px; height: 40px; border-radius: var(--radius-full); }
   .budget-savings-rate-card {
     border-radius: 16px !important;
     padding: 12px 14px !important;
