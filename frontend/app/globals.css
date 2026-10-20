@@ -2969,26 +2969,26 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     transition: opacity 0.2s ease, visibility 0s;
   }
 
-  /* Plovoucí skleněný panel — stejný jazyk jako appbar a bottom-nav */
+  /* Boční panel přes celou výšku (od horního po spodní okraj), zaoblený jen vlevo */
   .mobile-tools-drawer {
     display: flex;
     position: fixed;
-    top: calc(12px + env(safe-area-inset-top));
-    right: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
+    top: 0;
+    right: 0;
+    bottom: 0;
     z-index: 350;
-    width: min(340px, calc(100vw - 46px));
+    width: min(340px, calc(100vw - 34px));
     max-width: calc(100vw / var(--ui-zoom, 1));
     flex-direction: column;
     gap: 14px;
-    padding: 18px 16px;
+    padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
     background: rgba(248, 250, 253, 0.96);
     backdrop-filter: blur(40px) saturate(180%);
     -webkit-backdrop-filter: blur(40px) saturate(180%);
     border: none;
-    border-radius: 28px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14), inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
-    transform: translateX(calc(100% + 24px));
+    border-radius: 28px 0 0 28px;
+    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.18), inset 0.5px 0 0 rgba(255, 255, 255, 0.55);
+    transform: translateX(100%);
     visibility: hidden;
     transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.2, 1), visibility 0s linear 0.24s;
     overflow-y: auto;
@@ -2996,7 +2996,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   [data-mode="dark"] .mobile-tools-drawer {
     background: rgba(36, 36, 40, 0.97);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), inset 0 0.5px 0 rgba(255, 255, 255, 0.09);
+    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5), inset 0.5px 0 0 rgba(255, 255, 255, 0.09);
   }
 
   .mobile-tools-drawer.open {
