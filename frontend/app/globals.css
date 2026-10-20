@@ -5074,7 +5074,7 @@ body:has(.dash) {
 .inv2-hero:has(.inv2-hero-chart:empty) { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 900px) { .inv2-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; } }
 
-.inv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
+.inv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: stretch; }
 .inv2-side { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
 @media (max-width: 1100px) { .inv2-grid { grid-template-columns: minmax(0, 1fr); } }
 
