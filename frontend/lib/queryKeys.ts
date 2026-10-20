@@ -39,6 +39,7 @@ export const queryKeys = {
   subscriptionsSummary: ['subscriptions-summary'] as const,
   subscriptionsDetect: ['subscriptions-detect'] as const,
   salaryConfig: ['salary-config'] as const,
+  accountColors: ['account-colors'] as const,
   salaryEstimates: ['salary-estimates'] as const,
   salaryEstimate: (yearMonth: string) => ['salary-estimate', yearMonth] as const,
 };

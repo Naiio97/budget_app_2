@@ -2463,6 +2463,12 @@ select.input {
   padding-top: 0;
 }
 .account-title-block { min-width: 0; }
+.account-title-row { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.account-head-avatar {
+  width: 52px; height: 52px; border-radius: 15px; flex-shrink: 0; color: #fff;
+  display: grid; place-items: center; font-size: 17px; font-weight: 600;
+}
+@media (max-width: 680px) { .account-head-avatar { width: 44px; height: 44px; border-radius: 13px; font-size: 15px; } }
 .account-back-btn {
   min-width: 70px;
   height: 36px;
@@ -2793,6 +2799,11 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 .loan-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .loan-field > span { font-size: 12px; color: var(--text-2); }
 .loan-field-wide { grid-column: 1 / -1; }
+/* Povinná pole a chybové hlášky ve formulářích */
+.field-req { color: var(--neg); font-weight: 600; }
+.field-error { color: var(--neg); font-size: 12px; line-height: 1.3; }
+.field-hint { color: var(--text-3); font-size: 12px; line-height: 1.3; }
+.input.input-error { border-color: var(--neg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--neg) 18%, transparent); }
 
 .loan-card-head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -2969,26 +2980,26 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     transition: opacity 0.2s ease, visibility 0s;
   }
 
-  /* Plovoucí skleněný panel — stejný jazyk jako appbar a bottom-nav */
+  /* Boční panel přes celou výšku (od horního po spodní okraj), zaoblený jen vlevo */
   .mobile-tools-drawer {
     display: flex;
     position: fixed;
-    top: calc(12px + env(safe-area-inset-top));
-    right: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
+    top: 0;
+    right: 0;
+    bottom: 0;
     z-index: 350;
-    width: min(340px, calc(100vw - 46px));
+    width: min(340px, calc(100vw - 34px));
     max-width: calc(100vw / var(--ui-zoom, 1));
     flex-direction: column;
     gap: 14px;
-    padding: 18px 16px;
+    padding: calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
     background: rgba(248, 250, 253, 0.96);
     backdrop-filter: blur(40px) saturate(180%);
     -webkit-backdrop-filter: blur(40px) saturate(180%);
     border: none;
-    border-radius: 28px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14), inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
-    transform: translateX(calc(100% + 24px));
+    border-radius: 28px 0 0 28px;
+    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.18), inset 0.5px 0 0 rgba(255, 255, 255, 0.55);
+    transform: translateX(100%);
     visibility: hidden;
     transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.2, 1), visibility 0s linear 0.24s;
     overflow-y: auto;
@@ -2996,7 +3007,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   }
   [data-mode="dark"] .mobile-tools-drawer {
     background: rgba(36, 36, 40, 0.97);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), inset 0 0.5px 0 rgba(255, 255, 255, 0.09);
+    box-shadow: -16px 0 40px rgba(0, 0, 0, 0.5), inset 0.5px 0 0 rgba(255, 255, 255, 0.09);
   }
 
   .mobile-tools-drawer.open {
@@ -5069,7 +5080,7 @@ body:has(.dash) {
 .inv2-hero:has(.inv2-hero-chart:empty) { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 900px) { .inv2-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; } }
 
-.inv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: start; }
+.inv2-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--spacing-md); align-items: stretch; }
 .inv2-side { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
 @media (max-width: 1100px) { .inv2-grid { grid-template-columns: minmax(0, 1fr); } }
 
@@ -5248,7 +5259,7 @@ body:has(.dash) {
 }
 
 .sb-section-title { font-size: 17px; font-weight: 600; margin: 8px 4px 0; color: var(--text); }
-.sb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); align-items: start; }
+.sb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); align-items: stretch; }
 @media (max-width: 1000px) { .sb-grid { grid-template-columns: minmax(0, 1fr); } }
 .sb-card { display: flex; flex-direction: column; gap: 16px; }
 .sb-card-head { display: flex; align-items: flex-start; gap: 14px; }
@@ -5257,6 +5268,8 @@ body:has(.dash) {
 .sb-card-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .sb-card-title strong { font-size: 17px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Dlouhé štítky (Zdraženo…, Dlouho žádná platba…) se v úzké kartě zalomí do více řádků místo vmáčknutí do 20px pilulky */
+.sb-chips .chip { height: auto; min-height: 20px; padding: 3px 8px; border-radius: 10px; line-height: 1.25; white-space: normal; text-align: left; max-width: 100%; }
 .sb-card-price { display: flex; flex-direction: column; align-items: flex-end; }
 .sb-card-price strong { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; color: var(--text); }
 .sb-card-price span { font-size: 12.5px; color: var(--text-3); }
@@ -5270,6 +5283,8 @@ body:has(.dash) {
 .sb-meta span { font-size: 12px; color: var(--text-3); }
 .sb-meta strong { font-size: 14.5px; font-weight: 600; color: var(--text); }
 .sb-actions { display: flex; justify-content: flex-end; gap: 4px; margin: -4px 0 -6px; opacity: 0.7; }
+/* karty v řádku mají stejnou výšku, akce drží u spodku i když chybí „Moje část" */
+.sb-card .sb-actions { margin-top: auto; }
 .sb-actions:hover { opacity: 1; }
 
 .sb-cancelled { padding: 6px 24px; }
@@ -5463,4 +5478,44 @@ body { zoom: var(--ui-zoom); }
   .dash-kpis, .dash-col,
   .bud-kpis, .bud-layout, .bud-list, .bud-aside { gap: var(--spacing-md); }
   .investment-header { margin-bottom: var(--spacing-md); }
+}
+
+/* Nastavení → Účty: výběr barvy účtu */
+.set-color-wrap { position: relative; display: inline-flex; }
+.set-color-dot { width: 14px; height: 14px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+.set-color-backdrop { position: fixed; inset: 0; z-index: 60; }
+.set-color-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 61;
+  width: 212px; padding: 12px; border-radius: 16px;
+  background: var(--surface-strong); border: 0.5px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.set-color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.set-color-swatch {
+  width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2); transition: transform 0.12s;
+}
+.set-color-swatch:hover { transform: scale(1.12); }
+.set-color-swatch.active { box-shadow: 0 0 0 2px var(--surface-strong), 0 0 0 4px var(--text); }
+.set-color-reset {
+  border: 0; background: var(--surface-sunken); color: var(--text-2); font: inherit; font-size: 12.5px;
+  padding: 7px 10px; border-radius: 10px; cursor: pointer;
+}
+.set-color-reset:disabled { opacity: 0.5; cursor: default; }
+
+/* Nádech barvy účtu přes celé pozadí (detail účtu) — fixní vrstva za obsahem, od
+   úplného horního okraje, takže prosvítá i skrz sklo horního menu. */
+/* body jako vlastní stacking kontext: z-index:-1 se pak kreslí nad pozadím body, pod obsahem */
+html[data-page-tint] body { isolation: isolate; }
+html[data-page-tint] body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(130% 75% at 22% 0%,
+    color-mix(in srgb, var(--page-tint) 34%, transparent) 0%,
+    color-mix(in srgb, var(--page-tint) 12%, transparent) 50%,
+    transparent 80%);
 }

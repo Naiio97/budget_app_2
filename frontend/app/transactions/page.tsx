@@ -334,7 +334,7 @@ function TransactionsPageContent() {
                             <CustomSelect
                                 options={categoriesData.filter((c: Category) => c.is_active).map((cat: Category) => ({
                                     value: cat.name,
-                                    label: cat.name,
+                                    label: categoryLabel(cat.name),
                                     icon: getCategoryIcon(cat.icon, 15),
                                 }))}
                                 value={selectedCategory}
@@ -408,7 +408,7 @@ function TransactionsPageContent() {
                             )}
                             {tagSummary.by_category.slice(0, 3).map(bc => (
                                 <div key={bc.category}>
-                                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{bc.category}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{categoryLabel(bc.category)}</div>
                                     <div className="num" style={{ fontSize: 16 }}>{formatCurrency(bc.amount)}</div>
                                 </div>
                             ))}

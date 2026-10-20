@@ -26,6 +26,7 @@ import {
     ManualInvestmentAccount,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { categoryLabel } from '@/components/transaction-format';
 import {
     Area,
     AreaChart,
@@ -52,6 +53,7 @@ type HoldingRow = {
     pnl: number | null;
     pnlPct: number | null;
     share: number;
+    color?: string;
 };
 
 const PERIODS = ['1W', '1M', '3M', '6M', '1Y', 'ALL'];
@@ -171,9 +173,11 @@ export default function InvestmentsPage() {
         return () => window.removeEventListener('storage', onStorage);
     }, []);
 
-    const allocationRows = useMemo(() => {
+    // Všechny skupiny s přiřazenou barvou (bez řazení a ořezu na 8) — z ní čerpá
+    // graf Rozložení i barvy barů u pozic, ať si odpovídají.
+    const allocationAll = useMemo(() => {
         void colorVersion;
-        const rows = [
+        return [
             ...pies.map((pie) => ({
                 id: `pie-${pie.id}`,
                 name: pie.name,
@@ -202,10 +206,17 @@ export default function InvestmentsPage() {
                 color: allocationColor(pies.length + orphanPositions.length + index + 1),
             })),
         ].filter((row) => row.value > 0);
-
-        return rows.sort((a, b) => b.value - a.value).slice(0, 8);
         // colorVersion is intentional dep — it triggers re-read from localStorage
     }, [manualInvestments, orphanPositions, pies, colorVersion]);
+
+    const allocationRows = useMemo(
+        () => [...allocationAll].sort((a, b) => b.value - a.value).slice(0, 8),
+        [allocationAll],
+    );
+    const allocationColorById = useMemo(
+        () => Object.fromEntries(allocationAll.map((row) => [row.id, row.color])) as Record<string, string>,
+        [allocationAll],
+    );
 
     const holdingRows = useMemo<HoldingRow[]>(() => {
         const pieHoldings = pies.flatMap((pie) => pie.instruments.map((instrument) => {
@@ -218,6 +229,7 @@ export default function InvestmentsPage() {
                 pnl: position?.ppl_czk ?? instrument.result_czk ?? null,
                 pnlPct: position?.ppl_pct ?? null,
                 share: combinedTotal > 0 ? (instrument.value_czk / combinedTotal) * 100 : 0,
+                color: allocationColorById[`pie-${pie.id}`],
             };
         }));
 
@@ -229,6 +241,7 @@ export default function InvestmentsPage() {
             pnl: position.ppl_czk,
             pnlPct: position.ppl_pct,
             share: combinedTotal > 0 ? (position.value_czk / combinedTotal) * 100 : 0,
+            color: allocationColorById[`pos-${position.ticker}`],
         }));
 
         const manualHoldings = manualInvestments.flatMap((account) => account.positions.map((position) => ({
@@ -239,10 +252,11 @@ export default function InvestmentsPage() {
             pnl: position.pnl,
             pnlPct: position.pnl_pct,
             share: combinedTotal > 0 ? (position.current_value / combinedTotal) * 100 : 0,
+            color: allocationColorById[`manual-${account.id}`],
         })));
 
         return [...pieHoldings, ...orphanHoldings, ...manualHoldings].sort((a, b) => b.value - a.value).slice(0, 12);
-    }, [combinedTotal, manualInvestments, orphanPositions, pies, positionMap]);
+    }, [allocationColorById, combinedTotal, manualInvestments, orphanPositions, pies, positionMap]);
 
     const projectionData = useMemo<ProjectionPoint[]>(() => {
         const start = projStartOverride !== '' ? (parseFloat(projStartOverride) || 0) : combinedTotal;
@@ -428,7 +442,7 @@ export default function InvestmentsPage() {
                                         <span>{holding.source}</span>
                                     </div>
                                     <div className="investment-holding-share">
-                                        <div style={{ width: `${Math.min(100, Math.max(3, holding.share))}%` }} />
+                                        <div style={{ width: `${Math.min(100, Math.max(3, holding.share))}%`, background: holding.color }} />
                                     </div>
                                     <div className="investment-holding-value">
                                         <strong>{formatCurrency(holding.value)}</strong>
@@ -490,7 +504,7 @@ export default function InvestmentsPage() {
                                             <div className="investment-feed-icon">{transaction.amount >= 0 ? '+' : '-'}</div>
                                             <div>
                                                 <strong>{transaction.description}</strong>
-                                                <span>{formatDate(transaction.date)} · {transaction.category}</span>
+                                                <span>{formatDate(transaction.date)} · {categoryLabel(transaction.category)}</span>
                                             </div>
                                             <em className={transaction.amount >= 0 ? 'positive' : ''}>
                                                 {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount, transaction.currency)}

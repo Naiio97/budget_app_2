@@ -290,9 +290,6 @@ export default function Trading212DetailPage() {
 
                 {/* Page head */}
                 <div className="account-detail-head inv2-head">
-                    <button type="button" onClick={() => router.back()} className="inv2-back" aria-label="Zpět">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m15 18-6-6 6-6" /></svg>
-                    </button>
                     <div className="account-title-block">
                         <h1>Trading 212</h1>
                         <div className="account-detail-sub">
@@ -303,6 +300,7 @@ export default function Trading212DetailPage() {
                     <div className="inv2-actions">
                         <span className="inv2-pill"><i />Synchronizováno přes API</span>
                         <SyncButton />
+                        <button type="button" onClick={() => router.back()} className="btn account-back-btn">← Zpět</button>
                     </div>
                 </div>
 

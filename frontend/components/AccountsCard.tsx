@@ -4,7 +4,8 @@ import Link from 'next/link';
 import type { Account } from '@/lib/api';
 import { formatCurrency } from '@/lib/format';
 import { getConsentStatus } from '@/lib/consent';
-import { avatarColor, avatarInitials } from '@/lib/account-avatar';
+import { avatarInitials } from '@/lib/account-avatar';
+import { useAccountColors } from '@/lib/account-colors';
 import SyncButton from './SyncButton';
 
 // Rozpoznání podle částí kódu banky (GoCardless: „CESKA_SPORITELNA_GIBACZPX", „AIRBANK_AIRACZPP")
@@ -53,6 +54,7 @@ const MAX_SHOWN = 6;
 
 // hideWithDrawer: tam, kde je seznam účtů i v bočním menu (≤1200 px), se karta schová
 export default function AccountsCard({ accounts, hideWithDrawer = false }: { accounts: Account[]; hideWithDrawer?: boolean }) {
+    const { colorFor } = useAccountColors();
     const shown = accounts.slice(0, MAX_SHOWN);
 
     return (
@@ -72,7 +74,7 @@ export default function AccountsCard({ accounts, hideWithDrawer = false }: { acc
                     const syncBroken = !consentWarning && !!acc.last_sync_error;
                     return (
                         <Link key={acc.id} href={accountHref(acc)} className="dash-acc">
-                            <span className="dash-avatar" style={{ background: avatarColor(acc.name) }}>
+                            <span className="dash-avatar" style={{ background: colorFor(acc.id, acc.name) }}>
                                 {avatarInitials(acc.name)}
                             </span>
                             <span className="dash-acc-text">

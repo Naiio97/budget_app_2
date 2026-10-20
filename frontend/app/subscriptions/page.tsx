@@ -40,12 +40,14 @@ const emptyForm = {
     contribution_pattern: '',
 };
 type SubscriptionFormState = typeof emptyForm;
+type FormErrors = Partial<Record<'name' | 'merchant_pattern' | 'amount', string>>;
 
 // Sdílený formulář pro vytvoření (karta nahoře) i inline editaci v kartě
 // konkrétního předplatného.
-function SubscriptionForm({ form, setForm, saving, isEdit, hasError, onSubmit, onCancel }: {
+function SubscriptionForm({ form, setForm, errors, saving, isEdit, hasError, onSubmit, onCancel }: {
     form: SubscriptionFormState;
     setForm: (f: SubscriptionFormState) => void;
+    errors: FormErrors;
     saving: boolean;
     isEdit: boolean;
     hasError: boolean;
@@ -56,16 +58,21 @@ function SubscriptionForm({ form, setForm, saving, isEdit, hasError, onSubmit, o
         <>
             <div className="loan-form-grid">
                 <label className="loan-field">
-                    <span>Název</span>
-                    <input className="input" placeholder="Netflix" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                    <span>Název <b className="field-req" title="Povinné">*</b></span>
+                    <input className={`input${errors.name ? ' input-error' : ''}`} placeholder="Netflix" value={form.name} aria-invalid={!!errors.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                    {errors.name && <small className="field-error">{errors.name}</small>}
                 </label>
                 <label className="loan-field">
-                    <span>Text pro párování plateb</span>
-                    <input className="input" placeholder="netflix" value={form.merchant_pattern} onChange={e => setForm({ ...form, merchant_pattern: e.target.value })} />
+                    <span>Text pro párování plateb <b className="field-req" title="Povinné">*</b></span>
+                    <input className={`input${errors.merchant_pattern ? ' input-error' : ''}`} placeholder="netflix" value={form.merchant_pattern} aria-invalid={!!errors.merchant_pattern} onChange={e => setForm({ ...form, merchant_pattern: e.target.value })} />
+                    {errors.merchant_pattern
+                        ? <small className="field-error">{errors.merchant_pattern}</small>
+                        : <small className="field-hint">Část názvu obchodníka z výpisu — podle ní se hledají platby.</small>}
                 </label>
                 <label className="loan-field">
-                    <span>Částka (Kč)</span>
-                    <input className="input" type="number" placeholder="269" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+                    <span>Částka (Kč) <b className="field-req" title="Povinné">*</b></span>
+                    <input className={`input${errors.amount ? ' input-error' : ''}`} type="number" placeholder="269" value={form.amount} aria-invalid={!!errors.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
+                    {errors.amount && <small className="field-error">{errors.amount}</small>}
                 </label>
                 <label className="loan-field">
                     <span>Perioda</span>
@@ -149,7 +156,8 @@ export default function SubscriptionsPage() {
         queryClient.invalidateQueries({ queryKey: queryKeys.subscriptionsSummary });
     };
 
-    const closeForm = () => { setShowForm(false); setEditingId(null); setForm(emptyForm); };
+    const [errors, setErrors] = useState<FormErrors>({});
+    const closeForm = () => { setShowForm(false); setEditingId(null); setForm(emptyForm); setErrors({}); };
 
     const createMutation = useMutation({
         mutationFn: (data: SubscriptionCreateInput) => createSubscription(data),
@@ -176,6 +184,7 @@ export default function SubscriptionsPage() {
     // slouží jen pro nové předplatné.
     const startEdit = (sub: Subscription) => {
         setShowForm(false);
+        setErrors({});
         setEditingId(sub.id);
         setForm({
             name: sub.name,
@@ -192,7 +201,12 @@ export default function SubscriptionsPage() {
 
     const submit = () => {
         const amount = parseFloat(form.amount);
-        if (!form.name.trim() || !form.merchant_pattern.trim() || !(amount > 0)) return;
+        const found: FormErrors = {};
+        if (!form.name.trim()) found.name = 'Vyplň název.';
+        if (!form.merchant_pattern.trim()) found.merchant_pattern = 'Vyplň text pro párování plateb — bez něj se nedají najít platby.';
+        if (!(amount > 0)) found.amount = 'Zadej částku větší než 0.';
+        setErrors(found);
+        if (Object.keys(found).length > 0) return;
         const data: SubscriptionCreateInput = {
             name: form.name.trim(),
             merchant_pattern: form.merchant_pattern.trim(),
@@ -241,7 +255,7 @@ export default function SubscriptionsPage() {
                         >
                             {detecting ? 'Hledám…' : <>{LineIcons.search} Najít v historii</>}
                         </button>
-                        <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setShowForm(true); }}>
+                        <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm(emptyForm); setErrors({}); setShowForm(true); }}>
                             + Přidat ručně
                         </button>
                     </div>
@@ -336,7 +350,16 @@ export default function SubscriptionsPage() {
                     >
                         <SubscriptionForm
                             form={form}
-                            setForm={setForm}
+                            setForm={(f) => {
+                                setForm(f);
+                                // chyba u pole zmizí, jakmile ho uživatel upraví
+                                setErrors(prev => ({
+                                    name: f.name !== form.name ? undefined : prev.name,
+                                    merchant_pattern: f.merchant_pattern !== form.merchant_pattern ? undefined : prev.merchant_pattern,
+                                    amount: f.amount !== form.amount ? undefined : prev.amount,
+                                }));
+                            }}
+                            errors={errors}
                             saving={saving}
                             isEdit={editingId != null}
                             hasError={editingId != null ? updateMutation.isError : createMutation.isError}
@@ -473,18 +496,17 @@ function SubscriptionCard({ sub, onEdit, onToggleActive, onDelete, onAdoptPrice 
                 </div>
             </div>
 
-            {isShared && (
-                <div className="sb-mine">
-                    <div className="sb-mine-row">
-                        <span>Moje část</span>
-                        <span className="num">
-                            {formatCurrency(sub.my_amount, sub.currency)}
-                            {sub.my_amount_override == null && ` (${sub.my_percentage} %)`}
-                        </span>
-                    </div>
-                    <div className="sb-mine-bar"><span style={{ width: `${minePct}%`, background: color }} /></div>
+            {/* Blok je u každé karty (u nesdílených 100 %), aby měly karty stejnou strukturu i výšku */}
+            <div className="sb-mine">
+                <div className="sb-mine-row">
+                    <span>Moje část</span>
+                    <span className="num">
+                        {formatCurrency(sub.my_amount, sub.currency)}
+                        {sub.my_amount_override == null && ` (${sub.my_percentage} %)`}
+                    </span>
                 </div>
-            )}
+                <div className="sb-mine-bar"><span style={{ width: `${minePct}%`, background: color }} /></div>
+            </div>
 
             <div className="sb-meta">
                 <div>

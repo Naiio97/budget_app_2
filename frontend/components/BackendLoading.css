@@ -1,6 +1,8 @@
 .bl-screen {
   --bl-blue:#2F6BEA; --bl-sky:#6FA2FF; --bl-ink:#121A2B; --bl-soft:#5B6880; --bl-mist:#8C9DB8; --bl-ok:#2E9E6B;
-  min-height: 100vh; min-height: 100dvh; padding: 20px;
+  /* Desktop má body { zoom: 0.8 } — bez vydělení zoomem by obrazovka pokryla jen
+     80 % výšky a dole by prosvítalo tmavé pozadí stránky */
+  min-height: calc(100vh / var(--ui-zoom, 1)); min-height: calc(100dvh / var(--ui-zoom, 1)); padding: 20px;
   display: flex; align-items: center; justify-content: center;
   background: linear-gradient(180deg, #7D91AD 0%, #B9C5D6 45%, #EEF1F6 100%);
   color: var(--bl-ink);

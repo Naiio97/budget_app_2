@@ -1,3 +1,6 @@
+import json
+import re
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
@@ -392,6 +395,56 @@ async def save_salary_config(
         await set_setting(db, current_user.id, "salary_prumer_quarter", request.prumer_quarter.strip())
     await db.commit()
     return {"status": "saved"}
+
+
+# ============== Account colors ==============
+
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+class AccountColorRequest(BaseModel):
+    account_id: str
+    color: Optional[str] = None  # None = vrátit výchozí barvu
+
+
+async def _load_account_colors(db: AsyncSession, user_id: int) -> dict[str, str]:
+    raw = await get_setting(db, user_id, "account_colors")
+    try:
+        data = json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+    return {k: v for k, v in data.items() if isinstance(k, str) and isinstance(v, str)}
+
+
+@router.get("/account-colors")
+async def get_account_colors(
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Barvy účtů zvolené uživatelem (account_id → #rrggbb) — používá detail účtu a ikony v seznamu účtů"""
+    return {"colors": await _load_account_colors(db, current_user.id)}
+
+
+@router.put("/account-colors")
+async def set_account_color(
+    request: AccountColorRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Nastavit (nebo smazat) barvu jednoho účtu"""
+    account_id = request.account_id.strip()
+    if not account_id or len(account_id) > 100:
+        raise HTTPException(status_code=400, detail="Invalid account id")
+    colors = await _load_account_colors(db, current_user.id)
+    if request.color is None:
+        colors.pop(account_id, None)
+    else:
+        if not _HEX_COLOR_RE.match(request.color):
+            raise HTTPException(status_code=400, detail="Color must be #rrggbb")
+        colors[account_id] = request.color.lower()
+    await set_setting(db, current_user.id, "account_colors", json.dumps(colors))
+    await db.commit()
+    return {"colors": colors}
 
 
 # ============== My Account Patterns (Internal Transfers) ==============

@@ -779,6 +779,7 @@ export function dispatchDemoGet(path: string): unknown | undefined {
     if (path.startsWith('/sync/history')) return MOCK_SYNC_HISTORY;
     if (path.startsWith('/sync/')) return { status: 'completed', accounts_synced: 1, transactions_synced: 5 };
     if (path.startsWith('/settings/salary-config')) return MOCK_SALARY_CONFIG;
+    if (path.startsWith('/settings/account-colors')) return { colors: {} };
     if (path.startsWith('/salary-period/current')) {
         const now = new Date();
         const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;

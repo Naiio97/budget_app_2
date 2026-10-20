@@ -8,6 +8,7 @@ import {
 import MainLayout from '@/components/MainLayout';
 import { getWrapped, SpendingWrapped } from '@/lib/api';
 import { getCategoryIcon } from '@/lib/category-icons';
+import { categoryLabel } from '@/components/transaction-format';
 
 // Roční přehled — „Spending Wrapped": top obchodníci, nejdražší měsíc,
 // žebříček kategorií, největší výdaj a projekty (tagy) za vybraný rok.
@@ -190,7 +191,7 @@ export default function WrappedPage() {
                                                     <span style={{ color: 'var(--text-2)', display: 'flex' }}>
                                                         {getCategoryIcon(CATEGORY_ICON_KEY[c.category] ?? 'box', 15)}
                                                     </span>
-                                                    <span style={{ flex: 1, fontSize: 14 }}>{c.category}</span>
+                                                    <span style={{ flex: 1, fontSize: 14 }}>{categoryLabel(c.category)}</span>
                                                     <span className="muted" style={{ fontSize: 12 }}>{pct.toFixed(0)} %</span>
                                                     <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{formatCZK(c.total)}</span>
                                                 </div>
