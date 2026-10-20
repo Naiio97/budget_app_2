@@ -14,6 +14,7 @@ import {
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
 import { getCategoryIcon as rawCategoryIcon } from '@/lib/category-icons';
+import { categoryLabel } from '@/components/transaction-format';
 
 function progressColor(pct: number): string {
     if (pct >= 100) return 'var(--neg)';
@@ -174,7 +175,7 @@ export default function BudgetsPage() {
                                                 onClick={() => toggleNewCategory(cat.name)}
                                                 className={`chip ${active ? 'chip-accent' : ''}`}
                                                 style={{ cursor: 'pointer', border: active ? 'none' : '0.5px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                                {iconFor(cat.name, 13)} {cat.name}
+                                                {iconFor(cat.name, 13)} {categoryLabel(cat.name)}
                                             </button>
                                         );
                                     })}

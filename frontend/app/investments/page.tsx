@@ -26,6 +26,7 @@ import {
     ManualInvestmentAccount,
 } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { categoryLabel } from '@/components/transaction-format';
 import {
     Area,
     AreaChart,
@@ -503,7 +504,7 @@ export default function InvestmentsPage() {
                                             <div className="investment-feed-icon">{transaction.amount >= 0 ? '+' : '-'}</div>
                                             <div>
                                                 <strong>{transaction.description}</strong>
-                                                <span>{formatDate(transaction.date)} · {transaction.category}</span>
+                                                <span>{formatDate(transaction.date)} · {categoryLabel(transaction.category)}</span>
                                             </div>
                                             <em className={transaction.amount >= 0 ? 'positive' : ''}>
                                                 {transaction.amount >= 0 ? '+' : ''}{formatCurrency(transaction.amount, transaction.currency)}

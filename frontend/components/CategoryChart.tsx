@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import ArrowIcon from './ArrowIcon';
+import { categoryLabel } from './transaction-format';
 
 interface CategoryChartProps {
     categories: Record<string, number>;
@@ -93,7 +94,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
                                             strokeDashoffset={-c.offset}
                                             tabIndex={0}
                                             role="button"
-                                            aria-label={`${c.name}: ${fmt(c.amount)}, ${percentText(c.share)}`}
+                                            aria-label={`${categoryLabel(c.name)}: ${fmt(c.amount)}, ${percentText(c.share)}`}
                                             onMouseEnter={() => setHovered(c.name)}
                                             onMouseLeave={() => setHovered(null)}
                                             onFocus={() => setHovered(c.name)}
@@ -134,7 +135,7 @@ export default function CategoryChart({ categories, currency = 'CZK' }: Category
                                 onClick={() => togglePinned(c.name)}
                             >
                                 <span className="dash-legend-dot" style={{ background: c.color }} />
-                                <span className="dash-legend-name">{c.name}</span>
+                                <span className="dash-legend-name">{categoryLabel(c.name)}</span>
                                 <span className="dash-legend-share">{percentText(c.share)}</span>
                                 <span className="dash-legend-amount num">{fmt(c.amount)}</span>
                             </li>
