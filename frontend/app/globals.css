@@ -2955,12 +2955,17 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     -webkit-backdrop-filter: blur(4px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    /* visibility: zavřená vrstva přes celou obrazovku (s blur) jinak zůstává
+       v dokumentu a iOS Safari kolem ní kreslí rozmazaný pruh pod výřezem */
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
   }
 
   .mobile-tools-overlay.open {
     opacity: 1;
     pointer-events: auto;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0s;
   }
 
   /* Plovoucí skleněný panel — stejný jazyk jako appbar a bottom-nav */
@@ -2983,7 +2988,8 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
     border-radius: 28px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.14), inset 0 0.5px 0 rgba(255, 255, 255, 0.55);
     transform: translateX(calc(100% + 24px));
-    transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.2, 1);
+    visibility: hidden;
+    transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.2, 1), visibility 0s linear 0.24s;
     overflow-y: auto;
     overflow-x: hidden;
   }
@@ -2994,6 +3000,8 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 
   .mobile-tools-drawer.open {
     transform: translateX(0);
+    visibility: visible;
+    transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.2, 1), visibility 0s;
   }
 
   .mobile-tools-head {
