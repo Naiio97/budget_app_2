@@ -57,7 +57,7 @@ export const metadata: Metadata = {
       { url: "/favicon-32.png?v=3", sizes: "32x32", type: "image/png" },
       { url: "/favicon-16.png?v=3", sizes: "16x16", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png?v=3",
+    apple: [{ url: "/apple-touch-icon.png?v=4", sizes: "180x180", type: "image/png" }],
   },
   // Next 16 generuje z appleWebApp.capable jen nový `mobile-web-app-capable`
   // (Chrome ten apple-prefixovaný označil za zastaralý), jenže iOS Safari
