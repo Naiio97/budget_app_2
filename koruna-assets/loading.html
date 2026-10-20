@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Koruna</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#7D91AD">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Plus+Jakarta+Sans:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root { --blue:#2F6BEA; --sky:#6FA2FF; --ink:#121A2B; --soft:#5B6880; --mist:#8C9DB8; --ok:#2E9E6B; }
+  * { box-sizing: border-box; margin: 0; }
+  html { height: 100%; }
+  body {
+    font-family: Inter, system-ui, sans-serif; color: var(--ink);
+    background: linear-gradient(180deg, #7D91AD 0%, #B9C5D6 45%, #EEF1F6 100%);
+    display: flex; align-items: center; justify-content: center; padding: 20px 20px 72px; min-height: 100vh; min-height: 100dvh;
+  }
+  .card {
+    width: min(440px, 100%); padding: 48px 44px 40px; border-radius: 28px;
+    background: rgba(255,255,255,.72); border: 1px solid #fff;
+    backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 24px 64px rgba(27,58,143,.12);
+    display: flex; flex-direction: column; align-items: center; gap: 28px;
+  }
+  @media (max-width: 480px) { .card { padding: 40px 24px 32px; } }
+
+  .ring { position: relative; width: 132px; height: 132px; display: grid; place-items: center; }
+  .ring svg.arc { position: absolute; inset: 0; animation: spin 1.6s linear infinite; }
+  .tile {
+    width: 88px; height: 88px; border-radius: 22px; display: grid; place-items: center;
+    background: linear-gradient(160deg, #4F86F7, #1F4FC4); box-shadow: 0 10px 24px rgba(47,107,234,.25);
+  }
+  .tile svg { width: 58px; height: 58px; }
+  .bar { transform-box: fill-box; transform-origin: bottom; animation: grow 1.4s ease-in-out infinite; }
+  .bar:nth-child(2) { animation-delay: .15s; }
+  .bar:nth-child(3) { animation-delay: .3s; }
+  @keyframes grow { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(.72); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .titles { text-align: center; display: grid; gap: 8px; }
+  h1 { font: 700 30px/1.1 "Plus Jakarta Sans", sans-serif; letter-spacing: -.6px; }
+  .status { font-size: 15px; color: var(--soft); min-height: 1.4em; transition: opacity .3s; }
+
+  .steps { width: 100%; padding: 8px; border-radius: 16px; background: rgba(243,245,249,.8); display: grid; gap: 4px; list-style: none; }
+  .step { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; font-size: 14px; color: var(--mist); transition: background .3s, color .3s; }
+  .step .b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(140,157,184,.12); flex: none; }
+  .step .b::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--mist); }
+  .step .t { margin-left: auto; font-size: 12px; color: var(--mist); }
+  .step.active { background: #fff; color: var(--ink); font-weight: 600; }
+  .step.active .b { background: rgba(47,107,234,.12); }
+  .step.active .b::before { width: 10px; height: 10px; background: none; border: 2px solid var(--blue); border-right-color: transparent; animation: spin .8s linear infinite; }
+  .step.done { color: var(--ink); }
+  .step.done .b { background: rgba(46,158,107,.12); }
+  .step.done .b::before { width: 10px; height: 5px; border-radius: 0; background: none; border: 2px solid var(--ok); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px,-1px); }
+
+  .progress { width: 100%; display: grid; gap: 10px; }
+  .track { height: 6px; border-radius: 3px; background: rgba(47,107,234,.1); overflow: hidden; }
+  .fill { height: 100%; width: 1%; border-radius: 3px; background: linear-gradient(90deg, var(--sky), var(--blue)); transition: width .6s ease; }
+  .meta { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--soft); }
+  .meta b { color: var(--blue); font-weight: 600; }
+  footer { position: fixed; bottom: max(24px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: 12px; color: var(--soft); }
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; } }
+</style>
+</head>
+<body>
+  <main class="card" role="status" aria-live="polite">
+    <div class="ring">
+      <svg class="arc" viewBox="0 0 132 132" aria-hidden="true">
+        <circle cx="66" cy="66" r="64" fill="none" stroke="rgba(47,107,234,.12)" stroke-width="3"/>
+        <circle cx="66" cy="66" r="64" fill="none" stroke="url(#a)" stroke-width="3" stroke-linecap="round" stroke-dasharray="250 402"/>
+        <defs><linearGradient id="a"><stop offset="0" stop-color="#6FA2FF"/><stop offset="1" stop-color="#2F6BEA"/></linearGradient></defs>
+      </svg>
+      <div class="tile">
+        <svg viewBox="0 0 400 400" fill="#fff" aria-hidden="true">
+          <g>
+            <path class="bar" d="M46 159A41 41 0 0 1 128 159V255A41 41 0 0 1 46 255Z"/>
+            <path class="bar" d="M159 78A41 41 0 0 1 241 78V255A41 41 0 0 1 159 255Z"/>
+            <path class="bar" d="M272 159A41 41 0 0 1 354 159V255A41 41 0 0 1 272 255Z"/>
+          </g>
+          <path d="M56 310H344A27 27 0 0 1 344 364H56A27 27 0 0 1 56 310Z"/>
+        </svg>
+      </div>
+    </div>
+    <div class="titles">
+      <h1>Koruna</h1>
+      <p class="status" id="status">Probouzíme vaše finance…</p>
+    </div>
+    <ol class="steps">
+      <li class="step active" data-step="app"><span class="b"></span>Spouštíme aplikační server<span class="t"></span></li>
+      <li class="step" data-step="db"><span class="b"></span>Připojujeme databázi<span class="t"></span></li>
+      <li class="step" data-step="ui"><span class="b"></span>Načítáme přehled<span class="t"></span></li>
+    </ol>
+    <div class="progress">
+      <div class="track"><div class="fill" id="fill"></div></div>
+      <div class="meta"><span id="hint">Po delší pauze to může trvat až minutu.</span><b id="pct">1 %</b></div>
+    </div>
+  </main>
+  <footer>Data jsou šifrovaná a uložená v EU</footer>
+
+<script>
+  // Upravte podle svého backendu:
+  //  HEALTH_APP – endpoint, který odpoví, jakmile běží kontejner (bez dotazu do DB)
+  //  HEALTH_DB  – endpoint, který odpoví 200 až když je dostupná i databáze
+  //  TARGET     – kam přesměrovat, když je vše připraveno
+  const HEALTH_APP = "/api/health";
+  const HEALTH_DB  = "/api/health/db";
+  const TARGET     = "/";
+  const EXPECTED_MS = 45000;
+
+  const $ = s => document.querySelector(s);
+  const steps = [...document.querySelectorAll(".step")];
+  const start = Date.now();
+  let phase = 0, stepStart = start;
+
+  const ok = async url => {
+    try { const r = await fetch(url, { cache: "no-store" }); return r.ok; }
+    catch { return false; }
+  };
+
+  function setPhase(p) {
+    const secs = Math.max(1, Math.round((Date.now() - stepStart) / 1000));
+    steps[phase].classList.replace("active", "done");
+    steps[phase].querySelector(".t").textContent = secs + " s";
+    phase = p; stepStart = Date.now();
+    if (steps[p]) steps[p].classList.add("active");
+    $("#status").textContent = ["Probouzíme vaše finance…", "Ještě chvilku, databáze se probouzí…", "Skoro hotovo…"][p] || "Hotovo";
+  }
+
+  function tick() {
+    const t = Date.now() - start;
+    // asymptotický průběh: nikdy nedojde na 100 %, dokud backend neodpoví
+    const base = [0, 40, 85][phase] ?? 100, span = [38, 43, 13][phase] ?? 0;
+    const pct = Math.round(base + span * (1 - Math.exp(-(Date.now() - stepStart) / (EXPECTED_MS / 3))));
+    $("#fill").style.width = pct + "%";
+    $("#pct").textContent = pct + " %";
+    if (t > 90000) $("#hint").textContent = "Trvá to déle než obvykle. Zkoušíme to dál…";
+  }
+  setInterval(tick, 400);
+
+  (async function poll() {
+    if (phase === 0 && await ok(HEALTH_APP)) setPhase(1);
+    if (phase === 1 && await ok(HEALTH_DB)) setPhase(2);
+    if (phase === 2) {
+      $("#fill").style.width = "100%"; $("#pct").textContent = "100 %";
+      setTimeout(() => location.replace(TARGET), 600);
+      return;
+    }
+    setTimeout(poll, 2000);
+  })();
+</script>
+</body>
+</html>
