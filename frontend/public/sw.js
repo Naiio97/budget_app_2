@@ -25,6 +25,7 @@ const PRECACHE_ASSETS = [
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png',
     '/icons/icon-32x32.png',
+    '/favicon.svg',
     '/icons/apple-touch-icon.png',
 ];
 

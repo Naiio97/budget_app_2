@@ -362,11 +362,10 @@ select.input {
 }
 .appbar-logo-mark {
   width: 28px; height: 28px;
-  background: var(--accent);
+  background: linear-gradient(160deg, #4F86F7, #1F4FC4);
   color: #fff;
-  border-radius: 8px;
+  border-radius: 22.5%;
   display: grid; place-items: center;
-  font-weight: 700; font-size: 14px;
   box-shadow: 0 1px 0 rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.2);
   flex-shrink: 0;
 }

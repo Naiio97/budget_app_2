@@ -53,10 +53,11 @@ export const metadata: Metadata = {
   // takže záložka jinak drží starou faviconu klidně týdny.
   icons: {
     icon: [
-      { url: "/icons/icon-32x32.png?v=2", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192x192.png?v=2", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.svg?v=3", type: "image/svg+xml" },
+      { url: "/favicon-32.png?v=3", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png?v=3", sizes: "16x16", type: "image/png" },
     ],
-    apple: "/icons/apple-touch-icon.png?v=2",
+    apple: "/icons/apple-touch-icon.png?v=3",
   },
   // Next 16 generuje z appleWebApp.capable jen nový `mobile-web-app-capable`
   // (Chrome ten apple-prefixovaný označil za zastaralý), jenže iOS Safari
