@@ -5248,7 +5248,7 @@ body:has(.dash) {
 }
 
 .sb-section-title { font-size: 17px; font-weight: 600; margin: 8px 4px 0; color: var(--text); }
-.sb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); align-items: start; }
+.sb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); align-items: stretch; }
 @media (max-width: 1000px) { .sb-grid { grid-template-columns: minmax(0, 1fr); } }
 .sb-card { display: flex; flex-direction: column; gap: 16px; }
 .sb-card-head { display: flex; align-items: flex-start; gap: 14px; }
@@ -5270,6 +5270,8 @@ body:has(.dash) {
 .sb-meta span { font-size: 12px; color: var(--text-3); }
 .sb-meta strong { font-size: 14.5px; font-weight: 600; color: var(--text); }
 .sb-actions { display: flex; justify-content: flex-end; gap: 4px; margin: -4px 0 -6px; opacity: 0.7; }
+/* karty v řádku mají stejnou výšku, akce drží u spodku i když chybí „Moje část" */
+.sb-card .sb-actions { margin-top: auto; }
 .sb-actions:hover { opacity: 1; }
 
 .sb-cancelled { padding: 6px 24px; }
