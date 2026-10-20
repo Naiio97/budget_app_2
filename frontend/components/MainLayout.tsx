@@ -1,6 +1,7 @@
 'use client';
 
-import { avatarColor, avatarInitials } from '@/lib/account-avatar';
+import { avatarInitials } from '@/lib/account-avatar';
+import { useAccountColors } from '@/lib/account-colors';
 import KorunaMark from '@/components/KorunaMark';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -97,6 +98,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
     const moreRef = useRef<HTMLDivElement>(null);
     const layoutRef = useRef<HTMLDivElement>(null);
     const { accounts } = useAccounts();
+    const { colorFor } = useAccountColors();
     const { sync: handleSync, isSyncing } = useSync();
 
     const { data: syncStatus } = useQuery<SyncStatus>({
@@ -460,7 +462,7 @@ export default function MainLayout({ children, disableScroll = false }: MainLayo
                                                 className="mobile-account-row"
                                                 onClick={() => setIsMobileToolsOpen(false)}
                                             >
-                                                <span className="mobile-account-logo" style={{ background: avatarColor(account.name) }}>
+                                                <span className="mobile-account-logo" style={{ background: colorFor(account.id, account.name) }}>
                                                     {avatarInitials(account.name)}
                                                 </span>
                                                 <span className="mobile-account-copy">

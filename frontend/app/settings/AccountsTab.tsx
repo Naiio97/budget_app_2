@@ -5,6 +5,7 @@ import Image from 'next/image';
 import CustomSelect from '@/components/CustomSelect';
 import { apiFetch, getDashboard, getInstitutions, connectBank, updateAccount, deleteAccount, updateManualInvestment, deleteManualInvestment, Account, ApiKeysResponse } from '@/lib/api';
 import { getConsentStatus } from '@/lib/consent';
+import { ACCOUNT_COLOR_PALETTE, useAccountColors } from '@/lib/account-colors';
 import { Icons } from '@/lib/icons';
 import SyncHistoryCard from './SyncHistoryCard';
 import { SurfaceCard, EditIcon, UnlinkIcon, CloseIcon, EyeIcon, EyeOffIcon, BankIcon, HourglassIcon } from './shared';
@@ -36,6 +37,9 @@ export default function AccountsTab({ accounts, setAccounts, apiKeysLoaded, refr
     const [editingAccount, setEditingAccount] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     const [processingAccount, setProcessingAccount] = useState<string | null>(null);
+    // Barva účtu: která řádka má právě otevřený výběr
+    const [colorPickerFor, setColorPickerFor] = useState<string | null>(null);
+    const { colors: accountColors, setColor: setAccountColor, colorFor } = useAccountColors();
 
     // Banks (pro connect modal)
     const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -203,6 +207,34 @@ export default function AccountsTab({ accounts, setAccounts, apiKeysLoaded, refr
                                                                 Obnovit
                                                             </button>
                                                         )}
+                                                        <div className="set-color-wrap">
+                                                            <button className="set-icon-btn" title="Barva účtu" aria-label="Barva účtu" aria-expanded={colorPickerFor === acc.id} onClick={() => setColorPickerFor(p => p === acc.id ? null : acc.id)}>
+                                                                <span className="set-color-dot" style={{ background: colorFor(acc.id, acc.name) }} />
+                                                            </button>
+                                                            {colorPickerFor === acc.id && (
+                                                                <>
+                                                                    <div className="set-color-backdrop" onClick={() => setColorPickerFor(null)} />
+                                                                    <div className="set-color-pop" role="dialog" aria-label="Barva účtu">
+                                                                        <div className="set-color-grid">
+                                                                            {ACCOUNT_COLOR_PALETTE.map(c => (
+                                                                                <button
+                                                                                    key={c.value}
+                                                                                    type="button"
+                                                                                    className={`set-color-swatch ${accountColors[acc.id] === c.value ? 'active' : ''}`}
+                                                                                    style={{ background: c.value }}
+                                                                                    title={c.name}
+                                                                                    aria-label={c.name}
+                                                                                    onClick={() => { setAccountColor(acc.id, c.value); setColorPickerFor(null); }}
+                                                                                />
+                                                                            ))}
+                                                                        </div>
+                                                                        <button type="button" className="set-color-reset" disabled={!accountColors[acc.id]} onClick={() => { setAccountColor(acc.id, null); setColorPickerFor(null); }}>
+                                                                            Výchozí barva
+                                                                        </button>
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                         <button className="set-icon-btn" title="Přejmenovat" onClick={() => { setEditName(acc.name); setEditingAccount(acc.id); }}>{EditIcon}</button>
                                                         <button className="set-icon-btn" title={visible ? 'Skrýt' : 'Zobrazit'} onClick={() => handleToggleVisibility(acc.id, acc.is_visible ?? true)}>{visible ? EyeIcon : EyeOffIcon}</button>
                                                         <button className="set-icon-btn danger" title="Odpojit / smazat" onClick={() => handleDeleteAccount(acc.id)}>{UnlinkIcon}</button>

@@ -10,6 +10,8 @@ import TransactionList from '@/components/TransactionList';
 import { getAccountDetail, getTransactions, AccountDetail, Transaction, PaginatedResponse } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { useAccountColors } from '@/lib/account-colors';
+import { avatarColor, avatarInitials } from '@/lib/account-avatar';
 
 const formatMoney = (amount: number, currency = 'CZK') =>
     new Intl.NumberFormat('cs-CZ', {
@@ -219,17 +221,26 @@ export default function AccountDetailPage() {
     const [nowMs] = useState(() => Date.now());
 
     // Per-account color theme (persisted in localStorage)
-    const [themeId, setThemeId] = useState<string>(() => {
+    // Barva účtu je uložená na backendu (Nastavení → Účty); starší volba z tohoto
+    // okna (localStorage) platí jen jako záloha, dokud si uživatel nezvolí novou.
+    const { colors: accountColors, setColor: setAccountColor } = useAccountColors();
+    const [legacyThemeId, setLegacyThemeId] = useState<string>(() => {
         if (typeof window === 'undefined' || !accountId) return 'default';
         const saved = localStorage.getItem(`acct-theme-${accountId}`);
         return saved && THEMES.some(t => t.id === saved) ? saved : 'default';
     });
     const [themeOpen, setThemeOpen] = useState(false);
+    const legacyColor = THEMES.find(t => t.id === legacyThemeId)?.color ?? null;
+    const themeColor = (accountId ? accountColors[accountId] : undefined) ?? legacyColor;
+    const themeId = THEMES.find(t => t.color === themeColor)?.id ?? (themeColor ? 'custom' : 'default');
     const selectTheme = (id: string) => {
-        setThemeId(id);
-        if (accountId) localStorage.setItem(`acct-theme-${accountId}`, id);
+        const color = THEMES.find(t => t.id === id)?.color ?? null;
+        if (!accountId) return;
+        setAccountColor(accountId, color);
+        // zrušit i starou lokální volbu, ať se po „Výchozí“ nevrací
+        localStorage.removeItem(`acct-theme-${accountId}`);
+        setLegacyThemeId('default');
     };
-    const themeColor = THEMES.find(t => t.id === themeId)?.color ?? null;
 
     // Account meta
     const { data: meta, isLoading: metaLoading, isError } = useQuery<AccountDetail>({
@@ -298,7 +309,9 @@ export default function AccountDetailPage() {
     const pageBgStyle: React.CSSProperties = themeColor ? {
         position: 'relative',
     } : {};
-    const heroBgStyle: React.CSSProperties = { padding: '24px 28px' };
+    const heroBgStyle: React.CSSProperties = themeColor
+        ? { padding: '24px 28px', backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${themeColor} 24%, transparent), transparent 65%)` }
+        : { padding: '24px 28px' };
 
     return (
         <MainLayout>
@@ -309,7 +322,7 @@ export default function AccountDetailPage() {
                         position: 'absolute',
                         top: -20, left: -40, right: -40,
                         height: 520,
-                        background: `radial-gradient(ellipse at 30% 0%, color-mix(in srgb, ${themeColor} 16%, transparent), transparent 65%)`,
+                        background: `radial-gradient(ellipse at 30% 0%, color-mix(in srgb, ${themeColor} 26%, transparent), transparent 65%)`,
                         pointerEvents: 'none',
                         zIndex: 0,
                     }} />
@@ -319,13 +332,19 @@ export default function AccountDetailPage() {
 
                 {/* ── Page head ── */}
                 <div className="account-detail-head">
-                    <div className="account-title-block">
-                        <h1 style={themeColor ? { color: themeColor } : undefined}>{account.name}</h1>
-                        <div className="account-detail-sub">
-                            {account.type === 'bank' ? 'Běžný účet' : account.type}
-                            {account.institution && <> · {account.institution.replace(/_/g, ' ')}</>}
-                            {account.last_synced && <> · synchronizováno {formatLastSync(account.last_synced)}</>}
-                            {!account.is_visible && <> · <span className="chip">Skrytý</span></>}
+                    <div className="account-title-row">
+                        {/* Stejná dlaždice jako v seznamu Vaše účty — barva z Nastavení → Účty */}
+                        <span className="account-head-avatar" style={{ background: themeColor ?? avatarColor(account.name) }}>
+                            {avatarInitials(account.name)}
+                        </span>
+                        <div className="account-title-block">
+                            <h1>{account.name}</h1>
+                            <div className="account-detail-sub">
+                                {account.type === 'bank' ? 'Běžný účet' : account.type}
+                                {account.institution && <> · {account.institution.replace(/_/g, ' ')}</>}
+                                {account.last_synced && <> · synchronizováno {formatLastSync(account.last_synced)}</>}
+                                {!account.is_visible && <> · <span className="chip">Skrytý</span></>}
+                            </div>
                         </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

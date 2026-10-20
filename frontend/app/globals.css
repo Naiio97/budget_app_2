@@ -2463,6 +2463,12 @@ select.input {
   padding-top: 0;
 }
 .account-title-block { min-width: 0; }
+.account-title-row { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.account-head-avatar {
+  width: 52px; height: 52px; border-radius: 15px; flex-shrink: 0; color: #fff;
+  display: grid; place-items: center; font-size: 17px; font-weight: 600;
+}
+@media (max-width: 680px) { .account-head-avatar { width: 44px; height: 44px; border-radius: 13px; font-size: 15px; } }
 .account-back-btn {
   min-width: 70px;
   height: 36px;
@@ -5473,3 +5479,27 @@ body { zoom: var(--ui-zoom); }
   .bud-kpis, .bud-layout, .bud-list, .bud-aside { gap: var(--spacing-md); }
   .investment-header { margin-bottom: var(--spacing-md); }
 }
+
+/* Nastavení → Účty: výběr barvy účtu */
+.set-color-wrap { position: relative; display: inline-flex; }
+.set-color-dot { width: 14px; height: 14px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25); }
+.set-color-backdrop { position: fixed; inset: 0; z-index: 60; }
+.set-color-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 61;
+  width: 212px; padding: 12px; border-radius: 16px;
+  background: var(--surface-strong); border: 0.5px solid var(--border);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.set-color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.set-color-swatch {
+  width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2); transition: transform 0.12s;
+}
+.set-color-swatch:hover { transform: scale(1.12); }
+.set-color-swatch.active { box-shadow: 0 0 0 2px var(--surface-strong), 0 0 0 4px var(--text); }
+.set-color-reset {
+  border: 0; background: var(--surface-sunken); color: var(--text-2); font: inherit; font-size: 12.5px;
+  padding: 7px 10px; border-radius: 10px; cursor: pointer;
+}
+.set-color-reset:disabled { opacity: 0.5; cursor: default; }

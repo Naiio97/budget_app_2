@@ -68,3 +68,17 @@ export async function deleteShareRule(id: number): Promise<void> {
     const response = await apiFetch(`/settings/share-rules/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete share rule');
 }
+
+// Barvy účtů (account_id → #rrggbb), uložené na backendu — platí na všech zařízeních
+export async function getAccountColors(): Promise<{ colors: Record<string, string> }> {
+    return fetchApi<{ colors: Record<string, string> }>('/settings/account-colors');
+}
+
+export async function saveAccountColor(accountId: string, color: string | null): Promise<{ colors: Record<string, string> }> {
+    const response = await apiFetch('/settings/account-colors', {
+        method: 'PUT',
+        body: JSON.stringify({ account_id: accountId, color }),
+    });
+    if (!response.ok) throw new Error('Failed to save account color');
+    return response.json();
+}
