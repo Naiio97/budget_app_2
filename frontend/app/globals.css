@@ -1836,7 +1836,6 @@ select.input {
   flex-direction: column;
   gap: 14px;
   padding: 14px 12px 16px;
-  border-top: 0.5px solid var(--border);
 }
 .bd-field {
   display: flex;
@@ -4852,6 +4851,8 @@ body:has(.dash) {
   .bd-card:not(.expanded):hover { background: var(--surface-sunken); }
 }
 .bd-card.expanded { background: var(--surface-sunken); border-radius: 14px; border-bottom-color: transparent; }
+/* Oddělovač nad rozbaleným řádkem (spodní okraj předchozího) zmizí taky */
+.bd-card:has(+ .bd-card.expanded) { border-bottom-color: transparent; }
 .bd-head { padding: 14px 8px; }
 .bd-head .recurring-name { font-size: 15px; font-weight: 500; }
 .bd-loan-tag {
@@ -5273,6 +5274,8 @@ body:has(.dash) {
 @media (max-width: 900px) {
   .sb-row { grid-template-columns: 38px minmax(0, 1fr) auto; }
   .sb-row-meta { display: none; }
+  /* Akce spadnou pod řádek — přes celou šířku a doprava, ne do 1. sloupce vlevo */
+  .sb-row .sb-actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: -4px; }
 }
 
 /* okno s formulářem (FormModal) */
