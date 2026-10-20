@@ -52,10 +52,10 @@ interface MainLayoutProps {
 
 // iOS u appky přidané na plochu stavovou lištu neschová ani nenechá protéct —
 // vždycky tam je neprůhledný proužek. Nejlepší dosažitelné je naladit ho meta
-// theme-color na barvu pozadí motivu, aby s appkou splynul (tmavý v tmavém,
-// světlý ve světlém; iOS podle jasu barvy zvolí i barvu textu hodin). Držíme ho
+// theme-color = barva horního okraje pozadí scény (první stop gradientu --bg-scene,
+// ne plné pozadí), aby pruh pod výřezem / Dynamic Island splynul s obsahem; iOS podle jasu barvy zvolí i barvu textu hodin). Držíme ho
 // v obou režimech — prohlížeč i PWA. Bez něj iOS spadne na defaultní světlou lištu.
-const THEME_BAR_COLOR = { dark: '#000000', light: '#f2f2f7' } as const;
+const THEME_BAR_COLOR = { dark: '#2b3b54', light: '#546881' } as const;
 const THEME_EVENT = 'koruna-theme-change';
 
 function subscribeTheme(onChange: () => void) {

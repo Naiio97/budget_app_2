@@ -22,7 +22,7 @@ export const viewport: Viewport = {
   // Výchozí (tmavá) barva stavové lišty už při startu, než se z localStorage
   // načte motiv a MainLayout ji případně přebarví na světlou. iOS jinak ukáže
   // defaultní světle šedou lištu. Viz applyThemeToDocument v MainLayout.tsx.
-  themeColor: "#000000",
+  themeColor: "#2b3b54",
 };
 
 export const metadata: Metadata = {
