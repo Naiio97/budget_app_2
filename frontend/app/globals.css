@@ -2943,7 +2943,7 @@ input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
   .main-content {
     max-width: calc(100vw / var(--ui-zoom, 1));
     /* +5px: obsah (datum nad nadpisem) nesmí lézt těsně pod výřez / Dynamic Island */
-    padding-top: calc(env(safe-area-inset-top) + 5px);
+    padding-top: calc(env(safe-area-inset-top) + 15px);
     padding-bottom: calc(72px + env(safe-area-inset-bottom));
   }
   .page-container { padding: var(--spacing-md); }
