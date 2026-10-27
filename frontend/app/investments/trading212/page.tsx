@@ -176,6 +176,10 @@ export default function Trading212DetailPage() {
     }
 
     const total = portfolio.total_value;
+    const byResult = [...positions].sort((a, b) => b.ppl_pct - a.ppl_pct);
+    const bestPos = byResult[0];
+    const worstPos = byResult[byResult.length - 1];
+    const biggestPos = [...positions].sort((a, b) => b.value_czk - a.value_czk)[0];
     const invested = detail?.invested ?? 0;
     const result = detail?.result ?? 0;
     const resultPct = invested > 0 ? (result / invested) * 100 : 0;
@@ -383,7 +387,8 @@ export default function Trading212DetailPage() {
                 </section>
 
                 {/* Pozice + rozložení */}
-                <div className="inv2-grid">
+                <div className="dip-grid">
+                    <div className="dip-col">
                     <section className="surface">
                         <div className="card-head">
                             <h3>Pozice</h3>
@@ -437,7 +442,8 @@ export default function Trading212DetailPage() {
                             )}
                         </div>
                     </section>
-                    <div className="inv2-side">
+                    </div>
+                    <div className="dip-col">
                     <section className="surface">
                         <div className="card-head">
                             <h3>Rozložení</h3>
@@ -450,10 +456,10 @@ export default function Trading212DetailPage() {
                                 <div style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: 'var(--spacing-lg)' }}>Žádné pozice.</div>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
-                                    <div style={{ height: 180, position: 'relative' }}>
+                                    <div style={{ height: 240, position: 'relative' }}>
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
-                                                <Pie data={allocationRows} cx="50%" cy="50%" innerRadius={52} outerRadius={82} dataKey="value" strokeWidth={2} stroke="var(--surface)">
+                                                <Pie data={allocationRows} cx="50%" cy="50%" innerRadius={78} outerRadius={110} dataKey="value" strokeWidth={2} stroke="var(--surface)">
                                                     {allocationRows.map(r => <Cell key={r.key} fill={r.color} />)}
                                                 </Pie>
                                                 <Tooltip formatter={(v: number | undefined, name) => [formatCurrency(Number(v ?? 0)), name as string]} />
@@ -507,11 +513,20 @@ export default function Trading212DetailPage() {
                             </div>
                         </section>
                     </div>
-                </div>
-
-                {/* Recent transactions + dividends */}
-                {(portfolio.transactions.length > 0 || dividends.length > 0) && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-lg)' }}>
+                    <div className="dip-col">
+                        {positions.length > 0 && (
+                            <section className="surface">
+                                <div className="card-head"><h3>Výkon pozic</h3></div>
+                                <div className="card-body">
+                                    <div className="dip-stats">
+                                        <div><span>Nejlepší pozice</span><strong>{cleanTicker(bestPos.ticker)}</strong><em className="num" style={{ color: 'var(--pos)' }}>{bestPos.ppl_pct >= 0 ? '+' : ''}{formatPct(bestPos.ppl_pct)}</em></div>
+                                        <div><span>Nejhorší pozice</span><strong>{cleanTicker(worstPos.ticker)}</strong><em className="num" style={{ color: worstPos.ppl_pct >= 0 ? 'var(--pos)' : 'var(--neg)' }}>{worstPos.ppl_pct >= 0 ? '+' : ''}{formatPct(worstPos.ppl_pct)}</em></div>
+                                        <div><span>Největší pozice</span><strong>{cleanTicker(biggestPos.ticker)}</strong><em>{total > 0 ? formatPct((biggestPos.value_czk / total) * 100) : '0 %'} portfolia</em></div>
+                                        <div><span>Počet pozic</span><strong>{positions.length}</strong></div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
                         {portfolio.transactions.length > 0 && (
                             <section className="surface">
                                 <div className="card-head"><h3>Poslední transakce</h3></div>
@@ -534,7 +549,6 @@ export default function Trading212DetailPage() {
                                 </div>
                             </section>
                         )}
-
                         {dividends.length > 0 && (
                             <section className="surface">
                                 <div className="card-head"><h3>Dividendy</h3></div>
@@ -558,7 +572,7 @@ export default function Trading212DetailPage() {
                             </section>
                         )}
                     </div>
-                )}
+                </div>
             </div>
         </MainLayout>
     );
