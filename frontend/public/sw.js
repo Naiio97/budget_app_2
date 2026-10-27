@@ -18,9 +18,14 @@ if (self.location.hostname === 'localhost' || self.location.hostname === '127.0.
 // __BUILD_SHA__ is replaced at docker build time; falls back to 'dev' for local.
 const CACHE_NAME = 'budget-tracker-__BUILD_SHA__';
 const OFFLINE_URL = '/offline.html';
+const SPLASH_URL = '/loading.html';
+// Když server do téhle doby neodpoví (studený start kontejneru), ukážeme místo
+// bílé obrazovky úvodní stránku s logem, která se sama obnoví.
+const SPLASH_AFTER_MS = 700;
 
 const PRECACHE_ASSETS = [
     '/offline.html',
+    '/loading.html',
     '/manifest.json',
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png',
@@ -69,11 +74,16 @@ self.addEventListener('fetch', (event) => {
 
     // Navigation (HTML documents): network-first, fall back to offline page
     if (request.mode === 'navigate') {
-        event.respondWith(
+        event.respondWith(new Promise((resolve) => {
+            let settled = false;
+            const finish = (res) => { if (!settled) { settled = true; clearTimeout(timer); resolve(res); } };
+            const timer = setTimeout(() => {
+                caches.match(SPLASH_URL).then((splash) => { if (splash) finish(splash); });
+            }, SPLASH_AFTER_MS);
             fetch(request)
-                .then((response) => response)
-                .catch(() => caches.match(OFFLINE_URL))
-        );
+                .then(finish)
+                .catch(() => caches.match(OFFLINE_URL).then(finish));
+        }));
         return;
     }
 

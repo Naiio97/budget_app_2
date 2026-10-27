@@ -36,6 +36,6 @@ export default auth((req) => {
 export const config = {
     // Skip Next internals + static assets so they don't hit the auth check.
     matcher: [
-        "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js|.*\\.png|.*\\.svg|.*\\.ico).*)",
+        "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js|offline.html|loading.html|.*\\.png|.*\\.svg|.*\\.ico).*)",
     ],
 };
