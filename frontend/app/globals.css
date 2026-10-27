@@ -5557,3 +5557,4 @@ html[data-page-tint] body::before {
 .dip-card-head h3 { font-size: 17px; }
 .dip-monthly-chart { max-height: 440px; }
 .inv2-grid:has(.dip-left) { align-items: start; }
+.dip-monthly-chart { flex: none; height: 380px; min-height: 0; max-height: none; }
