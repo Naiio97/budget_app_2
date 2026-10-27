@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { getLineIcon } from '@/lib/line-icons';
 
 // Okno s formulářem (přidat / upravit záznam) — stejný skleněný vzhled jako detail
 // transakce a splátkový kalendář. Zavírá se klikem na pozadí, křížkem i Escapem.
@@ -30,7 +31,7 @@ export default function FormModal({ title, subtitle, onClose, children }: {
                         <div className="form-modal-title">{title}</div>
                         {subtitle && <div className="form-modal-sub">{subtitle}</div>}
                     </div>
-                    <button onClick={onClose} className="btn btn-icon btn-ghost" aria-label="Zavřít">×</button>
+                    <button onClick={onClose} className="btn btn-icon btn-ghost tx-modal-close" aria-label="Zavřít">{getLineIcon('close', 16)}</button>
                 </div>
                 <div className="form-modal-body">{children}</div>
             </div>

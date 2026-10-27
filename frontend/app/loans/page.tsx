@@ -8,6 +8,7 @@ import GlassCard from '@/components/GlassCard';
 import FormModal from '@/components/FormModal';
 import { queryKeys } from '@/lib/queryKeys';
 import { Icons } from '@/lib/icons';
+import { getLineIcon } from '@/lib/line-icons';
 import {
     Loan, LoanPayment, LoansSummary, LoanCreateInput,
     getLoans, getLoansSummary, getLoanSchedule,
@@ -384,7 +385,7 @@ function LoanCard({ loan, color, expanded, onToggle, onEdit, onDelete }: {
                                     Splátkový kalendář · {loan.paid_count}/{loan.term_months} splátek
                                 </div>
                             </div>
-                            <button onClick={onToggle} className="btn btn-icon btn-ghost" aria-label="Zavřít">×</button>
+                            <button onClick={onToggle} className="btn btn-icon btn-ghost tx-modal-close" aria-label="Zavřít">{getLineIcon('close', 16)}</button>
                         </div>
                         <div className="loan-schedule ln-modal-body">
             {isLoading ? (
