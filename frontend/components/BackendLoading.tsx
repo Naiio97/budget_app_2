@@ -11,6 +11,18 @@ const SHOW_AFTER_MS = 700; // rychlý start (warm kontejner) nemá blikat loadin
 const STEPS = ["Spouštíme aplikační server", "Připojujeme databázi", "Připravujeme přihlášení"];
 const STATUS = ["Probouzíme vaše finance…", "Ještě chvilku, databáze se probouzí…", "Skoro hotovo…"];
 
+function LogoBars({ animated = false }: { animated?: boolean }) {
+    const bar = animated ? "bl-bar" : undefined;
+    return (
+        <svg viewBox="0 0 400 400" fill="#fff" aria-hidden="true">
+            <path className={bar} d="M46 159A41 41 0 0 1 128 159V255A41 41 0 0 1 46 255Z" />
+            <path className={bar} d="M159 78A41 41 0 0 1 241 78V255A41 41 0 0 1 159 255Z" />
+            <path className={bar} d="M272 159A41 41 0 0 1 354 159V255A41 41 0 0 1 272 255Z" />
+            <path d="M56 310H344A27 27 0 0 1 344 364H56A27 27 0 0 1 56 310Z" />
+        </svg>
+    );
+}
+
 async function isOk(path: string): Promise<boolean> {
     try {
         const r = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
@@ -71,7 +83,14 @@ export default function BackendReady({ children }: { children: ReactNode }) {
     }, []);
 
     if (phase >= 3) return <>{children}</>;
-    if (!showLoading) return null;
+    if (!showLoading) {
+        // Prvních 700 ms: stejné pozadí a logo jako splash a úvodní stránka, ať mezi nimi nic neblikne
+        return (
+            <div className="bl-screen">
+                <div className="bl-tile"><LogoBars /></div>
+            </div>
+        );
+    }
 
     const base = [0, 45, 90][phase] ?? 100;
     const span = [43, 43, 8][phase] ?? 0;
@@ -86,14 +105,7 @@ export default function BackendReady({ children }: { children: ReactNode }) {
                         <circle cx="66" cy="66" r="64" fill="none" stroke="url(#bl-g)" strokeWidth="3" strokeLinecap="round" strokeDasharray="250 402" />
                         <defs><linearGradient id="bl-g"><stop offset="0" stopColor="#6FA2FF" /><stop offset="1" stopColor="#2F6BEA" /></linearGradient></defs>
                     </svg>
-                    <div className="bl-tile">
-                        <svg viewBox="0 0 400 400" fill="#fff" aria-hidden="true">
-                            <path className="bl-bar" d="M46 159A41 41 0 0 1 128 159V255A41 41 0 0 1 46 255Z" />
-                            <path className="bl-bar" d="M159 78A41 41 0 0 1 241 78V255A41 41 0 0 1 159 255Z" />
-                            <path className="bl-bar" d="M272 159A41 41 0 0 1 354 159V255A41 41 0 0 1 272 255Z" />
-                            <path d="M56 310H344A27 27 0 0 1 344 364H56A27 27 0 0 1 56 310Z" />
-                        </svg>
-                    </div>
+                    <div className="bl-tile"><LogoBars animated /></div>
                 </div>
                 <div className="bl-titles">
                     <h1>Koruna</h1>
