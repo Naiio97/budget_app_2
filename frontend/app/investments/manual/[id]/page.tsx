@@ -439,7 +439,7 @@ export default function ManualInvestmentDetailPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             {account.positions.map((pos, posIndex) => (
                                 <div key={pos.id}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,255,255,0.04)', borderRadius: 'var(--radius-sm)' }}>
+                                        <div className="dip-pos-row">
                                             <div>
                                                 <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>{pos.name}</div>
                                                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
@@ -449,8 +449,8 @@ export default function ManualInvestmentDetailPage() {
                                                     {account.total_value > 0 && <span>{pos.quantity != null ? ' · ' : ''}{((pos.current_value / account.total_value) * 100).toFixed(1)} % účtu</span>}
                                                 </div>
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                                                <div style={{ textAlign: 'right' }}>
+                                            <div className="dip-pos-right">
+                                                <div className="dip-pos-value" style={{ textAlign: 'right' }}>
                                                     <div style={{ fontWeight: 600 }}>{fmt(pos.current_value, pos.currency)}</div>
                                                     {pos.pnl != null && (
                                                         <div style={{ fontSize: '0.78rem', color: pos.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)' }}>

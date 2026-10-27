@@ -5570,3 +5570,12 @@ html[data-page-tint] body::before {
 .dip-col { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
 .dip-monthly { flex: none; }
 @media (max-width: 1100px) { .dip-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* DIP — řádek pozice */
+.dip-pos-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: var(--radius-sm); }
+.dip-pos-right { display: flex; align-items: center; gap: 16px; }
+@media (max-width: 680px) {
+  .dip-pos-row { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px; }
+  .dip-pos-right { justify-content: space-between; }
+  .dip-pos-value { text-align: left !important; }
+}
