@@ -5558,3 +5558,9 @@ html[data-page-tint] body::before {
 .dip-monthly-chart { max-height: 440px; }
 .inv2-grid:has(.dip-left) { align-items: start; }
 .dip-monthly-chart { flex: none; height: 380px; min-height: 0; max-height: none; }
+
+/* DIP detail — tři sloupce */
+.dip-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-md); align-items: start; }
+.dip-col { display: flex; flex-direction: column; gap: var(--spacing-md); min-width: 0; }
+.dip-monthly { flex: none; }
+@media (max-width: 1100px) { .dip-grid { grid-template-columns: minmax(0, 1fr); } }

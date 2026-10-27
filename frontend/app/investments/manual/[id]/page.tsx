@@ -394,8 +394,8 @@ export default function ManualInvestmentDetailPage() {
                 </section>
 
                 {/* Pozice + alokace */}
-                <div className="inv2-grid">
-                    <div className="dip-left">
+                <div className="dip-grid">
+                    <div className="dip-col">
                     {/* Right column: Positions */}
                     <GlassCard>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 40, marginBottom: 'var(--spacing-md)' }}>
@@ -531,33 +531,24 @@ export default function ManualInvestmentDetailPage() {
                         </div>
                     </GlassCard>
 
-                    {/* Pod pozicemi: změny po měsících */}
-                    {monthly.length >= 2 && (
-                        <GlassCard className="dip-monthly">
-                            <div className="dip-card-head">
-                                <h3>Změna hodnoty po měsících</h3>
-                                <span className="muted small">rozdíl oproti konci předchozího měsíce</span>
-                            </div>
-                            <div className="dip-monthly-chart"><ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={monthly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                                    <XAxis dataKey="label" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                                    <YAxis tickFormatter={v => `${v > 0 ? '+' : ''}${Math.round(v / 1000)}k`} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} width={46} />
-                                    <Tooltip
-                                        cursor={{ fill: 'var(--surface-sunken)' }}
-                                        contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
-                                        formatter={(v: number | undefined) => [`${(v ?? 0) >= 0 ? '+' : '−'}${fmt(Math.abs(v ?? 0), account.currency)}`, 'Změna']}
-                                    />
-                                    <Bar dataKey="diff" radius={[6, 6, 0, 0]} maxBarSize={38}>
-                                        {monthly.map((m, i) => <Cell key={i} fill={m.diff >= 0 ? '#7fbf9e' : '#d09a8a'} />)}
-                                    </Bar>
-                                </BarChart>
-                            </ResponsiveContainer></div>
-                        </GlassCard>
-                    )}
+                        {/* Poslední změny hodnoty */}
+                        {recentChanges.length > 0 && (
+                            <GlassCard>
+                                <div className="dip-card-head"><h3>Poslední změny</h3></div>
+                                <div className="dip-changes">
+                                    {recentChanges.map(c => (
+                                        <div key={c.date}>
+                                            <span>{fmtDateFull(c.date)}</span>
+                                            <strong className={`num ${c.diff >= 0 ? 'pos' : 'neg'}`}>{c.diff >= 0 ? '+' : '−'}{fmt(Math.abs(c.diff), account.currency)}</strong>
+                                            <em className="num">{fmt(c.value, account.currency)}</em>
+                                        </div>
+                                    ))}
+                                </div>
+                            </GlassCard>
+                        )}
                     </div>
 
-                    <div className="inv2-side">
+                    <div className="dip-col">
                         {/* Allocation pie */}
                         {pieData.length > 0 && (
                             <GlassCard>
@@ -602,23 +593,33 @@ export default function ManualInvestmentDetailPage() {
                                 </div>
                             </GlassCard>
                         )}
+                    </div>
 
-                        {/* Poslední změny hodnoty */}
-                        {recentChanges.length > 0 && (
-                            <GlassCard>
-                                <div className="dip-card-head"><h3>Poslední změny</h3></div>
-                                <div className="dip-changes">
-                                    {recentChanges.map(c => (
-                                        <div key={c.date}>
-                                            <span>{fmtDateFull(c.date)}</span>
-                                            <strong className={`num ${c.diff >= 0 ? 'pos' : 'neg'}`}>{c.diff >= 0 ? '+' : '−'}{fmt(Math.abs(c.diff), account.currency)}</strong>
-                                            <em className="num">{fmt(c.value, account.currency)}</em>
-                                        </div>
-                                    ))}
-                                </div>
-                            </GlassCard>
-                        )}
-
+                    <div className="dip-col">
+                    {/* Pod pozicemi: změny po měsících */}
+                    {monthly.length >= 2 && (
+                        <GlassCard className="dip-monthly">
+                            <div className="dip-card-head">
+                                <h3>Změna hodnoty po měsících</h3>
+                                <span className="muted small">rozdíl oproti konci předchozího měsíce</span>
+                            </div>
+                            <div className="dip-monthly-chart"><ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={monthly} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                                    <XAxis dataKey="label" tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                                    <YAxis tickFormatter={v => `${v > 0 ? '+' : ''}${Math.round(v / 1000)}k`} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} width={46} />
+                                    <Tooltip
+                                        cursor={{ fill: 'var(--surface-sunken)' }}
+                                        contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                        formatter={(v: number | undefined) => [`${(v ?? 0) >= 0 ? '+' : '−'}${fmt(Math.abs(v ?? 0), account.currency)}`, 'Změna']}
+                                    />
+                                    <Bar dataKey="diff" radius={[6, 6, 0, 0]} maxBarSize={38}>
+                                        {monthly.map((m, i) => <Cell key={i} fill={m.diff >= 0 ? '#7fbf9e' : '#d09a8a'} />)}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer></div>
+                        </GlassCard>
+                    )}
                     </div>
                 </div>
 
