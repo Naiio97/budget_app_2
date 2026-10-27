@@ -180,6 +180,14 @@ export default function Trading212DetailPage() {
     const bestPos = byResult[0];
     const worstPos = byResult[byResult.length - 1];
     const biggestPos = [...positions].sort((a, b) => b.value_czk - a.value_czk)[0];
+    const hist = history?.history ?? [];
+    const histStats = hist.length >= 2 ? {
+        max: hist.reduce((a, b) => (b.value > a.value ? b : a)),
+        min: hist.reduce((a, b) => (b.value < a.value ? b : a)),
+        avg: hist.reduce((s, h) => s + h.value, 0) / hist.length,
+        change: hist[hist.length - 1].value - hist[0].value,
+    } : null;
+    const recentChanges = hist.slice(1).map((h, i) => ({ date: h.date, value: h.value, diff: h.value - hist[i].value })).filter(c => Math.abs(c.diff) >= 1).slice(-6).reverse();
     const invested = detail?.invested ?? 0;
     const result = detail?.result ?? 0;
     const resultPct = invested > 0 ? (result / invested) * 100 : 0;
@@ -442,6 +450,22 @@ export default function Trading212DetailPage() {
                             )}
                         </div>
                     </section>
+                        {recentChanges.length > 0 && (
+                            <section className="surface">
+                                <div className="card-head"><h3>Poslední změny</h3><span className="muted" style={{ fontSize: 12 }}>hodnota portfolia</span></div>
+                                <div className="card-body">
+                                    <div className="dip-changes">
+                                        {recentChanges.map(c => (
+                                            <div key={c.date}>
+                                                <span>{formatDate(c.date)}</span>
+                                                <strong className={`num ${c.diff >= 0 ? 'pos' : 'neg'}`}>{c.diff >= 0 ? '+' : '−'}{formatCurrency(Math.abs(c.diff))}</strong>
+                                                <em className="num">{formatCurrency(c.value)}</em>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </section>
+                        )}
                     </div>
                     <div className="dip-col">
                     <section className="surface">
@@ -502,16 +526,6 @@ export default function Trading212DetailPage() {
                             )}
                         </div>
                     </section>
-                        <section className="surface inv2-api">
-                            <span className="inv2-api-icon">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v6m0 6v6M3 12h6m6 0h6" /><circle cx="12" cy="12" r="3" /></svg>
-                            </span>
-                            <div>
-                                <strong>Propojeno přes API</strong>
-                                <span>Automatická synchronizace</span>
-                                {portfolio.last_synced && <em>Poslední synchronizace {formatDate(portfolio.last_synced)}</em>}
-                            </div>
-                        </section>
                     </div>
                     <div className="dip-col">
                         {positions.length > 0 && (
@@ -523,6 +537,19 @@ export default function Trading212DetailPage() {
                                         <div><span>Nejhorší pozice</span><strong>{cleanTicker(worstPos.ticker)}</strong><em className="num" style={{ color: worstPos.ppl_pct >= 0 ? 'var(--pos)' : 'var(--neg)' }}>{worstPos.ppl_pct >= 0 ? '+' : ''}{formatPct(worstPos.ppl_pct)}</em></div>
                                         <div><span>Největší pozice</span><strong>{cleanTicker(biggestPos.ticker)}</strong><em>{total > 0 ? formatPct((biggestPos.value_czk / total) * 100) : '0 %'} portfolia</em></div>
                                         <div><span>Počet pozic</span><strong>{positions.length}</strong></div>
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+                        {histStats && (
+                            <section className="surface">
+                                <div className="card-head"><h3>Statistiky</h3><span className="muted" style={{ fontSize: 12 }}>za zvolené období</span></div>
+                                <div className="card-body">
+                                    <div className="dip-stats">
+                                        <div><span>Nejvyšší hodnota</span><strong className="num">{formatCurrency(histStats.max.value)}</strong><em>{formatDate(histStats.max.date)}</em></div>
+                                        <div><span>Nejnižší hodnota</span><strong className="num">{formatCurrency(histStats.min.value)}</strong><em>{formatDate(histStats.min.date)}</em></div>
+                                        <div><span>Průměrná hodnota</span><strong className="num">{formatCurrency(histStats.avg)}</strong></div>
+                                        <div><span>Změna za období</span><strong className="num" style={{ color: histStats.change >= 0 ? 'var(--pos)' : 'var(--neg)' }}>{histStats.change >= 0 ? '+' : '−'}{formatCurrency(Math.abs(histStats.change))}</strong></div>
                                     </div>
                                 </div>
                             </section>
