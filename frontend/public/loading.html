@@ -3,26 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#2b3b54">
+  <meta name="theme-color" content="#7D91AD">
   <title>Koruna</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
+    /* Gradient je na html i body a výška je 100dvh, jinak dole (pod home indikátorem) prosvitne bílá */
+    html { height: 100%; background: #EEF1F6; }
     body {
+      min-height: 100vh; min-height: 100dvh;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
-      background: linear-gradient(160deg, #3a4d6b 0%, #2b3b54 100%);
-      color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #7D91AD 0%, #B9C5D6 45%, #EEF1F6 100%) no-repeat;
+      background-size: 100% 100%;
+      color: #121A2B; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    @media (prefers-color-scheme: light) {
-      body { background: linear-gradient(160deg, #f4f6fb 0%, #e3e9f4 100%); color: #1f2b3f; }
-    }
-    .mark { width: 84px; height: 84px; padding: 16px; border-radius: 24px; background: #2f6bea; color: #fff;
-            box-shadow: 0 10px 30px rgba(47, 107, 234, 0.35); animation: pulse 1.8s ease-in-out infinite; }
+    .mark { width: 96px; height: 96px; padding: 16px; border-radius: 25%; color: #fff;
+            background: linear-gradient(160deg, #4F86F7, #1F4FC4);
+            box-shadow: 0 10px 28px rgba(47, 107, 234, 0.3); animation: pulse 1.8s ease-in-out infinite; }
     .mark svg { width: 100%; height: 100%; display: block; }
-    h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
-    p { font-size: 13px; opacity: 0.65; margin-top: -14px; }
-    .bar { width: 120px; height: 3px; border-radius: 3px; background: rgba(127, 140, 160, 0.3); overflow: hidden; }
-    .bar::after { content: ''; display: block; width: 40%; height: 100%; border-radius: 3px; background: #2f6bea;
+    h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+    p { font-size: 14px; color: #5B6880; margin-top: -14px; }
+    .bar { width: 120px; height: 4px; border-radius: 4px; background: rgba(47, 107, 234, 0.12); overflow: hidden; }
+    .bar::after { content: ''; display: block; width: 40%; height: 100%; border-radius: 4px; background: #2F6BEA;
                   animation: slide 1.2s ease-in-out infinite; }
     @keyframes pulse { 50% { transform: scale(1.05); } }
     @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
