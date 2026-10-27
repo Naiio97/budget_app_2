@@ -564,23 +564,26 @@ export default function ManualInvestmentDetailPage() {
                                 <div style={{ display: 'flex', alignItems: 'center', minHeight: 40, marginBottom: 'var(--spacing-md)' }}>
                                     <h3 style={{ margin: 0 }}>Alokace</h3>
                                 </div>
-                                <ResponsiveContainer width="100%" height={180}>
-                                    <PieChart>
-                                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} dataKey="value" strokeWidth={0}>
-                                            {pieData.map((p, i) => <Cell key={p.id} fill={colorForIndex(p.id, i)} />)}
-                                        </Pie>
-                                        <Tooltip
-                                            contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
-                                            formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+                                <div className="dip-donut">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie data={pieData} cx="50%" cy="50%" innerRadius={78} outerRadius={110} dataKey="value" strokeWidth={0}>
+                                                {pieData.map((p, i) => <Cell key={p.id} fill={colorForIndex(p.id, i)} />)}
+                                            </Pie>
+                                            <Tooltip
+                                                contentStyle={{ background: '#2d3d5c', border: 'none', borderRadius: '8px', fontSize: '0.78rem', color: '#fff' }}
+                                                formatter={(v: number | undefined, name: string | undefined) => [fmt(v ?? 0, account.currency), name ?? '']}
+                                            />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                    <div className="inv2-donut-center"><span>Celkem</span><strong>{fmt(account.total_value, account.currency)}</strong></div>
+                                </div>
+                                <div className="investment-allocation-list" style={{ marginTop: 8 }}>
                                     {pieData.map((p, i) => (
-                                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                                            <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: colorForIndex(p.id, i), flexShrink: 0 }} />
-                                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                                            <span className="text-secondary">{account.total_value ? ((p.value / account.total_value) * 100).toFixed(1) : 0} %</span>
+                                        <div key={p.id} className="investment-allocation-row">
+                                            <span style={{ background: colorForIndex(p.id, i) }} />
+                                            <strong title={p.name}>{p.name}</strong>
+                                            <em><b>{fmt(p.value, account.currency)}</b> {account.total_value ? ((p.value / account.total_value) * 100).toFixed(1).replace('.', ',') : 0} %</em>
                                         </div>
                                     ))}
                                 </div>
