@@ -73,6 +73,10 @@ class _FakeResult:
     def scalars(self):
         return _FakeScalars(self._scalars)
 
+    def all(self):
+        # dotaz na minulé výplaty vrací řádky (date, amount)
+        return [v if isinstance(v, tuple) else (v, 60000) for v in self._scalars]
+
 
 class FakeSession:
     """Rozliší dotaz na skutečnou výplatu (LIKE "YYYY-MM-%") od dotazu na dny
@@ -133,3 +137,15 @@ async def test_current_period_before_salary_is_previous_month():
     # Výplata za srpen ještě nedorazila (jen predikce ~15.), dnes 3. 8. → období červenec.
     db = FakeSession(past_dates=["2020-05-15"])
     assert await current_period_year_month(db, 1, date(2026, 8, 3)) == "2026-07"
+
+
+# ── odhad dne výplaty ignoruje vedlejší drobné platby ────────────────────
+
+async def test_past_days_use_largest_payment_per_month():
+    from services.salary_period import _past_salary_days
+    # V září dorazila výplata 7., ale i testovací 1 Kč platby 14. — počítá se 7.
+    db = FakeSession(past_dates=[
+        ("2026-09-14", 1), ("2026-09-14", 1), ("2026-09-07", 61270),
+        ("2026-08-07", 59075),
+    ])
+    assert await _past_salary_days(db, 1) == [7, 7]
