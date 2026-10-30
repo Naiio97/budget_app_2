@@ -21,6 +21,10 @@ from models import TransactionModel
 # Cílový den výplaty bez historie (než se objeví první transakce Salary).
 DEFAULT_PAY_DAY = 8
 
+# Drobné platby (např. testovací 1 Kč od zaměstnavatele) se v kategorii Salary
+# objevují taky — nesmí ovlivnit ani odhad dne výplaty, ani skutečný příchod.
+MIN_SALARY_AMOUNT = 1000
+
 
 def _parse_ym(year_month: str) -> tuple[int, int]:
     year, month = (int(x) for x in year_month.split("-"))
@@ -84,19 +88,28 @@ def _parse_iso(d: str) -> Optional[date]:
 
 
 async def _past_salary_days(db: AsyncSession, user_id: int) -> list[int]:
-    """Dny v měsíci z posledních ~8 skutečných výplat — pro medián cílového dne."""
+    """Dny v měsíci z posledních ~8 skutečných výplat (největší platba měsíce) —
+    pro medián cílového dne."""
     rows = (await db.execute(
-        select(TransactionModel.date)
+        select(TransactionModel.date, TransactionModel.amount)
         .where(
             TransactionModel.user_id == user_id,
             TransactionModel.account_type == "bank",
             TransactionModel.category == "Salary",
-            TransactionModel.amount > 0,
+            TransactionModel.amount >= MIN_SALARY_AMOUNT,
         )
         .order_by(TransactionModel.date.desc())
-        .limit(8)
-    )).scalars().all()
-    return [int(d[8:10]) for d in rows if len(d) >= 10]
+    )).all()
+    # jedna výplata na měsíc: největší částka, ať vedlejší příchozí platby den nezkreslí
+    best: dict[str, tuple[float, str]] = {}
+    for d, amount in rows:
+        if len(d) < 10:
+            continue
+        ym = d[:7]
+        if ym not in best or amount > best[ym][0]:
+            best[ym] = (amount, d)
+    recent = sorted(best, reverse=True)[:8]
+    return [int(best[ym][1][8:10]) for ym in recent]
 
 
 async def _actual_arrival(db: AsyncSession, user_id: int, year_month: str) -> Optional[date]:
@@ -108,7 +121,7 @@ async def _actual_arrival(db: AsyncSession, user_id: int, year_month: str) -> Op
             TransactionModel.user_id == user_id,
             TransactionModel.account_type == "bank",
             TransactionModel.category == "Salary",
-            TransactionModel.amount > 0,
+            TransactionModel.amount >= MIN_SALARY_AMOUNT,
             TransactionModel.date.like(f"{year_month}-%"),
         )
         .order_by(TransactionModel.amount.desc())
