@@ -5,9 +5,12 @@ on:
     branches:
       - main   # Spustí se jen při pushi do main
     paths:
-      - 'backend/**'  # Spustí se jen pokud se změní něco v backendu
+      - 'backend/**' # Spustí se jen pokud se změní něco v backendu
+      - '.github/workflows/deploy-backend.yml' 
   workflow_dispatch: # Přidá tlačítko pro manuální spuštění v GitHubu
-
+permissions: 
+  id-token: write
+  contents: read
 jobs:
   build-and-deploy: #Říká, na jakém stroji pipeline poběží.
     runs-on: ubuntu-latest #= virtuální Ubuntu mašina na serverech GitHubu. Standard. Nic řešit.
@@ -15,10 +18,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4 #Stáhne kód z repozitáře na ten virtuální stroj.
 
-      - name: Log in to Azure #Přihlášení k Azure
-        uses: azure/login@v2 #Používá akci "login" verze 2 od Azure
+      - name: Log in to Azure (OIDC)
+        uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }} #Přihlašovací údaje k Azure, užene do v Github secrets, šifrované!
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to ACR #Přihlásí se do Azure Container Registry (ACR) — to je soukromý Docker Hub na Azure, kde budeš ukládat Docker image.
         uses: azure/docker-login@v1 #Používá akci "docker-login" verze 1 od Azure
